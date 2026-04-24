@@ -121,6 +121,7 @@ export default function ProfessorDashboard() {
     referral_specify: '',
     remarks: '',
   });
+  const [completeError, setCompleteError] = useState('');
 
   const [newSched, setNewSched] = useState({ day: 'Monday', time_start: '', time_end: '' });
   const [schedError, setSchedError] = useState('');
@@ -151,18 +152,23 @@ export default function ProfessorDashboard() {
     if (completingId === id) { setCompletingId(null); return; }
     setCompletingId(id);
     setCompleteForm({ action_taken: '', referral: '', referral_specify: '', remarks: '' });
+    setCompleteError('');
   };
 
   const handleComplete = async (id: number) => {
-    if (!completeForm.action_taken) { alert('Please select an action taken.'); return; }
+    if (!completeForm.action_taken) { setCompleteError('Please select an action taken.'); return; }
     if (completeForm.action_taken === 'Referred to' && !completeForm.referral) {
-      alert('Please select a referral option.'); return;
+      setCompleteError('Please select a referral option.'); return;
     }
     if (completeForm.referral === 'Other Office (Please Specify)' && !completeForm.referral_specify.trim()) {
-      alert('Please specify the other office.'); return;
+      setCompleteError('Please specify the other office.'); return;
     }
+    setCompleteError('');
     const data = await api.patch(`/api/consultations/${id}/complete`, completeForm, token!);
-    if (data.error) { alert(data.error); return; }
+    if (data.error) { setCompleteError(data.error); return; }
+    setConsultations(prev => prev.map(c =>
+      c.id === id ? { ...c, status: 'completed', action_taken: completeForm.action_taken, referral: completeForm.referral || null } : c
+    ));
     setCompletingId(null);
     fetchAll();
   };
@@ -404,7 +410,7 @@ export default function ProfessorDashboard() {
                                 {opt}
                                 <input type="radio" className="sr-only"
                                   checked={completeForm.action_taken === opt}
-                                  onChange={() => setCompleteForm(f => ({ ...f, action_taken: opt, referral: '', referral_specify: '' }))} />
+                                  onChange={() => { setCompleteForm(f => ({ ...f, action_taken: opt, referral: '', referral_specify: '' })); setCompleteError(''); }} />
                               </label>
                             ))}
                           </div>
@@ -421,7 +427,7 @@ export default function ProfessorDashboard() {
                                   {opt}
                                   <input type="radio" className="sr-only"
                                     checked={completeForm.referral === opt}
-                                    onChange={() => setCompleteForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
+                                    onChange={() => { setCompleteForm(f => ({ ...f, referral: opt, referral_specify: '' })); setCompleteError(''); }} />
                                 </label>
                               ))}
                             </div>
@@ -430,7 +436,7 @@ export default function ProfessorDashboard() {
                                 className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
                                 placeholder="Please specify the office…"
                                 value={completeForm.referral_specify}
-                                onChange={e => setCompleteForm(f => ({ ...f, referral_specify: e.target.value }))}
+                                onChange={e => { setCompleteForm(f => ({ ...f, referral_specify: e.target.value })); setCompleteError(''); }}
                               />
                             )}
                           </div>
@@ -448,9 +454,13 @@ export default function ProfessorDashboard() {
                           />
                         </div>
 
-                        <div className="flex justify-end">
+                        <div className="flex items-center justify-between gap-3">
+                          {completeError
+                            ? <p className="text-red-400 text-xs flex-1">{completeError}</p>
+                            : <span />
+                          }
                           <button onClick={() => handleComplete(c.id)}
-                            className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                            className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex-shrink-0">
                             Submit & Mark Completed
                           </button>
                         </div>

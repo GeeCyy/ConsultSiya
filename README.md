@@ -96,15 +96,18 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 - Browse available consultation slots
 - Book a slot (inline form — nature of advising, mode, date)
 - View and cancel their own consultations
+- **History** — past (completed/cancelled) consultations grouped by quarter, showing date, purpose, adviser, and action taken
 
 ### Professor
-- **My Consultations** — confirm or mark consultations as completed (with action taken, referral, remarks)
+- **My Consultations** — confirm or mark consultations as completed (inline form with action taken, referral, remarks; validation errors shown inline)
 - **Manage Schedules** — create and delete availability slots
 - **Export Report** — download advising report as PDF or Excel
+- **History** — past advising sessions grouped by quarter, showing date, student, purpose, and action taken
 
 ### Admin
 - View all consultations across the system
 - Stats: Total / Pending / Confirmed / Completed / Cancelled
+- **History** — all past consultations grouped by quarter, showing date, student, adviser, purpose, and action taken
 
 ---
 
