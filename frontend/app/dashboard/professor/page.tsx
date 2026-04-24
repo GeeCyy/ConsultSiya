@@ -3,9 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -34,10 +31,44 @@ type Schedule = {
   is_available: boolean;
 };
 
-const statusColor = (status: string) =>
-  status === 'completed' ? '#166534' :
-  status === 'confirmed' ? '#1e3a5f' :
-  status === 'cancelled' ? '#4a0000' : '#854d0e';
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, { ring: string; text: string; dot: string; label: string }> = {
+    pending:   { ring: 'ring-amber-500/30',   text: 'text-amber-400',   dot: 'bg-amber-400',   label: 'Pending' },
+    confirmed: { ring: 'ring-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    label: 'Confirmed' },
+    completed: { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
+    cancelled: { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
+  };
+  const s = styles[status] ?? { ring: 'ring-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400', label: status };
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/5 ring-1 ${s.ring} ${s.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+}
+
+function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
+  const initials = name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <div className={`rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 font-semibold flex-shrink-0 ${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'}`}>
+      {initials}
+    </div>
+  );
+}
+
+function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+        active ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
 
 export default function ProfessorDashboard() {
   const router = useRouter();
@@ -49,7 +80,6 @@ export default function ProfessorDashboard() {
 
   const [completingId, setCompletingId] = useState<number | null>(null);
   const [completeForm, setCompleteForm] = useState({ action_taken: '', referral: '', remarks: '' });
-
   const [newSched, setNewSched] = useState({ day: 'Monday', time_start: '', time_end: '' });
   const [schedError, setSchedError] = useState('');
 
@@ -75,28 +105,21 @@ export default function ProfessorDashboard() {
   };
 
   const toggleCompleting = (id: number) => {
-    if (completingId === id) {
-      setCompletingId(null);
-    } else {
-      setCompletingId(id);
-      setCompleteForm({ action_taken: '', referral: '', remarks: '' });
-    }
+    if (completingId === id) { setCompletingId(null); return; }
+    setCompletingId(id);
+    setCompleteForm({ action_taken: '', referral: '', remarks: '' });
   };
 
   const handleComplete = async (id: number) => {
     const data = await api.patch(`/api/consultations/${id}/complete`, completeForm, token!);
     if (data.error) { alert(data.error); return; }
     setCompletingId(null);
-    setCompleteForm({ action_taken: '', referral: '', remarks: '' });
     fetchAll();
   };
 
   const handleAddSchedule = async () => {
     setSchedError('');
-    if (!newSched.time_start || !newSched.time_end) {
-      setSchedError('Please fill in all time fields.');
-      return;
-    }
+    if (!newSched.time_start || !newSched.time_end) { setSchedError('Please fill in all time fields.'); return; }
     const data = await api.post('/api/schedules', newSched, token!);
     if (data.error) { setSchedError(data.error); return; }
     setNewSched({ day: 'Monday', time_start: '', time_end: '' });
@@ -112,239 +135,304 @@ export default function ProfessorDashboard() {
 
   const handleExport = async (format: 'excel' | 'pdf') => {
     const endpoint = format === 'excel' ? '/api/reports/excel' : '/api/reports/pdf';
-    const ext = format === 'excel' ? 'xlsx' : 'pdf';
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || 'Export failed.');
-        return;
-      }
+      const res = await fetch(`${API_URL}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { const e = await res.json(); alert(e.error || 'Export failed.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `advising-report.${ext}`;
-      a.click();
+      a.href = url; a.download = `advising-report.${format === 'excel' ? 'xlsx' : 'pdf'}`; a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      alert('Export failed. Please try again.');
-    }
+    } catch { alert('Export failed. Please try again.'); }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    router.push('/login');
+  const handleLogout = () => { localStorage.clear(); router.push('/login'); };
+
+  const stats = {
+    total: consultations.length,
+    pending: consultations.filter(c => c.status === 'pending').length,
+    completed: consultations.filter(c => c.status === 'completed').length,
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#1a1a1a' }}>
-      {/* Navbar */}
-      <div className="flex items-center justify-between px-8 py-4" style={{ backgroundColor: '#CC0000' }}>
-        <h1 className="text-white font-bold text-xl">ConsultSiya</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-white text-sm">Professor Dashboard</span>
-          <Button variant="outline" size="sm" onClick={handleLogout}
-            className="border-white text-white hover:bg-white hover:text-red-700">
-            Logout
-          </Button>
+    <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
+
+      {/* ── Sidebar ── */}
+      <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
+        {/* Brand */}
+        <div className="px-5 py-5 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-bold text-sm leading-none">ConsultSiya</p>
+              <p className="text-gray-600 text-xs mt-0.5">Mapúa SOIT</p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 px-8 pt-6">
-        {(['consultations', 'schedules', 'export'] as const).map(t => (
-          <Button key={t} size="sm" onClick={() => setTab(t)}
-            style={{ backgroundColor: tab === t ? '#CC0000' : '#333', color: 'white' }}>
-            {t === 'consultations' ? 'My Consultations' : t === 'schedules' ? 'Manage Schedules' : 'Export Report'}
-          </Button>
-        ))}
-      </div>
+        {/* Role pill */}
+        <div className="px-5 py-3 border-b border-white/5">
+          <span className="text-[10px] font-semibold text-[#CC0000] uppercase tracking-widest">Professor</span>
+        </div>
 
-      <div className="px-8 py-6">
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          <NavItem active={tab === 'consultations'} onClick={() => setTab('consultations')} label="My Consultations"
+            icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>}
+          />
+          <NavItem active={tab === 'schedules'} onClick={() => setTab('schedules')} label="Manage Schedules"
+            icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
+          />
+          <NavItem active={tab === 'export'} onClick={() => setTab('export')} label="Export Report"
+            icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0-4-4m4 4V4" /></svg>}
+          />
+        </nav>
+
+        {/* Logout */}
+        <div className="px-3 py-4 border-t border-white/5">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" /></svg>
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main content ── */}
+      <main className="flex-1 overflow-y-auto">
         {loading ? (
-          <p className="text-gray-400">Loading...</p>
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-600 text-sm">Loading...</p>
+          </div>
+
         ) : tab === 'consultations' ? (
-          <>
-            <h2 className="text-white text-2xl font-bold mb-6">My Consultations</h2>
+          <div className="max-w-3xl mx-auto px-8 py-8">
+            <div className="mb-7">
+              <h1 className="text-white text-2xl font-bold">My Consultations</h1>
+              <p className="text-gray-500 text-sm mt-1">Review and manage student consultation requests</p>
+            </div>
+
+            {/* Quick stats */}
+            <div className="grid grid-cols-3 gap-3 mb-7">
+              {[
+                { label: 'Total', value: stats.total, color: 'text-white' },
+                { label: 'Pending', value: stats.pending, color: 'text-amber-400' },
+                { label: 'Completed', value: stats.completed, color: 'text-emerald-400' },
+              ].map(s => (
+                <div key={s.label} className="rounded-xl border border-white/5 bg-[#161616] px-4 py-3">
+                  <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                  <p className="text-gray-600 text-xs mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
             {consultations.length === 0 ? (
-              <p className="text-gray-400">No consultations yet.</p>
+              <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
+                </div>
+                <p className="text-gray-400 font-medium text-sm">No consultations yet</p>
+                <p className="text-gray-600 text-xs mt-1">Students will appear here once they book a slot</p>
+              </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="space-y-3">
                 {consultations.map(c => (
-                  <Card key={c.id} style={{ backgroundColor: '#222222', borderColor: '#333333' }}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-white text-lg">{c.student_name}</CardTitle>
-                        <Badge style={{ backgroundColor: statusColor(c.status), color: 'white' }}>
-                          {c.status}
-                        </Badge>
+                  <div key={c.id} className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden transition-colors hover:border-white/10">
+                    <div className="p-5">
+                      <div className="flex items-start gap-4">
+                        <Avatar name={c.student_name} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <h3 className="text-white font-semibold text-sm">{c.student_name}</h3>
+                            <StatusBadge status={c.status} />
+                          </div>
+                          <p className="text-gray-500 text-xs mt-0.5">{c.student_number} · {c.program}</p>
+                        </div>
                       </div>
-                    </CardHeader>
-                    <CardContent className="space-y-1">
-                      <p className="text-gray-400 text-sm">
-                        📅 {new Date(c.date).toLocaleDateString()} — {c.day} {c.time_start?.slice(0, 5)} to {c.time_end?.slice(0, 5)}
-                      </p>
-                      <p className="text-gray-400 text-sm">📋 {c.nature_of_advising}</p>
-                      <p className="text-gray-400 text-sm">🎓 {c.student_number} · {c.program}</p>
-                      <p className="text-gray-400 text-sm">📍 Mode: {c.mode}</p>
 
-                      {(c.status === 'pending' || c.status === 'confirmed') && (
-                        <div className="flex gap-2 mt-3 flex-wrap">
-                          {c.status === 'pending' && (
-                            <Button size="sm" style={{ backgroundColor: '#1e3a5f', color: 'white' }}
-                              onClick={() => handleConfirm(c.id)}>
-                              Confirm
-                            </Button>
-                          )}
-                          <Button size="sm" style={{ backgroundColor: '#CC0000', color: 'white' }}
-                            onClick={() => toggleCompleting(c.id)}>
-                            {completingId === c.id ? 'Cancel' : 'Mark as Completed'}
-                          </Button>
+                      <div className="mt-4 grid grid-cols-2 gap-2.5">
+                        <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
+                          <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Date & Time</p>
+                          <p className="text-gray-200 text-sm font-medium">{new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                          <p className="text-gray-500 text-xs mt-0.5">{c.day} · {c.time_start?.slice(0, 5)}–{c.time_end?.slice(0, 5)}</p>
                         </div>
-                      )}
-
-                      {completingId === c.id && (
-                        <div className="mt-4 space-y-3 p-4 rounded-lg" style={{ backgroundColor: '#1a1a1a' }}>
-                          <div>
-                            <Label className="text-gray-300 text-sm">Action Taken</Label>
-                            <Input
-                              value={completeForm.action_taken}
-                              onChange={e => setCompleteForm(f => ({ ...f, action_taken: e.target.value }))}
-                              className="bg-gray-800 border-gray-600 text-white mt-1"
-                              placeholder="Describe action taken..."
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-gray-300 text-sm">Referral</Label>
-                            <Input
-                              value={completeForm.referral}
-                              onChange={e => setCompleteForm(f => ({ ...f, referral: e.target.value }))}
-                              className="bg-gray-800 border-gray-600 text-white mt-1"
-                              placeholder="Referral (if any)"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-gray-300 text-sm">Remarks</Label>
-                            <Input
-                              value={completeForm.remarks}
-                              onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
-                              className="bg-gray-800 border-gray-600 text-white mt-1"
-                              placeholder="Additional remarks..."
-                            />
-                          </div>
-                          <Button size="sm" style={{ backgroundColor: '#166534', color: 'white' }}
-                            onClick={() => handleComplete(c.id)}>
-                            Submit Completion
-                          </Button>
+                        <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
+                          <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Nature of Advising</p>
+                          <p className="text-gray-200 text-sm line-clamp-2">{c.nature_of_advising}</p>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
-        ) : tab === 'schedules' ? (
-          <>
-            <h2 className="text-white text-2xl font-bold mb-6">Manage Schedules</h2>
+                      </div>
 
-            <Card className="mb-6" style={{ backgroundColor: '#222222', borderColor: '#333333' }}>
-              <CardHeader>
-                <CardTitle className="text-white text-lg">Add New Schedule Slot</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-gray-300 text-sm">Day</Label>
-                    <select
-                      value={newSched.day}
-                      onChange={e => setNewSched(s => ({ ...s, day: e.target.value }))}
-                      className="w-full mt-1 px-3 py-2 rounded-md text-white text-sm"
-                      style={{ backgroundColor: '#333', border: '1px solid #555' }}
-                    >
-                      {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Time Start</Label>
-                    <Input
-                      type="time"
-                      value={newSched.time_start}
-                      onChange={e => setNewSched(s => ({ ...s, time_start: e.target.value }))}
-                      className="bg-gray-800 border-gray-600 text-white mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Time End</Label>
-                    <Input
-                      type="time"
-                      value={newSched.time_end}
-                      onChange={e => setNewSched(s => ({ ...s, time_end: e.target.value }))}
-                      className="bg-gray-800 border-gray-600 text-white mt-1"
-                    />
-                  </div>
-                </div>
-                {schedError && <p className="text-red-400 text-sm">{schedError}</p>}
-                <Button style={{ backgroundColor: '#CC0000', color: 'white' }} onClick={handleAddSchedule}>
-                  Add Schedule
-                </Button>
-              </CardContent>
-            </Card>
+                      <div className="mt-3.5 flex items-center justify-between">
+                        <span className={`inline-flex items-center gap-1.5 text-xs ${c.mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
+                          {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
+                        </span>
 
-            {schedules.length === 0 ? (
-              <p className="text-gray-400">No schedules yet.</p>
-            ) : (
-              <div className="grid gap-3">
-                {schedules.map(s => (
-                  <div key={s.id} className="flex items-center justify-between px-4 py-3 rounded-lg"
-                    style={{ backgroundColor: '#222222', border: '1px solid #333333' }}>
-                    <div className="flex items-center gap-4">
-                      <span className="text-white font-medium w-28">{s.day}</span>
-                      <span className="text-gray-400 text-sm">
-                        {s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}
-                      </span>
-                      <Badge style={{
-                        backgroundColor: s.is_available ? '#166534' : '#854d0e',
-                        color: 'white',
-                        fontSize: '0.7rem',
-                      }}>
-                        {s.is_available ? 'Available' : 'Booked'}
-                      </Badge>
+                        {(c.status === 'pending' || c.status === 'confirmed') && (
+                          <div className="flex items-center gap-2">
+                            {c.status === 'pending' && (
+                              <button onClick={() => handleConfirm(c.id)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                                Confirm
+                              </button>
+                            )}
+                            <button onClick={() => toggleCompleting(c.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${completingId === c.id ? 'bg-white/5 text-gray-400' : 'bg-[#CC0000]/10 text-[#ff5555] hover:bg-[#CC0000]/20'}`}>
+                              {completingId === c.id ? 'Close' : 'Mark Completed'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <Button size="sm" variant="destructive" onClick={() => handleDeleteSchedule(s.id)}>
-                      Delete
-                    </Button>
+
+                    {completingId === c.id && (
+                      <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
+                        <p className="text-white text-sm font-semibold">Completion Details</p>
+                        <div>
+                          <Label className="text-gray-500 text-xs mb-1.5 block">Action Taken</Label>
+                          <textarea
+                            value={completeForm.action_taken}
+                            onChange={e => setCompleteForm(f => ({ ...f, action_taken: e.target.value }))}
+                            rows={2}
+                            className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
+                            placeholder="Describe the action taken..."
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-gray-500 text-xs mb-1.5 block">Referral</Label>
+                            <Input value={completeForm.referral}
+                              onChange={e => setCompleteForm(f => ({ ...f, referral: e.target.value }))}
+                              className="bg-[#1a1a1a] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0 placeholder:text-gray-600"
+                              placeholder="Referral (if any)" />
+                          </div>
+                          <div>
+                            <Label className="text-gray-500 text-xs mb-1.5 block">Remarks</Label>
+                            <Input value={completeForm.remarks}
+                              onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
+                              className="bg-[#1a1a1a] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0 placeholder:text-gray-600"
+                              placeholder="Additional remarks" />
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <button onClick={() => handleComplete(c.id)}
+                            className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                            Submit & Mark Completed
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
-          </>
-        ) : (
-          <>
-            <h2 className="text-white text-2xl font-bold mb-6">Export Report</h2>
-            <Card style={{ backgroundColor: '#222222', borderColor: '#333333' }}>
-              <CardContent className="pt-6 space-y-4">
-                <p className="text-gray-400 text-sm">
-                  Download your academic advising report with all consultation records.
-                </p>
-                <div className="flex gap-4 flex-wrap">
-                  <Button style={{ backgroundColor: '#166534', color: 'white' }}
-                    onClick={() => handleExport('excel')}>
-                    Download Excel Report
-                  </Button>
-                  <Button style={{ backgroundColor: '#1e3a5f', color: 'white' }}
-                    onClick={() => handleExport('pdf')}>
-                    Download PDF Report
-                  </Button>
+          </div>
+
+        ) : tab === 'schedules' ? (
+          <div className="max-w-3xl mx-auto px-8 py-8">
+            <div className="mb-7">
+              <h1 className="text-white text-2xl font-bold">Manage Schedules</h1>
+              <p className="text-gray-500 text-sm mt-1">Add or remove your available consultation time slots</p>
+            </div>
+
+            {/* Add form */}
+            <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 mb-6">
+              <p className="text-white text-sm font-semibold mb-4">Add New Slot</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Day</Label>
+                  <select value={newSched.day} onChange={e => setNewSched(s => ({ ...s, day: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
+                    {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
                 </div>
-              </CardContent>
-            </Card>
-          </>
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Start Time</Label>
+                  <Input type="time" value={newSched.time_start}
+                    onChange={e => setNewSched(s => ({ ...s, time_start: e.target.value }))}
+                    className="bg-[#0f0f0f] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0" />
+                </div>
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">End Time</Label>
+                  <Input type="time" value={newSched.time_end}
+                    onChange={e => setNewSched(s => ({ ...s, time_end: e.target.value }))}
+                    className="bg-[#0f0f0f] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0" />
+                </div>
+              </div>
+              {schedError && <p className="text-red-400 text-xs mt-2">{schedError}</p>}
+              <button onClick={handleAddSchedule}
+                className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20">
+                Add Slot
+              </button>
+            </div>
+
+            {/* Slot list */}
+            <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
+              Your Slots ({schedules.length})
+            </p>
+            {schedules.length === 0 ? (
+              <div className="text-center py-12 rounded-2xl border border-white/5 bg-[#161616]">
+                <p className="text-gray-500 text-sm">No slots yet. Add one above.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {schedules.map(s => (
+                  <div key={s.id} className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-white/5 bg-[#161616] hover:border-white/10 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${s.is_available ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                      <span className="text-white text-sm font-medium w-24">{s.day}</span>
+                      <span className="text-gray-400 text-sm font-mono">{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs ${s.is_available ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {s.is_available ? 'Available' : 'Booked'}
+                      </span>
+                      <button onClick={() => handleDeleteSchedule(s.id)}
+                        className="px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        ) : (
+          <div className="max-w-3xl mx-auto px-8 py-8">
+            <div className="mb-7">
+              <h1 className="text-white text-2xl font-bold">Export Report</h1>
+              <p className="text-gray-500 text-sm mt-1">Download your faculty academic advising report</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => handleExport('excel')}
+                className="rounded-2xl border border-white/5 bg-[#161616] hover:border-emerald-500/20 hover:bg-emerald-500/5 p-6 text-left transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
+                  <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z" />
+                  </svg>
+                </div>
+                <p className="text-white font-semibold text-sm">Excel Spreadsheet</p>
+                <p className="text-gray-600 text-xs mt-1">Download full data as .xlsx</p>
+              </button>
+              <button onClick={() => handleExport('pdf')}
+                className="rounded-2xl border border-white/5 bg-[#161616] hover:border-blue-500/20 hover:bg-blue-500/5 p-6 text-left transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
+                  </svg>
+                </div>
+                <p className="text-white font-semibold text-sm">PDF Document</p>
+                <p className="text-gray-600 text-xs mt-1">Download formatted report as .pdf</p>
+              </button>
+            </div>
+          </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
