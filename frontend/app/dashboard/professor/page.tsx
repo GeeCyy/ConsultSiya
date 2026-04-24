@@ -30,6 +30,9 @@ type Consultation = {
   mode: string;
   status: string;
   uploaded_form_path: string | null;
+  action_taken: string | null;
+  referral: string | null;
+  referral_specify: string | null;
 };
 
 type Schedule = {
@@ -76,9 +79,36 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; labe
   );
 }
 
+function getQuarterLabel(dateStr: string): string {
+  const d = new Date(dateStr);
+  const m = d.getMonth();
+  const y = d.getFullYear();
+  const q = m < 3 ? '1st' : m < 6 ? '2nd' : m < 9 ? '3rd' : '4th';
+  return `${q} Quarter ${y}`;
+}
+
+function groupByQuarter<T extends { date: string }>(items: T[]): Array<[string, T[]]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = getQuarterLabel(item.date);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(item);
+  }
+  return Array.from(map.entries());
+}
+
+function actionLabel(action_taken: string | null, referral: string | null, referral_specify: string | null): string {
+  if (!action_taken) return '—';
+  if (action_taken === 'Referred to' && referral) {
+    if (referral === 'Other Office (Please Specify)' && referral_specify) return `Referred to: ${referral_specify}`;
+    return `Referred to: ${referral.split(' (')[0]}`;
+  }
+  return action_taken;
+}
+
 export default function ProfessorDashboard() {
   const router = useRouter();
-  const [tab, setTab] = useState<'consultations' | 'schedules' | 'export'>('consultations');
+  const [tab, setTab] = useState<'consultations' | 'schedules' | 'export' | 'history'>('consultations');
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,6 +271,9 @@ export default function ProfessorDashboard() {
           />
           <NavItem active={tab === 'export'} onClick={() => setTab('export')} label="Export Report"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0-4-4m4 4V4" /></svg>}
+          />
+          <NavItem active={tab === 'history'} onClick={() => setTab('history')} label="History"
+            icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
           />
         </nav>
 
@@ -493,6 +526,77 @@ export default function ProfessorDashboard() {
                 ))}
               </div>
             )}
+          </div>
+
+        ) : tab === 'history' ? (
+          <div className="max-w-4xl mx-auto px-8 py-8">
+            <div className="mb-7">
+              <h1 className="text-white text-2xl font-bold">History</h1>
+              <p className="text-gray-500 text-sm mt-1">Past advising records grouped by term</p>
+            </div>
+            {(() => {
+              const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'cancelled');
+              const natureLabel = (c: Consultation) =>
+                c.nature_of_advising === 'Others (Please Specify)' && c.nature_of_advising_specify
+                  ? `Others: ${c.nature_of_advising_specify}`
+                  : c.nature_of_advising;
+              if (historyItems.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
+                    </div>
+                    <p className="text-gray-400 font-medium text-sm">No history yet</p>
+                    <p className="text-gray-600 text-xs mt-1">Completed advising sessions will appear here</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-8">
+                  {groupByQuarter(historyItems).map(([quarter, items]) => (
+                    <div key={quarter}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">{quarter}</p>
+                        <span className="text-gray-700 text-xs">{items.length} session{items.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                        <table className="w-full table-fixed">
+                          <thead>
+                            <tr className="border-b border-white/5">
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[110px]">Date</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[160px]">Student</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3">Purpose</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[170px]">Action Taken</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[100px]">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {items.map(c => (
+                              <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
+                                <td className="px-4 py-3 text-gray-300 text-xs whitespace-nowrap">
+                                  {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </td>
+                                <td className="px-4 py-3 text-gray-300 text-xs">
+                                  <p className="truncate font-medium">{c.student_name}</p>
+                                  <p className="text-gray-600 text-[10px] mt-0.5">{c.student_number}</p>
+                                </td>
+                                <td className="px-4 py-3 text-gray-400 text-xs">
+                                  <span className="line-clamp-2">{natureLabel(c)}</span>
+                                </td>
+                                <td className="px-4 py-3 text-gray-400 text-xs">
+                                  <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
+                                </td>
+                                <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
         ) : (

@@ -58,10 +58,12 @@ router.get('/', authenticate, async (req, res) => {
       );
       result = await pool.query(
         `SELECT c.*, s.full_name AS student_name, s.student_number,
-                s.program, sch.day, sch.time_start, sch.time_end
+                s.program, sch.day, sch.time_start, sch.time_end,
+                cd.action_taken, cd.referral
          FROM consultations c
          JOIN students s ON c.student_id = s.id
          JOIN schedules sch ON c.schedule_id = sch.id
+         LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
          WHERE c.professor_id = $1
          ORDER BY c.date DESC`,
         [prof.rows[0].id]
@@ -72,10 +74,12 @@ router.get('/', authenticate, async (req, res) => {
       );
       result = await pool.query(
         `SELECT c.*, p.full_name AS professor_name,
-                sch.day, sch.time_start, sch.time_end
+                sch.day, sch.time_start, sch.time_end,
+                cd.action_taken, cd.referral
          FROM consultations c
          JOIN professors p ON c.professor_id = p.id
          JOIN schedules sch ON c.schedule_id = sch.id
+         LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
          WHERE c.student_id = $1
          ORDER BY c.date DESC`,
         [student.rows[0].id]
@@ -83,11 +87,13 @@ router.get('/', authenticate, async (req, res) => {
     } else {
       result = await pool.query(
         `SELECT c.*, s.full_name AS student_name, p.full_name AS professor_name,
-                sch.day, sch.time_start, sch.time_end
+                sch.day, sch.time_start, sch.time_end,
+                cd.action_taken, cd.referral
          FROM consultations c
          JOIN students s ON c.student_id = s.id
          JOIN professors p ON c.professor_id = p.id
          JOIN schedules sch ON c.schedule_id = sch.id
+         LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
          ORDER BY c.date DESC`
       );
     }
