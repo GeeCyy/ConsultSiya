@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,10 +10,18 @@ import { Label } from '@/components/ui/label';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('registered') === '1') {
+      setSuccess('Account created! You can now sign in.');
+    }
+  }, [searchParams]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -51,7 +60,12 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Error */}
+        {/* Success / Error */}
+        {success && (
+          <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#003a0e', color: '#6bff9e' }}>
+            {success}
+          </div>
+        )}
         {error && (
           <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#3a0000', color: '#ff6b6b' }}>
             {error}
@@ -94,7 +108,12 @@ export default function LoginPage() {
           </Button>
         </div>
 
-        <p className="text-center text-gray-600 text-xs mt-6">
+        <p className="text-center text-sm text-gray-500 mt-5">
+          No account yet?{' '}
+          <Link href="/register" className="text-[#CC0000] hover:underline">Register</Link>
+        </p>
+
+        <p className="text-center text-gray-600 text-xs mt-4">
           © 2026 Mapúa University SOIT
         </p>
       </div>
