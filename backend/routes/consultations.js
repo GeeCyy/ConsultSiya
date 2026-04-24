@@ -5,7 +5,7 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, nature_of_advising, mode } = req.body;
+  const { professor_id, schedule_id, date, nature_of_advising, nature_of_advising_specify, mode } = req.body;
 
   try {
     const studentResult = await pool.query(
@@ -30,9 +30,9 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO consultations
-       (student_id, professor_id, schedule_id, date, nature_of_advising, mode)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [student_id, professor_id, schedule_id, date, nature_of_advising, mode]
+       (student_id, professor_id, schedule_id, date, nature_of_advising, nature_of_advising_specify, mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [student_id, professor_id, schedule_id, date, nature_of_advising, nature_of_advising_specify || null, mode]
     );
 
     await pool.query(
@@ -200,7 +200,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
 // Professor marks consultation as completed and adds details
 router.patch('/:id/complete', authenticate, authorize('professor'), async (req, res) => {
   const { id } = req.params;
-  const { action_taken, referral, remarks } = req.body;
+  const { action_taken, referral, referral_specify, remarks } = req.body;
 
   try {
     const prof = await pool.query(
@@ -238,9 +238,9 @@ router.patch('/:id/complete', authenticate, authorize('professor'), async (req, 
 
     const result = await pool.query(
       `INSERT INTO consultation_details
-       (consultation_id, action_taken, referral, remarks)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [id, action_taken, referral, remarks]
+       (consultation_id, action_taken, referral, referral_specify, remarks)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, action_taken, referral || null, referral_specify || null, remarks || null]
     );
 
     res.json({ message: 'Consultation completed', details: result.rows[0] });

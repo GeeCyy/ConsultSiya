@@ -1,10 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+const NATURE_OPTIONS = [
+  'Thesis/Design Subject concerns',
+  'Mentoring/Clarification on the Topic of the Subjects Enrolled',
+  'Requirements in Courses Enrolled',
+  'Concerns about Electives/Tracks in the Curriculum',
+  'Concerns on Internship/OJT Matters',
+  'Concerns regarding Placement/Employment Opportunities',
+  'Concerns regarding Personal/Family, etc.',
+  'Others (Please Specify)',
+];
 
 type Schedule = {
   id: number;
@@ -24,8 +35,10 @@ type Consultation = {
   time_start: string;
   time_end: string;
   nature_of_advising: string;
+  nature_of_advising_specify: string | null;
   mode: string;
   status: string;
+  uploaded_form_path: string | null;
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -53,7 +66,9 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
-function NavItem({ icon, label, active, count, onClick }: { icon: React.ReactNode; label: string; active: boolean; count?: number; onClick: () => void }) {
+function NavItem({ icon, label, active, count, onClick }: {
+  icon: React.ReactNode; label: string; active: boolean; count?: number; onClick: () => void;
+}) {
   return (
     <button onClick={onClick}
       className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
@@ -78,8 +93,13 @@ export default function StudentDashboard() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const [bookingSlotId, setBookingSlotId] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ nature_of_advising: '', mode: 'F2F', date: '' });
+  const [bookForm, setBookForm] = useState({ nature_of_advising: '', nature_of_advising_specify: '', mode: 'F2F', date: '' });
   const [bookError, setBookError] = useState('');
+
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [downloadingSlip, setDownloadingSlip] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadForId = useRef<number | null>(null);
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
@@ -99,20 +119,27 @@ export default function StudentDashboard() {
   const toggleBooking = (id: number) => {
     if (bookingSlotId === id) { setBookingSlotId(null); return; }
     setBookingSlotId(id);
-    setBookForm({ nature_of_advising: '', mode: 'F2F', date: '' });
+    setBookForm({ nature_of_advising: '', nature_of_advising_specify: '', mode: 'F2F', date: '' });
     setBookError('');
   };
 
   const handleBook = async (schedule: Schedule) => {
     setBookError('');
-    if (!bookForm.nature_of_advising || !bookForm.date) { setBookError('Please fill in all fields.'); return; }
+    if (!bookForm.nature_of_advising) { setBookError('Please select a nature of advising.'); return; }
+    if (bookForm.nature_of_advising === 'Others (Please Specify)' && !bookForm.nature_of_advising_specify.trim()) {
+      setBookError('Please specify the nature of advising.'); return;
+    }
+    if (!bookForm.date) { setBookError('Please select a date.'); return; }
+
     const data = await api.post('/api/consultations', {
       professor_id: schedule.professor_id,
       schedule_id: schedule.id,
       date: bookForm.date,
       nature_of_advising: bookForm.nature_of_advising,
+      nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
       mode: bookForm.mode,
     }, token!);
+
     if (data.error) { setBookError(data.error); return; }
     setBookingSlotId(null);
     await fetchData();
@@ -126,16 +153,70 @@ export default function StudentDashboard() {
     fetchData();
   };
 
+  const handleDownloadSlip = async (id: number) => {
+    setDownloadingSlip(id);
+    try {
+      const res = await fetch(`${API_URL}/api/forms/advising-slip/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { alert('Failed to generate advising slip.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `advising-slip-${id}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingSlip(null);
+    }
+  };
+
+  const triggerUpload = (id: number) => {
+    uploadForId.current = id;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadForId.current) return;
+    const id = uploadForId.current;
+    setUploadingId(id);
+    e.target.value = '';
+
+    const formData = new FormData();
+    formData.append('form', file);
+
+    try {
+      const res = await fetch(`${API_URL}/api/forms/upload/${id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.error) { alert(data.error); return; }
+      await fetchData();
+    } finally {
+      setUploadingId(null);
+      uploadForId.current = null;
+    }
+  };
+
   const handleLogout = () => { localStorage.clear(); router.push('/login'); };
 
   const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
 
+  const natureLabel = (c: Consultation) =>
+    c.nature_of_advising === 'Others (Please Specify)' && c.nature_of_advising_specify
+      ? `Others: ${c.nature_of_advising_specify}`
+      : c.nature_of_advising;
+
   return (
     <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
 
+      {/* hidden file input for upload */}
+      <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
+
       {/* ── Sidebar ── */}
       <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
-        {/* Brand */}
         <div className="px-5 py-5 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
@@ -173,7 +254,7 @@ export default function StudentDashboard() {
         </div>
       </aside>
 
-      {/* ── Main content ── */}
+      {/* ── Main ── */}
       <main className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -212,7 +293,6 @@ export default function StudentDashboard() {
                           <p className="text-gray-500 text-xs mt-0.5 font-mono">{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</p>
                         </div>
                       </div>
-
                       <div className="mt-4 flex items-center justify-between">
                         <span className="inline-flex items-center gap-1.5 text-xs text-emerald-500">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -232,16 +312,46 @@ export default function StudentDashboard() {
                     {bookingSlotId === s.id && (
                       <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
                         <p className="text-white text-sm font-semibold">Booking Details</p>
+
+                        {/* Nature of Advising */}
                         <div>
-                          <Label className="text-gray-500 text-xs mb-1.5 block">Nature of Advising</Label>
-                          <Input value={bookForm.nature_of_advising}
-                            onChange={e => setBookForm(f => ({ ...f, nature_of_advising: e.target.value }))}
-                            className="bg-[#1a1a1a] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0 placeholder:text-gray-600"
-                            placeholder="e.g. Thesis / Design Subject concerns" />
+                          <p className="text-gray-500 text-xs mb-2">Nature of Advising</p>
+                          <div className="space-y-1.5">
+                            {NATURE_OPTIONS.map(opt => (
+                              <label key={opt}
+                                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                                  bookForm.nature_of_advising === opt
+                                    ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30'
+                                    : 'bg-[#1a1a1a] hover:bg-white/5'
+                                }`}>
+                                <span className={`mt-0.5 w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center ${
+                                  bookForm.nature_of_advising === opt ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
+                                }`}>
+                                  {bookForm.nature_of_advising === opt && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                  )}
+                                </span>
+                                <span className="text-sm text-gray-300">{opt}</span>
+                                <input type="radio" name="nature" value={opt} className="sr-only"
+                                  checked={bookForm.nature_of_advising === opt}
+                                  onChange={() => setBookForm(f => ({ ...f, nature_of_advising: opt, nature_of_advising_specify: '' }))} />
+                              </label>
+                            ))}
+                          </div>
+                          {bookForm.nature_of_advising === 'Others (Please Specify)' && (
+                            <input
+                              className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                              placeholder="Please specify…"
+                              value={bookForm.nature_of_advising_specify}
+                              onChange={e => setBookForm(f => ({ ...f, nature_of_advising_specify: e.target.value }))}
+                            />
+                          )}
                         </div>
+
+                        {/* Mode + Date */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label className="text-gray-500 text-xs mb-1.5 block">Mode</Label>
+                            <p className="text-gray-500 text-xs mb-1.5">Mode</p>
                             <select value={bookForm.mode}
                               onChange={e => setBookForm(f => ({ ...f, mode: e.target.value }))}
                               className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
@@ -250,12 +360,13 @@ export default function StudentDashboard() {
                             </select>
                           </div>
                           <div>
-                            <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
-                            <Input type="date" value={bookForm.date}
+                            <p className="text-gray-500 text-xs mb-1.5">Date</p>
+                            <input type="date" value={bookForm.date}
                               onChange={e => setBookForm(f => ({ ...f, date: e.target.value }))}
-                              className="bg-[#1a1a1a] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0" />
+                              className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
                           </div>
                         </div>
+
                         {bookError && <p className="text-red-400 text-xs">{bookError}</p>}
                         <div className="flex justify-end">
                           <button onClick={() => handleBook(s)}
@@ -297,7 +408,7 @@ export default function StudentDashboard() {
                           <h3 className="text-white font-semibold text-sm">{c.professor_name}</h3>
                           <StatusBadge status={c.status} />
                         </div>
-                        <p className="text-gray-500 text-xs mt-0.5">{c.nature_of_advising}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">{natureLabel(c)}</p>
                       </div>
                     </div>
 
@@ -318,14 +429,64 @@ export default function StudentDashboard() {
                       </div>
                     </div>
 
-                    {(c.status === 'pending' || c.status === 'confirmed') && (
-                      <div className="mt-3.5 flex justify-end">
+                    {/* Form actions */}
+                    <div className="mt-3.5 pt-3.5 border-t border-white/5 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        {/* Download advising slip */}
+                        <button
+                          onClick={() => handleDownloadSlip(c.id)}
+                          disabled={downloadingSlip === c.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200 transition-colors disabled:opacity-50">
+                          {downloadingSlip === c.id ? (
+                            <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                          )}
+                          Download Slip
+                        </button>
+
+                        {/* Upload signed form */}
+                        {(c.status === 'pending' || c.status === 'confirmed') && (
+                          <button
+                            onClick={() => triggerUpload(c.id)}
+                            disabled={uploadingId === c.id}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+                              c.uploaded_form_path
+                                ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20 hover:bg-amber-500/20'
+                            }`}>
+                            {uploadingId === c.id ? (
+                              <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            ) : c.uploaded_form_path ? (
+                              <>
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                Form Uploaded · Replace
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8-4-4m0 0L8 8m4-4v12" /></svg>
+                                Upload Signed Form
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Show uploaded indicator for non-active consultations */}
+                        {c.status !== 'pending' && c.status !== 'confirmed' && c.uploaded_form_path && (
+                          <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            Form submitted
+                          </span>
+                        )}
+                      </div>
+
+                      {(c.status === 'pending' || c.status === 'confirmed') && (
                         <button onClick={() => handleCancel(c.id)}
                           className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors">
-                          Cancel Consultation
+                          Cancel
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

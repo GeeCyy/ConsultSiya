@@ -1,6 +1,7 @@
 # Backend
 backend/.env
 backend/node_modules/
+backend/uploads/
 
 # Frontend (frontend/.gitignore handles its own ignores)
 frontend/node_modules/

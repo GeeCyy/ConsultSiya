@@ -9,6 +9,13 @@ import { Label } from '@/components/ui/label';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const REFERRAL_OPTIONS = [
+  'Peer Advising (W501-Intramuros / R203-Makati)',
+  'Counseling of Personal Concerns (Center for Guidance and Counseling)',
+  'Career Advising (Center for Career Services)',
+  'Other Office (Please Specify)',
+];
+
 type Consultation = {
   id: number;
   student_name: string;
@@ -19,8 +26,10 @@ type Consultation = {
   time_start: string;
   time_end: string;
   nature_of_advising: string;
+  nature_of_advising_specify: string | null;
   mode: string;
   status: string;
+  uploaded_form_path: string | null;
 };
 
 type Schedule = {
@@ -58,14 +67,11 @@ function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
         active ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
-      }`}
-    >
-      {icon}
-      {label}
+      }`}>
+      {icon}{label}
     </button>
   );
 }
@@ -79,9 +85,16 @@ export default function ProfessorDashboard() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const [completingId, setCompletingId] = useState<number | null>(null);
-  const [completeForm, setCompleteForm] = useState({ action_taken: '', referral: '', remarks: '' });
+  const [completeForm, setCompleteForm] = useState({
+    action_taken: '',
+    referral: '',
+    referral_specify: '',
+    remarks: '',
+  });
+
   const [newSched, setNewSched] = useState({ day: 'Monday', time_start: '', time_end: '' });
   const [schedError, setSchedError] = useState('');
+  const [downloadingForm, setDownloadingForm] = useState<number | null>(null);
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
@@ -107,14 +120,38 @@ export default function ProfessorDashboard() {
   const toggleCompleting = (id: number) => {
     if (completingId === id) { setCompletingId(null); return; }
     setCompletingId(id);
-    setCompleteForm({ action_taken: '', referral: '', remarks: '' });
+    setCompleteForm({ action_taken: '', referral: '', referral_specify: '', remarks: '' });
   };
 
   const handleComplete = async (id: number) => {
+    if (!completeForm.action_taken) { alert('Please select an action taken.'); return; }
+    if (completeForm.action_taken === 'Referred to' && !completeForm.referral) {
+      alert('Please select a referral option.'); return;
+    }
+    if (completeForm.referral === 'Other Office (Please Specify)' && !completeForm.referral_specify.trim()) {
+      alert('Please specify the other office.'); return;
+    }
     const data = await api.patch(`/api/consultations/${id}/complete`, completeForm, token!);
     if (data.error) { alert(data.error); return; }
     setCompletingId(null);
     fetchAll();
+  };
+
+  const handleDownloadStudentForm = async (id: number) => {
+    setDownloadingForm(id);
+    try {
+      const res = await fetch(`${API_URL}/api/forms/download/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error || 'Download failed.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `student-form-${id}`; a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingForm(null);
+    }
   };
 
   const handleAddSchedule = async () => {
@@ -154,12 +191,29 @@ export default function ProfessorDashboard() {
     completed: consultations.filter(c => c.status === 'completed').length,
   };
 
+  const natureLabel = (c: Consultation) =>
+    c.nature_of_advising === 'Others (Please Specify)' && c.nature_of_advising_specify
+      ? `Others: ${c.nature_of_advising_specify}`
+      : c.nature_of_advising;
+
+  const radioCls = (selected: boolean) =>
+    `flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+      selected ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30 text-white' : 'bg-[#1a1a1a] text-gray-400 hover:bg-white/5'
+    }`;
+
+  const radioBtn = (selected: boolean) => (
+    <span className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center ${
+      selected ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
+    }`}>
+      {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+    </span>
+  );
+
   return (
     <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
 
       {/* ── Sidebar ── */}
       <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
-        {/* Brand */}
         <div className="px-5 py-5 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
@@ -174,12 +228,10 @@ export default function ProfessorDashboard() {
           </div>
         </div>
 
-        {/* Role pill */}
         <div className="px-5 py-3 border-b border-white/5">
           <span className="text-[10px] font-semibold text-[#CC0000] uppercase tracking-widest">Professor</span>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavItem active={tab === 'consultations'} onClick={() => setTab('consultations')} label="My Consultations"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>}
@@ -192,7 +244,6 @@ export default function ProfessorDashboard() {
           />
         </nav>
 
-        {/* Logout */}
         <div className="px-3 py-4 border-t border-white/5">
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" /></svg>
@@ -201,7 +252,7 @@ export default function ProfessorDashboard() {
         </div>
       </aside>
 
-      {/* ── Main content ── */}
+      {/* ── Main ── */}
       <main className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -216,7 +267,6 @@ export default function ProfessorDashboard() {
               <p className="text-gray-500 text-sm mt-1">Review and manage student consultation requests</p>
             </div>
 
-            {/* Quick stats */}
             <div className="grid grid-cols-3 gap-3 mb-7">
               {[
                 { label: 'Total', value: stats.total, color: 'text-white' },
@@ -262,15 +312,32 @@ export default function ProfessorDashboard() {
                         </div>
                         <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
                           <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Nature of Advising</p>
-                          <p className="text-gray-200 text-sm line-clamp-2">{c.nature_of_advising}</p>
+                          <p className="text-gray-200 text-sm line-clamp-2">{natureLabel(c)}</p>
                         </div>
                       </div>
 
-                      <div className="mt-3.5 flex items-center justify-between">
-                        <span className={`inline-flex items-center gap-1.5 text-xs ${c.mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
-                          {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
-                        </span>
+                      <div className="mt-3.5 flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className={`inline-flex items-center gap-1.5 text-xs ${c.mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
+                            {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
+                          </span>
+
+                          {/* Download student's uploaded form */}
+                          {c.uploaded_form_path && (
+                            <button
+                              onClick={() => handleDownloadStudentForm(c.id)}
+                              disabled={downloadingForm === c.id}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20 hover:bg-blue-500/20 transition-colors disabled:opacity-50">
+                              {downloadingForm === c.id ? (
+                                <span className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                              )}
+                              Student Form
+                            </button>
+                          )}
+                        </div>
 
                         {(c.status === 'pending' || c.status === 'confirmed') && (
                           <div className="flex items-center gap-2">
@@ -289,35 +356,65 @@ export default function ProfessorDashboard() {
                       </div>
                     </div>
 
+                    {/* Completion form */}
                     {completingId === c.id && (
                       <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
                         <p className="text-white text-sm font-semibold">Completion Details</p>
+
+                        {/* Action Taken */}
                         <div>
-                          <Label className="text-gray-500 text-xs mb-1.5 block">Action Taken</Label>
+                          <p className="text-gray-500 text-xs mb-2">Action Taken</p>
+                          <div className="space-y-1.5">
+                            {['Resolved', 'For Follow-up', 'Referred to'].map(opt => (
+                              <label key={opt} className={radioCls(completeForm.action_taken === opt)}>
+                                {radioBtn(completeForm.action_taken === opt)}
+                                {opt}
+                                <input type="radio" className="sr-only"
+                                  checked={completeForm.action_taken === opt}
+                                  onChange={() => setCompleteForm(f => ({ ...f, action_taken: opt, referral: '', referral_specify: '' }))} />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Referral sub-choices */}
+                        {completeForm.action_taken === 'Referred to' && (
+                          <div>
+                            <p className="text-gray-500 text-xs mb-2">Referred To</p>
+                            <div className="space-y-1.5">
+                              {REFERRAL_OPTIONS.map(opt => (
+                                <label key={opt} className={radioCls(completeForm.referral === opt)}>
+                                  {radioBtn(completeForm.referral === opt)}
+                                  {opt}
+                                  <input type="radio" className="sr-only"
+                                    checked={completeForm.referral === opt}
+                                    onChange={() => setCompleteForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
+                                </label>
+                              ))}
+                            </div>
+                            {completeForm.referral === 'Other Office (Please Specify)' && (
+                              <input
+                                className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                                placeholder="Please specify the office…"
+                                value={completeForm.referral_specify}
+                                onChange={e => setCompleteForm(f => ({ ...f, referral_specify: e.target.value }))}
+                              />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Remarks */}
+                        <div>
+                          <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
                           <textarea
-                            value={completeForm.action_taken}
-                            onChange={e => setCompleteForm(f => ({ ...f, action_taken: e.target.value }))}
+                            value={completeForm.remarks}
+                            onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
                             rows={2}
                             className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
-                            placeholder="Describe the action taken..."
+                            placeholder="Additional remarks…"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-gray-500 text-xs mb-1.5 block">Referral</Label>
-                            <Input value={completeForm.referral}
-                              onChange={e => setCompleteForm(f => ({ ...f, referral: e.target.value }))}
-                              className="bg-[#1a1a1a] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0 placeholder:text-gray-600"
-                              placeholder="Referral (if any)" />
-                          </div>
-                          <div>
-                            <Label className="text-gray-500 text-xs mb-1.5 block">Remarks</Label>
-                            <Input value={completeForm.remarks}
-                              onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
-                              className="bg-[#1a1a1a] border-white/10 text-white text-sm focus:border-[#CC0000]/50 focus:ring-0 placeholder:text-gray-600"
-                              placeholder="Additional remarks" />
-                          </div>
-                        </div>
+
                         <div className="flex justify-end">
                           <button onClick={() => handleComplete(c.id)}
                             className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
@@ -339,7 +436,6 @@ export default function ProfessorDashboard() {
               <p className="text-gray-500 text-sm mt-1">Add or remove your available consultation time slots</p>
             </div>
 
-            {/* Add form */}
             <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 mb-6">
               <p className="text-white text-sm font-semibold mb-4">Add New Slot</p>
               <div className="grid grid-cols-3 gap-3">
@@ -370,10 +466,7 @@ export default function ProfessorDashboard() {
               </button>
             </div>
 
-            {/* Slot list */}
-            <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
-              Your Slots ({schedules.length})
-            </p>
+            <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">Your Slots ({schedules.length})</p>
             {schedules.length === 0 ? (
               <div className="text-center py-12 rounded-2xl border border-white/5 bg-[#161616]">
                 <p className="text-gray-500 text-sm">No slots yet. Add one above.</p>

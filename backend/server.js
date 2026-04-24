@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const pool = require('./db/db');
@@ -11,11 +12,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Static uploads (serve uploaded forms)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/schedules', require('./routes/schedules'));
 app.use('/api/consultations', require('./routes/consultations'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/forms', require('./routes/forms'));
 
 // Health check routes
 app.get('/health', (req, res) => {
