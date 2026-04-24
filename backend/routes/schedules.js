@@ -51,6 +51,23 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Admin: view all schedules across all professors
+router.get('/all', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available,
+              p.id AS professor_id, p.full_name AS professor_name, p.department
+       FROM schedules s
+       JOIN professors p ON s.professor_id = p.id
+       ORDER BY p.full_name, s.day, s.time_start`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Professor views their own schedules (all, including booked)
 router.get('/mine', authenticate, authorize('professor'), async (req, res) => {
   try {
