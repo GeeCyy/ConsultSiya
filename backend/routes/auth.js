@@ -24,9 +24,9 @@ router.post('/register', async (req, res) => {
     // Create profile based on role
     if (role === 'student') {
       await pool.query(
-        `INSERT INTO students (user_id, full_name, student_number, program, year_level) 
+        `INSERT INTO students (user_id, full_name, student_number, program, year_level)
          VALUES ($1, $2, $3, $4, $5)`,
-        [userId, full_name, student_number, program, year_level]
+        [userId, full_name, student_number, program, parseInt(year_level) || null]
       );
     } else if (role === 'professor') {
       await pool.query(

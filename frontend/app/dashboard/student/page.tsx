@@ -123,7 +123,7 @@ export default function StudentDashboard() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const [bookingSlotId, setBookingSlotId] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ nature_of_advising: '', nature_of_advising_specify: '', mode: 'F2F', date: '' });
+  const [bookForm, setBookForm] = useState({ nature_of_advising: [] as string[], nature_of_advising_specify: '', mode: 'F2F' });
   const [bookError, setBookError] = useState('');
 
   const [uploadingId, setUploadingId] = useState<number | null>(null);
@@ -149,23 +149,20 @@ export default function StudentDashboard() {
   const toggleBooking = (id: number) => {
     if (bookingSlotId === id) { setBookingSlotId(null); return; }
     setBookingSlotId(id);
-    setBookForm({ nature_of_advising: '', nature_of_advising_specify: '', mode: 'F2F', date: '' });
+    setBookForm({ nature_of_advising: [], nature_of_advising_specify: '', mode: 'F2F' });
     setBookError('');
   };
 
   const handleBook = async (schedule: Schedule) => {
     setBookError('');
-    if (!bookForm.nature_of_advising) { setBookError('Please select a nature of advising.'); return; }
-    if (bookForm.nature_of_advising === 'Others (Please Specify)' && !bookForm.nature_of_advising_specify.trim()) {
+    if (bookForm.nature_of_advising.length === 0) { setBookError('Please select at least one nature of advising.'); return; }
+    if (bookForm.nature_of_advising.includes('Others (Please Specify)') && !bookForm.nature_of_advising_specify.trim()) {
       setBookError('Please specify the nature of advising.'); return;
     }
-    if (!bookForm.date) { setBookError('Please select a date.'); return; }
-
     const data = await api.post('/api/consultations', {
       professor_id: schedule.professor_id,
       schedule_id: schedule.id,
-      date: bookForm.date,
-      nature_of_advising: bookForm.nature_of_advising,
+      nature_of_advising: bookForm.nature_of_advising.join(', '),
       nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
       mode: bookForm.mode,
     }, token!);
@@ -350,28 +347,35 @@ export default function StudentDashboard() {
                         <div>
                           <p className="text-gray-500 text-xs mb-2">Nature of Advising</p>
                           <div className="space-y-1.5">
-                            {NATURE_OPTIONS.map(opt => (
-                              <label key={opt}
-                                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                                  bookForm.nature_of_advising === opt
-                                    ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30'
-                                    : 'bg-[#1a1a1a] hover:bg-white/5'
-                                }`}>
-                                <span className={`mt-0.5 w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center ${
-                                  bookForm.nature_of_advising === opt ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
-                                }`}>
-                                  {bookForm.nature_of_advising === opt && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                  )}
-                                </span>
-                                <span className="text-sm text-gray-300">{opt}</span>
-                                <input type="radio" name="nature" value={opt} className="sr-only"
-                                  checked={bookForm.nature_of_advising === opt}
-                                  onChange={() => setBookForm(f => ({ ...f, nature_of_advising: opt, nature_of_advising_specify: '' }))} />
-                              </label>
-                            ))}
+                            {NATURE_OPTIONS.map(opt => {
+                              const checked = bookForm.nature_of_advising.includes(opt);
+                              return (
+                                <label key={opt}
+                                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                                    checked ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30' : 'bg-[#1a1a1a] hover:bg-white/5'
+                                  }`}>
+                                  <span className={`mt-0.5 w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${
+                                    checked ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
+                                  }`}>
+                                    {checked && (
+                                      <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M1.5 5l2.5 2.5 4.5-4.5" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <span className="text-sm text-gray-300">{opt}</span>
+                                  <input type="checkbox" className="sr-only" checked={checked}
+                                    onChange={() => setBookForm(f => {
+                                      const next = checked
+                                        ? f.nature_of_advising.filter(x => x !== opt)
+                                        : [...f.nature_of_advising, opt];
+                                      return { ...f, nature_of_advising: next, nature_of_advising_specify: next.includes('Others (Please Specify)') ? f.nature_of_advising_specify : '' };
+                                    })} />
+                                </label>
+                              );
+                            })}
                           </div>
-                          {bookForm.nature_of_advising === 'Others (Please Specify)' && (
+                          {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
                             <input
                               className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
                               placeholder="Please specify…"
@@ -391,12 +395,6 @@ export default function StudentDashboard() {
                               <option value="F2F">Face-to-Face (F2F)</option>
                               <option value="OL">Online (OL)</option>
                             </select>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 text-xs mb-1.5">Date</p>
-                            <input type="date" value={bookForm.date}
-                              onChange={e => setBookForm(f => ({ ...f, date: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
                           </div>
                         </div>
 
