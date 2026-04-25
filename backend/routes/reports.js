@@ -5,7 +5,28 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
-const getReportData = async (professorId) => {
+// Build a date-range WHERE clause fragment based on ?period=week|year|semester
+function periodClause(period) {
+  switch (period) {
+    case 'week':
+      return `AND c.date >= date_trunc('week', CURRENT_DATE) AND c.date < date_trunc('week', CURRENT_DATE) + interval '7 days'`;
+    case 'year':
+      return `AND c.date >= date_trunc('year', CURRENT_DATE) AND c.date < date_trunc('year', CURRENT_DATE) + interval '1 year'`;
+    case 'semester': {
+      // Semester 1: Aug–Jan, Semester 2: Feb–Jul (adjust to institution calendar)
+      return `AND (
+        (EXTRACT(MONTH FROM c.date) >= 8 AND EXTRACT(MONTH FROM c.date) <= 12)
+        OR
+        (EXTRACT(MONTH FROM c.date) >= 1 AND EXTRACT(MONTH FROM c.date) <= 1)
+      )`;
+    }
+    default:
+      return '';
+  }
+}
+
+const getReportData = async (professorId, period) => {
+  const clause = periodClause(period);
   const result = await pool.query(
     `SELECT
       c.id, c.date, c.nature_of_advising, c.mode, c.status,
@@ -18,7 +39,7 @@ const getReportData = async (professorId) => {
      JOIN professors p ON c.professor_id = p.id
      JOIN schedules sch ON c.schedule_id = sch.id
      LEFT JOIN consultation_details cd ON cd.consultation_id = c.id
-     WHERE c.professor_id = $1
+     WHERE c.professor_id = $1 ${clause}
      ORDER BY c.date ASC`,
     [professorId]
   );
@@ -59,6 +80,12 @@ const addExcelSheet = (workbook, professor, rows) => {
   ];
 
   rows.forEach((row, index) => {
+    let nature = row.nature_of_advising || '';
+    try {
+      const parsed = JSON.parse(nature);
+      if (Array.isArray(parsed)) nature = parsed.join('; ');
+    } catch {}
+
     sheet.addRow([
       index + 1,
       row.student_name,
@@ -66,7 +93,7 @@ const addExcelSheet = (workbook, professor, rows) => {
       row.program,
       new Date(row.date).toLocaleDateString(),
       `${row.day} ${row.time_start?.slice(0, 5)}-${row.time_end?.slice(0, 5)}`,
-      row.nature_of_advising,
+      nature,
       row.mode,
       row.action_taken || '',
       row.referral || '',
@@ -101,6 +128,12 @@ const addPdfSection = (doc, professor, rows, isFirst) => {
 
   rows.forEach((row, index) => {
     x = 40;
+    let nature = row.nature_of_advising || '';
+    try {
+      const parsed = JSON.parse(nature);
+      if (Array.isArray(parsed)) nature = parsed.join('; ');
+    } catch {}
+
     const rowData = [
       index + 1,
       row.student_name,
@@ -108,7 +141,7 @@ const addPdfSection = (doc, professor, rows, isFirst) => {
       row.program,
       new Date(row.date).toLocaleDateString(),
       `${row.day} ${row.time_start?.slice(0, 5)}`,
-      row.nature_of_advising,
+      nature,
       row.mode,
       row.action_taken || 'N/A',
     ];
@@ -122,7 +155,6 @@ const addPdfSection = (doc, professor, rows, isFirst) => {
   });
 };
 
-// Resolve which professor to report on based on role + query param
 const resolveProfessor = async (req) => {
   if (req.user.role === 'admin' && req.query.professor_id) {
     const r = await pool.query(
@@ -139,7 +171,7 @@ const resolveProfessor = async (req) => {
   return r.rows[0] ?? null;
 };
 
-// List all professors (admin only)
+// List all professors with consultation counts (admin)
 router.get('/professors', authenticate, authorize('admin'), async (req, res) => {
   try {
     const result = await pool.query(
@@ -157,16 +189,16 @@ router.get('/professors', authenticate, authorize('admin'), async (req, res) => 
   }
 });
 
-// Export as Excel
+// Export as Excel — supports ?period=week|year|semester
 router.get('/excel', authenticate, authorize('professor', 'admin'), async (req, res) => {
+  const period = req.query.period || '';
   try {
     const workbook = new ExcelJS.Workbook();
 
-    // Admin downloading combined report for all professors
     if (req.user.role === 'admin' && req.query.professor_id === 'all') {
       const profs = await pool.query('SELECT id, full_name, department FROM professors ORDER BY full_name');
       for (const prof of profs.rows) {
-        const rows = await getReportData(prof.id);
+        const rows = await getReportData(prof.id, period);
         addExcelSheet(workbook, prof, rows);
       }
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -178,7 +210,7 @@ router.get('/excel', authenticate, authorize('professor', 'admin'), async (req, 
     const professor = await resolveProfessor(req);
     if (!professor) return res.status(404).json({ error: 'Professor profile not found.' });
 
-    const rows = await getReportData(professor.id);
+    const rows = await getReportData(professor.id, period);
     addExcelSheet(workbook, professor, rows);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -191,20 +223,19 @@ router.get('/excel', authenticate, authorize('professor', 'admin'), async (req, 
   }
 });
 
-// Export as PDF
+// Export as PDF — supports ?period=week|year|semester
 router.get('/pdf', authenticate, authorize('professor', 'admin'), async (req, res) => {
+  const period = req.query.period || '';
   try {
     const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
 
-    // Admin downloading combined report for all professors
     if (req.user.role === 'admin' && req.query.professor_id === 'all') {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename=advising-report-all.pdf');
       doc.pipe(res);
-
       const profs = await pool.query('SELECT id, full_name, department FROM professors ORDER BY full_name');
       for (let i = 0; i < profs.rows.length; i++) {
-        const rows = await getReportData(profs.rows[i].id);
+        const rows = await getReportData(profs.rows[i].id, period);
         addPdfSection(doc, profs.rows[i], rows, i === 0);
       }
       doc.end();
@@ -214,8 +245,7 @@ router.get('/pdf', authenticate, authorize('professor', 'admin'), async (req, re
     const professor = await resolveProfessor(req);
     if (!professor) return res.status(404).json({ error: 'Professor profile not found.' });
 
-    const rows = await getReportData(professor.id);
-
+    const rows = await getReportData(professor.id, period);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=advising-report-${professor.full_name}.pdf`);
     doc.pipe(res);

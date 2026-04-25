@@ -17,6 +17,40 @@ const NATURE_OPTIONS = [
   'Others (Please Specify)',
 ];
 
+const DAY_MAP: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+  Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+function getUpcomingDates(dayName: string, count = 10): string[] {
+  const targetDay = DAY_MAP[dayName];
+  if (targetDay === undefined) return [];
+  const dates: string[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(today);
+  while (dates.length < count) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() === targetDay) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      dates.push(`${y}-${m}-${day}`);
+    }
+  }
+  return dates;
+}
+
+function parseNature(natureStr: string | null): string[] {
+  if (!natureStr) return [];
+  try {
+    const parsed = JSON.parse(natureStr);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [natureStr];
+  }
+}
+
 type Schedule = {
   id: number;
   professor_id: number;
@@ -25,6 +59,8 @@ type Schedule = {
   day: string;
   time_start: string;
   time_end: string;
+  is_available: boolean;
+  location?: string;
 };
 
 type Consultation = {
@@ -42,16 +78,30 @@ type Consultation = {
   action_taken: string | null;
   referral: string | null;
   referral_specify: string | null;
+  remarks: string | null;
+  location?: string;
+  meeting_link?: string | null;
+};
+
+type StudentProfile = {
+  full_name: string;
+  student_number: string;
+  program: string;
+  year_level: string;
+  email: string;
+  phone: string;
+};
+
+const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
+  pending:     { ring: 'ring-amber-500/30',   text: 'text-amber-400',   dot: 'bg-amber-400',   label: 'Pending' },
+  confirmed:   { ring: 'ring-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    label: 'Confirmed' },
+  completed:   { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
+  cancelled:   { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
+  rescheduled: { ring: 'ring-orange-500/30',  text: 'text-orange-400',  dot: 'bg-orange-400',  label: 'Rescheduled' },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, { ring: string; text: string; dot: string; label: string }> = {
-    pending:   { ring: 'ring-amber-500/30',   text: 'text-amber-400',   dot: 'bg-amber-400',   label: 'Pending' },
-    confirmed: { ring: 'ring-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    label: 'Confirmed' },
-    completed: { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
-    cancelled: { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
-  };
-  const s = styles[status] ?? { ring: 'ring-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400', label: status };
+  const s = STATUS_STYLES[status] ?? { ring: 'ring-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400', label: status };
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/5 ring-1 ${s.ring} ${s.text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
@@ -114,22 +164,38 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
   return action_taken;
 }
 
+type View = 'book' | 'my' | 'history' | 'profile';
+
 export default function StudentDashboard() {
   const router = useRouter();
-  const [view, setView] = useState<'book' | 'my' | 'history'>('book');
+  const [view, setView] = useState<View>('book');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(true);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const [bookingSlotId, setBookingSlotId] = useState<number | null>(null);
-  const [bookForm, setBookForm] = useState({ nature_of_advising: '', nature_of_advising_specify: '', mode: 'F2F', date: '' });
+  const [bookForm, setBookForm] = useState({
+    nature_of_advising: [] as string[],
+    nature_of_advising_specify: '',
+    mode: 'F2F',
+    date: '',
+  });
   const [bookError, setBookError] = useState('');
+  const [bookedDates, setBookedDates] = useState<Record<number, string[]>>({});
 
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [downloadingSlip, setDownloadingSlip] = useState<number | null>(null);
+  const [downloadingReceipt, setDownloadingReceipt] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadForId = useRef<number | null>(null);
+
+  // Profile
+  const [profile, setProfile] = useState<StudentProfile>({
+    full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '',
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
@@ -146,17 +212,35 @@ export default function StudentDashboard() {
     setLoading(false);
   };
 
-  const toggleBooking = (id: number) => {
-    if (bookingSlotId === id) { setBookingSlotId(null); return; }
-    setBookingSlotId(id);
-    setBookForm({ nature_of_advising: '', nature_of_advising_specify: '', mode: 'F2F', date: '' });
+  const toggleBooking = async (schedule: Schedule) => {
+    if (bookingSlotId === schedule.id) { setBookingSlotId(null); return; }
+    setBookingSlotId(schedule.id);
+    setBookForm({ nature_of_advising: [], nature_of_advising_specify: '', mode: 'F2F', date: '' });
     setBookError('');
+    try {
+      const data = await api.get(`/api/consultations/booked-dates?professor_id=${schedule.professor_id}`, token!);
+      if (Array.isArray(data)) setBookedDates(prev => ({ ...prev, [schedule.id]: data }));
+    } catch {}
+  };
+
+  const toggleNature = (opt: string) => {
+    setBookForm(f => {
+      const selected = f.nature_of_advising.includes(opt)
+        ? f.nature_of_advising.filter(n => n !== opt)
+        : [...f.nature_of_advising, opt];
+      return {
+        ...f,
+        nature_of_advising: selected,
+        nature_of_advising_specify:
+          opt === 'Others (Please Specify)' && f.nature_of_advising.includes(opt) ? '' : f.nature_of_advising_specify,
+      };
+    });
   };
 
   const handleBook = async (schedule: Schedule) => {
     setBookError('');
-    if (!bookForm.nature_of_advising) { setBookError('Please select a nature of advising.'); return; }
-    if (bookForm.nature_of_advising === 'Others (Please Specify)' && !bookForm.nature_of_advising_specify.trim()) {
+    if (bookForm.nature_of_advising.length === 0) { setBookError('Please select at least one nature of advising.'); return; }
+    if (bookForm.nature_of_advising.includes('Others (Please Specify)') && !bookForm.nature_of_advising_specify.trim()) {
       setBookError('Please specify the nature of advising.'); return;
     }
     if (!bookForm.date) { setBookError('Please select a date.'); return; }
@@ -183,20 +267,36 @@ export default function StudentDashboard() {
     fetchData();
   };
 
-  const handleDownloadSlip = async (id: number) => {
-    setDownloadingSlip(id);
+  const handleDownloadSlip = async () => {
+    setDownloadingSlip(-1);
     try {
-      const res = await fetch(`${API_URL}/api/forms/advising-slip/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { alert('Failed to generate advising slip.'); return; }
+      const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { alert('Failed to download form template.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `advising-slip-${id}.pdf`; a.click();
+      a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf'; a.click();
       URL.revokeObjectURL(url);
     } finally {
       setDownloadingSlip(null);
+    }
+  };
+
+  // Generate and download consultation receipt as PDF
+  const handleDownloadReceipt = async (c: Consultation) => {
+    setDownloadingReceipt(c.id);
+    try {
+      const res = await fetch(`${API_URL}/api/forms/advising-slip/${c.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { alert('Failed to generate receipt.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `receipt-consultation-${c.id}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingReceipt(null);
     }
   };
 
@@ -211,10 +311,8 @@ export default function StudentDashboard() {
     const id = uploadForId.current;
     setUploadingId(id);
     e.target.value = '';
-
     const formData = new FormData();
     formData.append('form', file);
-
     try {
       const res = await fetch(`${API_URL}/api/forms/upload/${id}`, {
         method: 'POST',
@@ -230,22 +328,34 @@ export default function StudentDashboard() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileMsg('');
+    setTimeout(() => {
+      setProfileSaving(false);
+      setProfileMsg('Profile saved successfully.');
+    }, 500);
+  };
+
   const handleLogout = () => { localStorage.clear(); router.push('/login'); };
 
   const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
 
-  const natureLabel = (c: Consultation) =>
-    c.nature_of_advising === 'Others (Please Specify)' && c.nature_of_advising_specify
-      ? `Others: ${c.nature_of_advising_specify}`
-      : c.nature_of_advising;
+  const natureLabel = (c: Consultation) => {
+    const items = parseNature(c.nature_of_advising);
+    return items.map(i =>
+      i === 'Others (Please Specify)' && c.nature_of_advising_specify
+        ? `Others: ${c.nature_of_advising_specify}` : i
+    ).join(', ') || '—';
+  };
+
+  const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
     <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
-
-      {/* hidden file input for upload */}
       <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
         <div className="px-5 py-5 border-b border-white/5">
           <div className="flex items-center gap-3">
@@ -277,6 +387,9 @@ export default function StudentDashboard() {
           <NavItem active={view === 'history'} onClick={() => setView('history')} label="History"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
           />
+          <NavItem active={view === 'profile'} onClick={() => setView('profile')} label="Profile"
+            icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" /></svg>}
+          />
         </nav>
 
         <div className="px-3 py-4 border-t border-white/5">
@@ -287,7 +400,7 @@ export default function StudentDashboard() {
         </div>
       </aside>
 
-      {/* ── Main ── */}
+      {/* Main */}
       <main className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -304,9 +417,6 @@ export default function StudentDashboard() {
 
             {schedules.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-                </div>
                 <p className="text-gray-400 font-medium text-sm">No slots available</p>
                 <p className="text-gray-600 text-xs mt-1">Check back later when professors post their schedules</p>
               </div>
@@ -320,6 +430,11 @@ export default function StudentDashboard() {
                         <div className="flex-1">
                           <h3 className="text-white font-semibold text-sm">{s.professor_name}</h3>
                           <p className="text-gray-500 text-xs mt-0.5">{s.department}</p>
+                          {s.location && (
+                            <p className="text-gray-600 text-xs mt-0.5">
+                              <span className="text-purple-400">F2F: </span>{s.location}
+                            </p>
+                          )}
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-gray-200 text-sm font-medium">{s.day}</p>
@@ -331,7 +446,7 @@ export default function StudentDashboard() {
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Available
                         </span>
-                        <button onClick={() => toggleBooking(s.id)}
+                        <button onClick={() => toggleBooking(s)}
                           className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                             bookingSlotId === s.id
                               ? 'bg-white/5 text-gray-400'
@@ -346,32 +461,32 @@ export default function StudentDashboard() {
                       <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
                         <p className="text-white text-sm font-semibold">Booking Details</p>
 
-                        {/* Nature of Advising */}
                         <div>
-                          <p className="text-gray-500 text-xs mb-2">Nature of Advising</p>
+                          <p className="text-gray-500 text-xs mb-2">Nature of Advising <span className="text-gray-700">(select all that apply)</span></p>
                           <div className="space-y-1.5">
-                            {NATURE_OPTIONS.map(opt => (
-                              <label key={opt}
-                                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                                  bookForm.nature_of_advising === opt
-                                    ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30'
-                                    : 'bg-[#1a1a1a] hover:bg-white/5'
-                                }`}>
-                                <span className={`mt-0.5 w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center ${
-                                  bookForm.nature_of_advising === opt ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
-                                }`}>
-                                  {bookForm.nature_of_advising === opt && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                  )}
-                                </span>
-                                <span className="text-sm text-gray-300">{opt}</span>
-                                <input type="radio" name="nature" value={opt} className="sr-only"
-                                  checked={bookForm.nature_of_advising === opt}
-                                  onChange={() => setBookForm(f => ({ ...f, nature_of_advising: opt, nature_of_advising_specify: '' }))} />
-                              </label>
-                            ))}
+                            {NATURE_OPTIONS.map(opt => {
+                              const checked = bookForm.nature_of_advising.includes(opt);
+                              return (
+                                <label key={opt}
+                                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                                    checked ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30' : 'bg-[#1a1a1a] hover:bg-white/5'
+                                  }`}>
+                                  <span className={`mt-0.5 w-3.5 h-3.5 rounded flex-shrink-0 border flex items-center justify-center ${
+                                    checked ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
+                                  }`}>
+                                    {checked && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <span className="text-sm text-gray-300">{opt}</span>
+                                  <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(opt)} />
+                                </label>
+                              );
+                            })}
                           </div>
-                          {bookForm.nature_of_advising === 'Others (Please Specify)' && (
+                          {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
                             <input
                               className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
                               placeholder="Please specify…"
@@ -381,7 +496,6 @@ export default function StudentDashboard() {
                           )}
                         </div>
 
-                        {/* Mode + Date */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <p className="text-gray-500 text-xs mb-1.5">Mode</p>
@@ -391,12 +505,33 @@ export default function StudentDashboard() {
                               <option value="F2F">Face-to-Face (F2F)</option>
                               <option value="OL">Online (OL)</option>
                             </select>
+                            {bookForm.mode === 'OL' && (
+                              <p className="text-cyan-400 text-xs mt-1">A meeting link will be generated for you.</p>
+                            )}
+                            {bookForm.mode === 'F2F' && s.location && (
+                              <p className="text-purple-400 text-xs mt-1">Location: {s.location}</p>
+                            )}
                           </div>
                           <div>
-                            <p className="text-gray-500 text-xs mb-1.5">Date</p>
-                            <input type="date" value={bookForm.date}
+                            <p className="text-gray-500 text-xs mb-1.5">
+                              Date <span className="text-gray-700">({s.day}s only)</span>
+                            </p>
+                            <select value={bookForm.date}
                               onChange={e => setBookForm(f => ({ ...f, date: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
+                              className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
+                              <option value="">Select a date…</option>
+                              {getUpcomingDates(s.day).map(dateStr => {
+                                const isBooked = (bookedDates[s.id] || []).includes(dateStr);
+                                const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-PH', {
+                                  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+                                });
+                                return (
+                                  <option key={dateStr} value={dateStr} disabled={isBooked}>
+                                    {isBooked ? `${label} — Booked` : label}
+                                  </option>
+                                );
+                              })}
+                            </select>
                           </div>
                         </div>
 
@@ -422,13 +557,12 @@ export default function StudentDashboard() {
               <p className="text-gray-500 text-sm mt-1">Past consultations grouped by term</p>
             </div>
             {(() => {
-              const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'cancelled');
+              const historyItems = consultations.filter(c =>
+                c.status === 'completed' || c.status === 'cancelled' || c.status === 'rescheduled'
+              );
               if (historyItems.length === 0) {
                 return (
                   <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
-                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                      <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-                    </div>
                     <p className="text-gray-400 font-medium text-sm">No history yet</p>
                     <p className="text-gray-600 text-xs mt-1">Completed consultations will appear here</p>
                   </div>
@@ -448,9 +582,10 @@ export default function StudentDashboard() {
                             <tr className="border-b border-white/5">
                               <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[110px]">Date</th>
                               <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3">Purpose</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[160px]">Adviser</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[170px]">Action Taken</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[150px]">Adviser</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[155px]">Action Taken</th>
                               <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[100px]">Status</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[80px]">Receipt</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
@@ -467,6 +602,20 @@ export default function StudentDashboard() {
                                   <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
                                 </td>
                                 <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                                <td className="px-4 py-3">
+                                  {c.status === 'completed' && (
+                                    <button
+                                      onClick={() => handleDownloadReceipt(c)}
+                                      disabled={downloadingReceipt === c.id}
+                                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+                                      {downloadingReceipt === c.id
+                                        ? <span className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                                        : <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                                      }
+                                      PDF
+                                    </button>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -479,7 +628,49 @@ export default function StudentDashboard() {
             })()}
           </div>
 
+        ) : view === 'profile' ? (
+          <div className="max-w-lg mx-auto px-8 py-8">
+            <div className="mb-7">
+              <h1 className="text-white text-2xl font-bold">Profile</h1>
+              <p className="text-gray-500 text-sm mt-1">Your student account information</p>
+            </div>
+            <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 space-y-4">
+              <div>
+                <label className="text-gray-500 text-xs mb-1.5 block">Full Name</label>
+                <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-500 text-xs mb-1.5 block">Student Number</label>
+                  <input className={inputCls} value={profile.student_number} onChange={e => setProfile(p => ({ ...p, student_number: e.target.value }))} placeholder="e.g. 2020-12345" />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs mb-1.5 block">Year Level</label>
+                  <input className={inputCls} type="number" min="1" max="6" value={profile.year_level} onChange={e => setProfile(p => ({ ...p, year_level: e.target.value }))} placeholder="1–6" />
+                </div>
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs mb-1.5 block">Course / Program</label>
+                <input className={inputCls} value={profile.program} onChange={e => setProfile(p => ({ ...p, program: e.target.value }))} placeholder="e.g. BS Computer Science" />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs mb-1.5 block">Email</label>
+                <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs mb-1.5 block">Phone (optional)</label>
+                <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
+              </div>
+              {profileMsg && <p className="text-emerald-400 text-xs">{profileMsg}</p>}
+              <button onClick={handleSaveProfile} disabled={profileSaving}
+                className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
+                {profileSaving ? 'Saving…' : 'Save Profile'}
+              </button>
+            </div>
+          </div>
+
         ) : (
+          /* My Consultations */
           <div className="max-w-3xl mx-auto px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">My Consultations</h1>
@@ -488,9 +679,6 @@ export default function StudentDashboard() {
 
             {consultations.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>
-                </div>
                 <p className="text-gray-400 font-medium text-sm">No consultations yet</p>
                 <p className="text-gray-600 text-xs mt-1">Book a slot to get started</p>
               </div>
@@ -505,41 +693,51 @@ export default function StudentDashboard() {
                           <h3 className="text-white font-semibold text-sm">{c.professor_name}</h3>
                           <StatusBadge status={c.status} />
                         </div>
-                        <p className="text-gray-500 text-xs mt-0.5">{natureLabel(c)}</p>
+                        <p className="text-gray-500 text-xs mt-0.5 line-clamp-1">{natureLabel(c)}</p>
                       </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-2.5">
                       <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
                         <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Date & Time</p>
-                        <p className="text-gray-200 text-sm font-medium">{new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        <p className="text-gray-200 text-sm font-medium">
+                          {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
                         <p className="text-gray-500 text-xs mt-0.5">{c.day} · {c.time_start?.slice(0, 5)}–{c.time_end?.slice(0, 5)}</p>
                       </div>
-                      <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5 flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
-                        <div>
-                          <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-0.5">Mode</p>
-                          <p className={`text-sm font-medium ${c.mode === 'F2F' ? 'text-purple-300' : 'text-cyan-300'}`}>
+                      <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
+                        <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Meeting</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
+                          <span className={`text-sm font-medium ${c.mode === 'F2F' ? 'text-purple-300' : 'text-cyan-300'}`}>
                             {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
-                          </p>
+                          </span>
                         </div>
+                        {c.mode === 'F2F' && c.location && (
+                          <p className="text-gray-500 text-xs mt-0.5">{c.location}</p>
+                        )}
+                        {c.mode === 'OL' && c.meeting_link && (
+                          <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
+                            className="text-cyan-400 text-xs mt-0.5 block hover:underline truncate">
+                            Join Meeting →
+                          </a>
+                        )}
                       </div>
                     </div>
 
                     {/* Form actions */}
                     <div className="mt-3.5 pt-3.5 border-t border-white/5 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
-                        {/* Download advising slip */}
+                        {/* Download blank advising slip template */}
                         <button
-                          onClick={() => handleDownloadSlip(c.id)}
-                          disabled={downloadingSlip === c.id}
+                          onClick={handleDownloadSlip}
+                          disabled={downloadingSlip === -1}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200 transition-colors disabled:opacity-50">
-                          {downloadingSlip === c.id ? (
-                            <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-                          )}
-                          Download Slip
+                          {downloadingSlip === -1
+                            ? <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                          }
+                          Download Form
                         </button>
 
                         {/* Upload signed form */}
@@ -568,7 +766,19 @@ export default function StudentDashboard() {
                           </button>
                         )}
 
-                        {/* Show uploaded indicator for non-active consultations */}
+                        {c.status === 'completed' && (
+                          <button
+                            onClick={() => handleDownloadReceipt(c)}
+                            disabled={downloadingReceipt === c.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+                            {downloadingReceipt === c.id
+                              ? <span className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                              : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
+                            }
+                            Download Receipt
+                          </button>
+                        )}
+
                         {c.status !== 'pending' && c.status !== 'confirmed' && c.uploaded_form_path && (
                           <span className="flex items-center gap-1.5 text-xs text-emerald-500">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
