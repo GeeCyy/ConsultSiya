@@ -91,6 +91,15 @@ function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
   );
 }
 
+function ProfileField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={className}>
+      <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">{label}</p>
+      <p className="text-gray-200 text-sm font-medium">{value || '—'}</p>
+    </div>
+  );
+}
+
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick}
@@ -133,6 +142,34 @@ const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 
 type Tab = 'consultations' | 'calendar' | 'schedules' | 'export' | 'history' | 'profile';
 
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#161616] shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+          <h2 className="text-white font-bold text-base">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function ProfessorDashboard() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('consultations');
@@ -141,24 +178,24 @@ export default function ProfessorDashboard() {
   const [loading, setLoading] = useState(true);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-  // Complete form
-  const [completingId, setCompletingId] = useState<number | null>(null);
+  // Complete modal
+  const [completingConsult, setCompletingConsult] = useState<Consultation | null>(null);
   const [completeForm, setCompleteForm] = useState({ action_taken: '', referral: '', referral_specify: '', remarks: '' });
   const [completeError, setCompleteError] = useState('');
 
-  // Reschedule form
-  const [reschedulingId, setReschedulingId] = useState<number | null>(null);
+  // Reschedule modal
+  const [reschedulingConsult, setReschedulingConsult] = useState<Consultation | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState({ referral: '', referral_specify: '', remarks: '' });
   const [rescheduleError, setRescheduleError] = useState('');
 
-  // Add / edit schedule
+  // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', time_start: '', time_end: '', location: '' });
   const [schedError, setSchedError] = useState('');
   const [showConfirmSched, setShowConfirmSched] = useState(false);
   const [pendingSched, setPendingSched] = useState<typeof newSched | null>(null);
 
-  // Edit schedule
-  const [editingSchedId, setEditingSchedId] = useState<number | null>(null);
+  // Edit schedule modal
+  const [editingScheduleSlot, setEditingScheduleSlot] = useState<Schedule | null>(null);
   const [editSched, setEditSched] = useState({ day: 'Monday', time_start: '', time_end: '', location: '' });
   const [editSchedError, setEditSchedError] = useState('');
   const [showConfirmEdit, setShowConfirmEdit] = useState(false);
@@ -170,6 +207,14 @@ export default function ProfessorDashboard() {
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const [profileMode, setProfileMode] = useState<'view' | 'edit'>('view');
+  const [profileBeforeEdit, setProfileBeforeEdit] = useState<ProfProfile | null>(null);
+
+  // Theme
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    return true;
+  });
 
   const timeStartRef = useRef<HTMLInputElement>(null);
   const timeEndRef = useRef<HTMLInputElement>(null);
@@ -180,12 +225,21 @@ export default function ProfessorDashboard() {
   }, []);
 
   const fetchAll = async () => {
-    const [c, s] = await Promise.all([
+    const [c, s, prof] = await Promise.all([
       api.get('/api/consultations', token!),
       api.get('/api/schedules/mine', token!),
+      api.get('/api/auth/profile', token!),
     ]);
     setConsultations(Array.isArray(c) ? c : []);
     setSchedules(Array.isArray(s) ? s : []);
+    if (!prof.error) {
+      setProfile({
+        full_name: prof.full_name || '',
+        department: prof.department || '',
+        email: prof.email || '',
+        phone: prof.phone || '',
+      });
+    }
     setLoading(false);
   };
 
@@ -195,15 +249,14 @@ export default function ProfessorDashboard() {
     fetchAll();
   };
 
-  const toggleCompleting = (id: number) => {
-    if (completingId === id) { setCompletingId(null); return; }
-    setCompletingId(id);
-    setReschedulingId(null);
+  const openCompleteModal = (c: Consultation) => {
+    setCompletingConsult(c);
     setCompleteForm({ action_taken: '', referral: '', referral_specify: '', remarks: '' });
     setCompleteError('');
   };
 
-  const handleComplete = async (id: number) => {
+  const handleComplete = async () => {
+    if (!completingConsult) return;
     if (!completeForm.action_taken) { setCompleteError('Please select an action taken.'); return; }
     if (completeForm.action_taken === 'Referred to' && !completeForm.referral) {
       setCompleteError('Please select a referral option.'); return;
@@ -212,25 +265,24 @@ export default function ProfessorDashboard() {
       setCompleteError('Please specify the other office.'); return;
     }
     setCompleteError('');
-    const data = await api.patch(`/api/consultations/${id}/complete`, completeForm, token!);
+    const data = await api.patch(`/api/consultations/${completingConsult.id}/complete`, completeForm, token!);
     if (data.error) { setCompleteError(data.error); return; }
-    setCompletingId(null);
+    setCompletingConsult(null);
     fetchAll();
   };
 
-  const toggleRescheduling = (id: number) => {
-    if (reschedulingId === id) { setReschedulingId(null); return; }
-    setReschedulingId(id);
-    setCompletingId(null);
+  const openRescheduleModal = (c: Consultation) => {
+    setReschedulingConsult(c);
     setRescheduleForm({ referral: '', referral_specify: '', remarks: '' });
     setRescheduleError('');
   };
 
-  const handleReschedule = async (id: number) => {
+  const handleReschedule = async () => {
+    if (!reschedulingConsult) return;
     setRescheduleError('');
-    const data = await api.patch(`/api/consultations/${id}/reschedule`, rescheduleForm, token!);
+    const data = await api.patch(`/api/consultations/${reschedulingConsult.id}/reschedule`, rescheduleForm, token!);
     if (data.error) { setRescheduleError(data.error); return; }
-    setReschedulingId(null);
+    setReschedulingConsult(null);
     fetchAll();
   };
 
@@ -270,9 +322,9 @@ export default function ProfessorDashboard() {
     fetchAll();
   };
 
-  // Schedule edit
-  const startEdit = (s: Schedule) => {
-    setEditingSchedId(s.id);
+  // Schedule edit modal
+  const openEditModal = (s: Schedule) => {
+    setEditingScheduleSlot(s);
     setEditSched({ day: s.day, time_start: s.time_start.slice(0, 5), time_end: s.time_end.slice(0, 5), location: s.location || '' });
     setEditSchedError('');
   };
@@ -281,7 +333,7 @@ export default function ProfessorDashboard() {
     setEditSchedError('');
     if (!editSched.time_start || !editSched.time_end) { setEditSchedError('Both time fields are required.'); return; }
     if (editSched.time_start >= editSched.time_end) { setEditSchedError('End time must be after start time.'); return; }
-    setPendingEdit({ id: editingSchedId!, ...editSched });
+    setPendingEdit({ id: editingScheduleSlot!.id, ...editSched });
     setShowConfirmEdit(true);
   };
 
@@ -291,7 +343,7 @@ export default function ProfessorDashboard() {
     setShowConfirmEdit(false);
     const data = await api.patch(`/api/schedules/${id}`, body, token!);
     if (data.error) { setEditSchedError(data.error); return; }
-    setEditingSchedId(null);
+    setEditingScheduleSlot(null);
     setPendingEdit(null);
     fetchAll();
   };
@@ -319,11 +371,22 @@ export default function ProfessorDashboard() {
   const handleSaveProfile = async () => {
     setProfileSaving(true);
     setProfileMsg('');
-    // Profile update is stored client-side for now; backend endpoint can be added separately
-    setTimeout(() => {
-      setProfileSaving(false);
+    const data = await api.patch('/api/auth/profile', profile, token!);
+    setProfileSaving(false);
+    if (data.error) {
+      setProfileMsg(data.error);
+    } else {
       setProfileMsg('Profile updated successfully.');
-    }, 500);
+      setProfileMode('view');
+    }
+  };
+
+  const toggleTheme = () => {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      return next;
+    });
   };
 
   const handleLogout = () => { localStorage.clear(); router.push('/login'); };
@@ -381,7 +444,7 @@ export default function ProfessorDashboard() {
   ];
 
   return (
-    <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
+    <div data-theme={isDark ? 'dark' : 'light'} className="flex h-screen bg-[#0c0c0c] overflow-hidden">
 
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
@@ -406,7 +469,15 @@ export default function ProfessorDashboard() {
             <NavItem key={item.key} active={tab === item.key} onClick={() => setTab(item.key)} label={item.label} icon={item.icon} />
           ))}
         </nav>
-        <div className="px-3 py-4 border-t border-white/5">
+        <div className="px-3 py-4 border-t border-white/5 space-y-1">
+          <button onClick={toggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+            {isDark ? (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
+            ) : (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z" /></svg>
+            )}
+            {isDark ? 'Light Mode' : 'Dark Mode'}
+          </button>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" /></svg>
             Sign Out
@@ -416,7 +487,7 @@ export default function ProfessorDashboard() {
 
       {/* Confirmation dialogs */}
       {showConfirmSched && pendingSched && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
           <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-4">Confirm New Schedule</h2>
             <div className="space-y-2 mb-5">
@@ -434,7 +505,7 @@ export default function ProfessorDashboard() {
       )}
 
       {showConfirmEdit && pendingEdit && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
           <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-4">Confirm Schedule Edit</h2>
             <div className="space-y-2 mb-5">
@@ -452,7 +523,7 @@ export default function ProfessorDashboard() {
       )}
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-[#0c0c0c]">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
@@ -557,112 +628,18 @@ export default function ProfessorDashboard() {
                                 Confirm
                               </button>
                             )}
-                            <button onClick={() => toggleRescheduling(c.id)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${reschedulingId === c.id ? 'bg-white/5 text-gray-400' : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'}`}>
-                              {reschedulingId === c.id ? 'Close' : 'Reschedule'}
+                            <button onClick={() => openRescheduleModal(c)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-orange-500/10 text-orange-400 hover:bg-orange-500/20">
+                              Reschedule
                             </button>
-                            <button onClick={() => toggleCompleting(c.id)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${completingId === c.id ? 'bg-white/5 text-gray-400' : 'bg-[#CC0000]/10 text-[#ff5555] hover:bg-[#CC0000]/20'}`}>
-                              {completingId === c.id ? 'Close' : 'Mark Completed'}
+                            <button onClick={() => openCompleteModal(c)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#CC0000]/10 text-[#ff5555] hover:bg-[#CC0000]/20">
+                              Mark Completed
                             </button>
                           </div>
                         )}
                       </div>
                     </div>
-
-                    {/* Completion form */}
-                    {completingId === c.id && (
-                      <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
-                        <p className="text-white text-sm font-semibold">Completion Details</p>
-                        <div>
-                          <p className="text-gray-500 text-xs mb-2">Action Taken</p>
-                          <div className="space-y-1.5">
-                            {['Resolved', 'For Follow-up', 'Referred to'].map(opt => (
-                              <label key={opt} className={radioCls(completeForm.action_taken === opt)}>
-                                {radioBtn(completeForm.action_taken === opt)}
-                                {opt}
-                                <input type="radio" className="sr-only" checked={completeForm.action_taken === opt}
-                                  onChange={() => { setCompleteForm(f => ({ ...f, action_taken: opt, referral: '', referral_specify: '' })); setCompleteError(''); }} />
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                        {completeForm.action_taken === 'Referred to' && (
-                          <div>
-                            <p className="text-gray-500 text-xs mb-2">Referred To</p>
-                            <div className="space-y-1.5">
-                              {REFERRAL_OPTIONS.map(opt => (
-                                <label key={opt} className={radioCls(completeForm.referral === opt)}>
-                                  {radioBtn(completeForm.referral === opt)}
-                                  {opt}
-                                  <input type="radio" className="sr-only" checked={completeForm.referral === opt}
-                                    onChange={() => { setCompleteForm(f => ({ ...f, referral: opt, referral_specify: '' })); setCompleteError(''); }} />
-                                </label>
-                              ))}
-                            </div>
-                            {completeForm.referral === 'Other Office (Please Specify)' && (
-                              <input className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
-                                placeholder="Please specify the office…"
-                                value={completeForm.referral_specify}
-                                onChange={e => { setCompleteForm(f => ({ ...f, referral_specify: e.target.value })); setCompleteError(''); }} />
-                            )}
-                          </div>
-                        )}
-                        <div>
-                          <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
-                          <textarea value={completeForm.remarks} onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
-                            rows={2} className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
-                            placeholder="Additional remarks…" />
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          {completeError ? <p className="text-red-400 text-xs flex-1">{completeError}</p> : <span />}
-                          <button onClick={() => handleComplete(c.id)}
-                            className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex-shrink-0">
-                            Submit & Mark Completed
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Reschedule form */}
-                    {reschedulingId === c.id && (
-                      <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
-                        <p className="text-white text-sm font-semibold">Mark as Rescheduled</p>
-                        <p className="text-gray-500 text-xs">This marks the consultation as rescheduled (referred/moved to another session).</p>
-                        <div>
-                          <p className="text-gray-500 text-xs mb-2">Referred To (optional)</p>
-                          <div className="space-y-1.5">
-                            {REFERRAL_OPTIONS.map(opt => (
-                              <label key={opt} className={radioCls(rescheduleForm.referral === opt)}>
-                                {radioBtn(rescheduleForm.referral === opt)}
-                                {opt}
-                                <input type="radio" className="sr-only" checked={rescheduleForm.referral === opt}
-                                  onChange={() => setRescheduleForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
-                              </label>
-                            ))}
-                          </div>
-                          {rescheduleForm.referral === 'Other Office (Please Specify)' && (
-                            <input className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
-                              placeholder="Specify office…"
-                              value={rescheduleForm.referral_specify}
-                              onChange={e => setRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
-                          )}
-                        </div>
-                        <div>
-                          <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
-                          <textarea value={rescheduleForm.remarks} onChange={e => setRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
-                            rows={2} className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
-                            placeholder="Reason for rescheduling…" />
-                        </div>
-                        {rescheduleError && <p className="text-red-400 text-xs">{rescheduleError}</p>}
-                        <div className="flex justify-end">
-                          <button onClick={() => handleReschedule(c.id)}
-                            className="px-4 py-2 rounded-lg text-sm font-medium bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
-                            Mark as Rescheduled
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -811,7 +788,6 @@ export default function ProfessorDashboard() {
             ) : (
               <div className="space-y-2">
                 {schedules.map(s => {
-                  const isEditing = editingSchedId === s.id;
                   const hasBookings = Number(s.upcoming_count) > 0;
                   return (
                     <div key={s.id} className="rounded-xl border border-white/5 bg-[#161616] overflow-hidden hover:border-white/10 transition-colors">
@@ -826,9 +802,9 @@ export default function ProfessorDashboard() {
                           <span className={`text-xs ${hasBookings ? 'text-amber-500' : 'text-emerald-500'}`}>
                             {hasBookings ? `${s.upcoming_count} upcoming` : 'Available'}
                           </span>
-                          <button onClick={() => isEditing ? setEditingSchedId(null) : startEdit(s)}
+                          <button onClick={() => openEditModal(s)}
                             className="px-2.5 py-1 rounded-lg text-xs text-blue-400 hover:bg-blue-500/10 transition-colors">
-                            {isEditing ? 'Cancel' : 'Edit'}
+                            Edit
                           </button>
                           <button onClick={() => handleDeleteSchedule(s.id)}
                             className="px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
@@ -836,43 +812,6 @@ export default function ProfessorDashboard() {
                           </button>
                         </div>
                       </div>
-
-                      {isEditing && (
-                        <div className="border-t border-white/5 bg-[#0f0f0f] px-4 py-4 space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-gray-500 text-xs mb-1 block">Day</Label>
-                              <select value={editSched.day} onChange={e => setEditSched(f => ({ ...f, day: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#111] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
-                                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <Label className="text-gray-500 text-xs mb-1 block">Location</Label>
-                              <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
-                                placeholder="Optional"
-                                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#111] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-gray-500 text-xs mb-1 block">Start Time</Label>
-                              <input type="time" value={editSched.time_start} onChange={e => setEditSched(f => ({ ...f, time_start: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#111] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
-                            </div>
-                            <div>
-                              <Label className="text-gray-500 text-xs mb-1 block">End Time</Label>
-                              <input type="time" value={editSched.time_end} onChange={e => setEditSched(f => ({ ...f, time_end: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#111] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
-                            </div>
-                          </div>
-                          {editSchedError && <p className="text-red-400 text-xs">{editSchedError}</p>}
-                          <button onClick={handleRequestEditSchedule}
-                            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
-                            Save Changes
-                          </button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -950,29 +889,73 @@ export default function ProfessorDashboard() {
               <h1 className="text-white text-2xl font-bold">Profile</h1>
               <p className="text-gray-500 text-sm mt-1">Your account information</p>
             </div>
-            <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 space-y-4">
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Full Name</Label>
-                <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
+            {profileMode === 'view' ? (
+              <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                <div className="p-6 border-b border-white/5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-2xl font-bold flex-shrink-0">
+                      {profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <h2 className="text-white text-lg font-bold leading-tight">{profile.full_name || '—'}</h2>
+                      <span className="inline-block mt-1.5 text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium">Professor</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setProfileBeforeEdit({ ...profile }); setProfileMode('edit'); setProfileMsg(''); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200 transition-colors flex-shrink-0">
+                    Edit Profile
+                  </button>
+                </div>
+                <div className="p-6 space-y-5">
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">Academic</p>
+                    <ProfileField label="Department" value={profile.department} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">Contact</p>
+                    <div className="space-y-3">
+                      <ProfileField label="Email" value={profile.email} />
+                      <ProfileField label="Phone" value={profile.phone} />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Department</Label>
-                <input className={inputCls} value={profile.department} onChange={e => setProfile(p => ({ ...p, department: e.target.value }))} placeholder="e.g. Computer Science" />
+            ) : (
+              <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 space-y-4">
+                <p className="text-white text-sm font-semibold">Edit Profile</p>
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Full Name</Label>
+                  <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
+                </div>
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Department</Label>
+                  <input className={inputCls} value={profile.department} onChange={e => setProfile(p => ({ ...p, department: e.target.value }))} placeholder="e.g. Computer Science" />
+                </div>
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Email</Label>
+                  <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
+                </div>
+                <div>
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Phone (optional)</Label>
+                  <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
+                </div>
+                {profileMsg && (
+                  <p className={`text-xs ${profileMsg.includes('success') ? 'text-emerald-400' : 'text-red-400'}`}>{profileMsg}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => { setProfile({ ...profileBeforeEdit! }); setProfileMode('view'); setProfileMsg(''); }}
+                    className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveProfile} disabled={profileSaving}
+                    className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
+                    {profileSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Email</Label>
-                <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
-              </div>
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Phone (optional)</Label>
-                <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
-              </div>
-              {profileMsg && <p className="text-emerald-400 text-xs">{profileMsg}</p>}
-              <button onClick={handleSaveProfile} disabled={profileSaving}
-                className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
-                {profileSaving ? 'Saving…' : 'Save Profile'}
-              </button>
-            </div>
+            )}
           </div>
 
         ) : (
@@ -1006,6 +989,164 @@ export default function ProfessorDashboard() {
           </div>
         )}
       </main>
+
+      {/* Complete modal */}
+      {completingConsult && (
+        <Modal title="Mark as Completed" onClose={() => setCompletingConsult(null)}>
+          <div className="px-5 py-5 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+              <Avatar name={completingConsult.student_name} size="sm" />
+              <div>
+                <p className="text-white text-sm font-semibold">{completingConsult.student_name}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{completingConsult.student_number} · {new Date(completingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-2">Action Taken</p>
+              <div className="space-y-1.5">
+                {['Resolved', 'For Follow-up', 'Referred to'].map(opt => (
+                  <label key={opt} className={radioCls(completeForm.action_taken === opt)}>
+                    {radioBtn(completeForm.action_taken === opt)}
+                    {opt}
+                    <input type="radio" className="sr-only" checked={completeForm.action_taken === opt}
+                      onChange={() => { setCompleteForm(f => ({ ...f, action_taken: opt, referral: '', referral_specify: '' })); setCompleteError(''); }} />
+                  </label>
+                ))}
+              </div>
+            </div>
+            {completeForm.action_taken === 'Referred to' && (
+              <div>
+                <p className="text-gray-500 text-xs mb-2">Referred To</p>
+                <div className="space-y-1.5">
+                  {REFERRAL_OPTIONS.map(opt => (
+                    <label key={opt} className={radioCls(completeForm.referral === opt)}>
+                      {radioBtn(completeForm.referral === opt)}
+                      {opt}
+                      <input type="radio" className="sr-only" checked={completeForm.referral === opt}
+                        onChange={() => { setCompleteForm(f => ({ ...f, referral: opt, referral_specify: '' })); setCompleteError(''); }} />
+                    </label>
+                  ))}
+                </div>
+                {completeForm.referral === 'Other Office (Please Specify)' && (
+                  <input className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                    placeholder="Please specify the office…"
+                    value={completeForm.referral_specify}
+                    onChange={e => { setCompleteForm(f => ({ ...f, referral_specify: e.target.value })); setCompleteError(''); }} />
+                )}
+              </div>
+            )}
+            <div>
+              <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
+              <textarea value={completeForm.remarks} onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
+                rows={2} className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
+                placeholder="Additional remarks…" />
+            </div>
+            {completeError && <p className="text-red-400 text-xs">{completeError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setCompletingConsult(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleComplete} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                Submit & Mark Completed
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reschedule modal */}
+      {reschedulingConsult && (
+        <Modal title="Mark as Rescheduled" onClose={() => setReschedulingConsult(null)}>
+          <div className="px-5 py-5 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+              <Avatar name={reschedulingConsult.student_name} size="sm" />
+              <div>
+                <p className="text-white text-sm font-semibold">{reschedulingConsult.student_name}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{reschedulingConsult.student_number} · {new Date(reschedulingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+              </div>
+            </div>
+            <p className="text-gray-500 text-xs">This marks the consultation as rescheduled (referred/moved to another session).</p>
+            <div>
+              <p className="text-gray-500 text-xs mb-2">Referred To (optional)</p>
+              <div className="space-y-1.5">
+                {REFERRAL_OPTIONS.map(opt => (
+                  <label key={opt} className={radioCls(rescheduleForm.referral === opt)}>
+                    {radioBtn(rescheduleForm.referral === opt)}
+                    {opt}
+                    <input type="radio" className="sr-only" checked={rescheduleForm.referral === opt}
+                      onChange={() => setRescheduleForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
+                  </label>
+                ))}
+              </div>
+              {rescheduleForm.referral === 'Other Office (Please Specify)' && (
+                <input className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                  placeholder="Specify office…"
+                  value={rescheduleForm.referral_specify}
+                  onChange={e => setRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
+              )}
+            </div>
+            <div>
+              <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
+              <textarea value={rescheduleForm.remarks} onChange={e => setRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
+                rows={2} className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
+                placeholder="Reason for rescheduling…" />
+            </div>
+            {rescheduleError && <p className="text-red-400 text-xs">{rescheduleError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setReschedulingConsult(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleReschedule} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
+                Mark as Rescheduled
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit schedule modal */}
+      {editingScheduleSlot && (
+        <Modal title="Edit Schedule Slot" onClose={() => setEditingScheduleSlot(null)}>
+          <div className="px-5 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-500 text-xs mb-1.5 block">Day</Label>
+                <select value={editSched.day} onChange={e => setEditSched(f => ({ ...f, day: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
+                  {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
+                <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
+                  placeholder="Optional"
+                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-500 text-xs mb-1.5 block">Start Time</Label>
+                <input type="time" value={editSched.time_start} onChange={e => setEditSched(f => ({ ...f, time_start: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
+              </div>
+              <div>
+                <Label className="text-gray-500 text-xs mb-1.5 block">End Time</Label>
+                <input type="time" value={editSched.time_end} onChange={e => setEditSched(f => ({ ...f, time_end: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50" />
+              </div>
+            </div>
+            {editSchedError && <p className="text-red-400 text-xs">{editSchedError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setEditingScheduleSlot(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleRequestEditSchedule} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

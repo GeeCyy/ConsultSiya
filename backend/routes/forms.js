@@ -123,13 +123,20 @@ function drawSlip(doc, startY, data) {
 
   doc.fontSize(8).font('Helvetica-Bold').text('Nature of Advising:', lx + 5, natY + 5);
 
-  const sel = data.nature_of_advising || '';
+  // Parse nature_of_advising — stored as JSON array string for multi-select
+  let natureArray = [];
+  try {
+    const parsed = JSON.parse(data.nature_of_advising || '[]');
+    natureArray = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    natureArray = data.nature_of_advising ? [data.nature_of_advising] : [];
+  }
   const specify = data.nature_of_advising_specify || 'N/A';
   const rx = mid + 5;
 
   let ly = natY + 18;
   LEFT_NATURE.forEach((opt, i) => {
-    drawCheckbox(doc, lx + 5, ly, sel === opt);
+    drawCheckbox(doc, lx + 5, ly, natureArray.includes(opt));
     doc.fontSize(7).font('Helvetica').fillColor('black');
     if (i === 1) {
       doc.text('Mentoring/Clarification on the Topic', lx + 17, ly, { width: 245 });
@@ -144,7 +151,7 @@ function drawSlip(doc, startY, data) {
   let ry2 = natY + 18;
   RIGHT_NATURE.forEach((opt, i) => {
     const isOthers = i === 4;
-    drawCheckbox(doc, rx, ry2, sel === opt);
+    drawCheckbox(doc, rx, ry2, natureArray.includes(opt));
     const label = isOthers ? `Others: (Please Specify) ${specify}` : opt;
     doc.fontSize(7).font('Helvetica').fillColor('black')
       .text(label, rx + 12, ry2, { width: 255 });
@@ -201,6 +208,15 @@ function drawSlip(doc, startY, data) {
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+// Serve blank advising slip template for download
+router.get('/blank-slip', authenticate, (req, res) => {
+  const templatePath = path.join(__dirname, '../templates/advising-slip-template.pdf');
+  if (!fs.existsSync(templatePath)) {
+    return res.status(404).json({ error: 'Template file not found on server.' });
+  }
+  res.download(templatePath, 'advising-slip-FM-AS-11-02.pdf');
+});
 
 // Generate pre-filled advising slip PDF
 router.get('/advising-slip/:id', authenticate, async (req, res) => {

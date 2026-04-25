@@ -1,3 +1,111 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Prevent white flash on dark-themed pages */
+body {
+  background-color: #0c0c0c;
+}
+
+/* Smooth transitions when switching themes */
+main,
+main .rounded-2xl,
+main .rounded-xl,
+main .rounded-lg,
+main input,
+main select,
+main textarea,
+main button,
+main p,
+main span,
+main h1,
+main h2,
+main h3,
+main td,
+main th,
+main div {
+  transition: background-color 0.2s ease, color 0.15s ease, border-color 0.2s ease;
+}
+
+/* ─── Light mode overrides (main content only — sidebar stays dark) ─── */
+
+[data-theme="light"] main {
+  background-color: #f9fafb;
+}
+
+/* Card backgrounds */
+[data-theme="light"] main .bg-\[\#161616\] {
+  background-color: #ffffff;
+}
+
+/* Sub-card / form area backgrounds */
+[data-theme="light"] main .bg-\[\#0f0f0f\] {
+  background-color: #f3f4f6;
+}
+[data-theme="light"] main .bg-\[\#0c0c0c\] {
+  background-color: #f3f4f6;
+}
+
+/* Input / option-row backgrounds */
+[data-theme="light"] main .bg-\[\#1a1a1a\] {
+  background-color: #f3f4f6;
+}
+
+/* Subtle overlay backgrounds */
+[data-theme="light"] main .bg-white\/3 {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] main .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] main .bg-white\/10 {
+  background-color: #e5e7eb;
+}
+
+/* Borders */
+[data-theme="light"] main .border-white\/5 {
+  border-color: #e5e7eb;
+}
+[data-theme="light"] main .border-white\/10 {
+  border-color: #d1d5db;
+}
+
+/* Table / list dividers */
+[data-theme="light"] main .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e5e7eb;
+}
+
+/* Primary text — only on elements without an arbitrary hex background */
+[data-theme="light"] main .text-white:not([class*="bg-[#"]) {
+  color: #111827;
+}
+
+/* Secondary content text */
+[data-theme="light"] main .text-gray-200 {
+  color: #374151;
+}
+[data-theme="light"] main .text-gray-300 {
+  color: #6b7280;
+}
+
+/* Hover state overrides */
+[data-theme="light"] main .hover\:bg-white\/5:hover {
+  background-color: #f3f4f6;
+}
+[data-theme="light"] main .hover\:bg-white\/10:hover {
+  background-color: #e5e7eb;
+}
+[data-theme="light"] main .hover\:bg-white\/\[0\.02\]:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+[data-theme="light"] main .hover\:text-gray-200:hover {
+  color: #374151;
+}
+[data-theme="light"] main .hover\:border-white\/10:hover {
+  border-color: #d1d5db;
+}
+
+/* Placeholder text */
+[data-theme="light"] main .placeholder-gray-600::placeholder {
+  color: #9ca3af;
+}

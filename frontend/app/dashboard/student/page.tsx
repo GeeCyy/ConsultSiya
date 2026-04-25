@@ -110,6 +110,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function ProfileField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={className}>
+      <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">{label}</p>
+      <p className="text-gray-200 text-sm font-medium">{value || '—'}</p>
+    </div>
+  );
+}
+
 function Avatar({ name }: { name: string }) {
   const initials = name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
   return (
@@ -166,6 +175,34 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
 
 type View = 'book' | 'my' | 'history' | 'profile';
 
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#161616] shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+          <h2 className="text-white font-bold text-base">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const router = useRouter();
   const [view, setView] = useState<View>('book');
@@ -174,7 +211,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-  const [bookingSlotId, setBookingSlotId] = useState<number | null>(null);
+  const [bookingSlot, setBookingSlot] = useState<Schedule | null>(null);
   const [bookForm, setBookForm] = useState({
     nature_of_advising: [] as string[],
     nature_of_advising_specify: '',
@@ -196,6 +233,14 @@ export default function StudentDashboard() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const [profileMode, setProfileMode] = useState<'view' | 'edit'>('view');
+  const [profileBeforeEdit, setProfileBeforeEdit] = useState<StudentProfile | null>(null);
+
+  // Theme
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    return true;
+  });
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
@@ -203,18 +248,28 @@ export default function StudentDashboard() {
   }, []);
 
   const fetchData = async () => {
-    const [sched, consult] = await Promise.all([
+    const [sched, consult, prof] = await Promise.all([
       api.get('/api/schedules', token!),
       api.get('/api/consultations', token!),
+      api.get('/api/auth/profile', token!),
     ]);
     setSchedules(Array.isArray(sched) ? sched : []);
     setConsultations(Array.isArray(consult) ? consult : []);
+    if (!prof.error) {
+      setProfile({
+        full_name: prof.full_name || '',
+        student_number: prof.student_number || '',
+        program: prof.program || '',
+        year_level: prof.year_level?.toString() || '',
+        email: prof.email || '',
+        phone: prof.phone || '',
+      });
+    }
     setLoading(false);
   };
 
-  const toggleBooking = async (schedule: Schedule) => {
-    if (bookingSlotId === schedule.id) { setBookingSlotId(null); return; }
-    setBookingSlotId(schedule.id);
+  const openBookingModal = async (schedule: Schedule) => {
+    setBookingSlot(schedule);
     setBookForm({ nature_of_advising: [], nature_of_advising_specify: '', mode: 'F2F', date: '' });
     setBookError('');
     try {
@@ -237,7 +292,8 @@ export default function StudentDashboard() {
     });
   };
 
-  const handleBook = async (schedule: Schedule) => {
+  const handleBook = async () => {
+    if (!bookingSlot) return;
     setBookError('');
     if (bookForm.nature_of_advising.length === 0) { setBookError('Please select at least one nature of advising.'); return; }
     if (bookForm.nature_of_advising.includes('Others (Please Specify)') && !bookForm.nature_of_advising_specify.trim()) {
@@ -246,8 +302,8 @@ export default function StudentDashboard() {
     if (!bookForm.date) { setBookError('Please select a date.'); return; }
 
     const data = await api.post('/api/consultations', {
-      professor_id: schedule.professor_id,
-      schedule_id: schedule.id,
+      professor_id: bookingSlot.professor_id,
+      schedule_id: bookingSlot.id,
       date: bookForm.date,
       nature_of_advising: bookForm.nature_of_advising,
       nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
@@ -255,7 +311,7 @@ export default function StudentDashboard() {
     }, token!);
 
     if (data.error) { setBookError(data.error); return; }
-    setBookingSlotId(null);
+    setBookingSlot(null);
     await fetchData();
     setView('my');
   };
@@ -331,10 +387,22 @@ export default function StudentDashboard() {
   const handleSaveProfile = async () => {
     setProfileSaving(true);
     setProfileMsg('');
-    setTimeout(() => {
-      setProfileSaving(false);
+    const data = await api.patch('/api/auth/profile', profile, token!);
+    setProfileSaving(false);
+    if (data.error) {
+      setProfileMsg(data.error);
+    } else {
       setProfileMsg('Profile saved successfully.');
-    }, 500);
+      setProfileMode('view');
+    }
+  };
+
+  const toggleTheme = () => {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      return next;
+    });
   };
 
   const handleLogout = () => { localStorage.clear(); router.push('/login'); };
@@ -352,7 +420,7 @@ export default function StudentDashboard() {
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
+    <div data-theme={isDark ? 'dark' : 'light'} className="flex h-screen bg-[#0c0c0c] overflow-hidden">
       <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
 
       {/* Sidebar */}
@@ -392,7 +460,15 @@ export default function StudentDashboard() {
           />
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/5">
+        <div className="px-3 py-4 border-t border-white/5 space-y-1">
+          <button onClick={toggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+            {isDark ? (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
+            ) : (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z" /></svg>
+            )}
+            {isDark ? 'Light Mode' : 'Dark Mode'}
+          </button>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" /></svg>
             Sign Out
@@ -401,7 +477,7 @@ export default function StudentDashboard() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-[#0c0c0c]">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
@@ -446,104 +522,12 @@ export default function StudentDashboard() {
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Available
                         </span>
-                        <button onClick={() => toggleBooking(s)}
-                          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            bookingSlotId === s.id
-                              ? 'bg-white/5 text-gray-400'
-                              : 'bg-[#CC0000] text-white hover:bg-[#aa0000] shadow-lg shadow-red-900/20'
-                          }`}>
-                          {bookingSlotId === s.id ? 'Close' : 'Book this slot'}
+                        <button onClick={() => openBookingModal(s)}
+                          className="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#CC0000] text-white hover:bg-[#aa0000] shadow-lg shadow-red-900/20">
+                          Book this slot
                         </button>
                       </div>
                     </div>
-
-                    {bookingSlotId === s.id && (
-                      <div className="border-t border-white/5 bg-[#0f0f0f] px-5 py-5 space-y-4">
-                        <p className="text-white text-sm font-semibold">Booking Details</p>
-
-                        <div>
-                          <p className="text-gray-500 text-xs mb-2">Nature of Advising <span className="text-gray-700">(select all that apply)</span></p>
-                          <div className="space-y-1.5">
-                            {NATURE_OPTIONS.map(opt => {
-                              const checked = bookForm.nature_of_advising.includes(opt);
-                              return (
-                                <label key={opt}
-                                  className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                                    checked ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30' : 'bg-[#1a1a1a] hover:bg-white/5'
-                                  }`}>
-                                  <span className={`mt-0.5 w-3.5 h-3.5 rounded flex-shrink-0 border flex items-center justify-center ${
-                                    checked ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
-                                  }`}>
-                                    {checked && (
-                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <span className="text-sm text-gray-300">{opt}</span>
-                                  <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(opt)} />
-                                </label>
-                              );
-                            })}
-                          </div>
-                          {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
-                            <input
-                              className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
-                              placeholder="Please specify…"
-                              value={bookForm.nature_of_advising_specify}
-                              onChange={e => setBookForm(f => ({ ...f, nature_of_advising_specify: e.target.value }))}
-                            />
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-gray-500 text-xs mb-1.5">Mode</p>
-                            <select value={bookForm.mode}
-                              onChange={e => setBookForm(f => ({ ...f, mode: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
-                              <option value="F2F">Face-to-Face (F2F)</option>
-                              <option value="OL">Online (OL)</option>
-                            </select>
-                            {bookForm.mode === 'OL' && (
-                              <p className="text-cyan-400 text-xs mt-1">A meeting link will be generated for you.</p>
-                            )}
-                            {bookForm.mode === 'F2F' && s.location && (
-                              <p className="text-purple-400 text-xs mt-1">Location: {s.location}</p>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-gray-500 text-xs mb-1.5">
-                              Date <span className="text-gray-700">({s.day}s only)</span>
-                            </p>
-                            <select value={bookForm.date}
-                              onChange={e => setBookForm(f => ({ ...f, date: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
-                              <option value="">Select a date…</option>
-                              {getUpcomingDates(s.day).map(dateStr => {
-                                const isBooked = (bookedDates[s.id] || []).includes(dateStr);
-                                const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-PH', {
-                                  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                                });
-                                return (
-                                  <option key={dateStr} value={dateStr} disabled={isBooked}>
-                                    {isBooked ? `${label} — Booked` : label}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          </div>
-                        </div>
-
-                        {bookError && <p className="text-red-400 text-xs">{bookError}</p>}
-                        <div className="flex justify-end">
-                          <button onClick={() => handleBook(s)}
-                            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20">
-                            Confirm Booking
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -634,39 +618,87 @@ export default function StudentDashboard() {
               <h1 className="text-white text-2xl font-bold">Profile</h1>
               <p className="text-gray-500 text-sm mt-1">Your student account information</p>
             </div>
-            <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 space-y-4">
-              <div>
-                <label className="text-gray-500 text-xs mb-1.5 block">Full Name</label>
-                <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
+            {profileMode === 'view' ? (
+              <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                <div className="p-6 border-b border-white/5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-2xl font-bold flex-shrink-0">
+                      {profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <h2 className="text-white text-lg font-bold leading-tight">{profile.full_name || '—'}</h2>
+                      <span className="inline-block mt-1.5 text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-medium">Student</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setProfileBeforeEdit({ ...profile }); setProfileMode('edit'); setProfileMsg(''); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200 transition-colors flex-shrink-0">
+                    Edit Profile
+                  </button>
+                </div>
+                <div className="p-6 space-y-5">
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">Student Information</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <ProfileField label="Student Number" value={profile.student_number} />
+                      <ProfileField label="Year Level" value={profile.year_level ? `${profile.year_level}${['','st','nd','rd'][+profile.year_level] ?? 'th'} Year` : ''} />
+                      <ProfileField label="Program" value={profile.program} className="col-span-2" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">Contact</p>
+                    <div className="space-y-3">
+                      <ProfileField label="Email" value={profile.email} />
+                      <ProfileField label="Phone" value={profile.phone} />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+            ) : (
+              <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 space-y-4">
+                <p className="text-white text-sm font-semibold">Edit Profile</p>
                 <div>
-                  <label className="text-gray-500 text-xs mb-1.5 block">Student Number</label>
-                  <input className={inputCls} value={profile.student_number} onChange={e => setProfile(p => ({ ...p, student_number: e.target.value }))} placeholder="e.g. 2020-12345" />
+                  <label className="text-gray-500 text-xs mb-1.5 block">Full Name</label>
+                  <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-gray-500 text-xs mb-1.5 block">Student Number</label>
+                    <input className={inputCls} value={profile.student_number} onChange={e => setProfile(p => ({ ...p, student_number: e.target.value }))} placeholder="e.g. 2020-12345" />
+                  </div>
+                  <div>
+                    <label className="text-gray-500 text-xs mb-1.5 block">Year Level</label>
+                    <input className={inputCls} type="number" min="1" max="6" value={profile.year_level} onChange={e => setProfile(p => ({ ...p, year_level: e.target.value }))} placeholder="1–6" />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-gray-500 text-xs mb-1.5 block">Year Level</label>
-                  <input className={inputCls} type="number" min="1" max="6" value={profile.year_level} onChange={e => setProfile(p => ({ ...p, year_level: e.target.value }))} placeholder="1–6" />
+                  <label className="text-gray-500 text-xs mb-1.5 block">Course / Program</label>
+                  <input className={inputCls} value={profile.program} onChange={e => setProfile(p => ({ ...p, program: e.target.value }))} placeholder="e.g. BS Computer Science" />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs mb-1.5 block">Email</label>
+                  <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs mb-1.5 block">Phone (optional)</label>
+                  <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
+                </div>
+                {profileMsg && (
+                  <p className={`text-xs ${profileMsg.includes('success') ? 'text-emerald-400' : 'text-red-400'}`}>{profileMsg}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => { setProfile({ ...profileBeforeEdit! }); setProfileMode('view'); setProfileMsg(''); }}
+                    className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveProfile} disabled={profileSaving}
+                    className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
+                    {profileSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
                 </div>
               </div>
-              <div>
-                <label className="text-gray-500 text-xs mb-1.5 block">Course / Program</label>
-                <input className={inputCls} value={profile.program} onChange={e => setProfile(p => ({ ...p, program: e.target.value }))} placeholder="e.g. BS Computer Science" />
-              </div>
-              <div>
-                <label className="text-gray-500 text-xs mb-1.5 block">Email</label>
-                <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
-              </div>
-              <div>
-                <label className="text-gray-500 text-xs mb-1.5 block">Phone (optional)</label>
-                <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
-              </div>
-              {profileMsg && <p className="text-emerald-400 text-xs">{profileMsg}</p>}
-              <button onClick={handleSaveProfile} disabled={profileSaving}
-                className="w-full py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
-                {profileSaving ? 'Saving…' : 'Save Profile'}
-              </button>
-            </div>
+            )}
           </div>
 
         ) : (
@@ -801,6 +833,89 @@ export default function StudentDashboard() {
           </div>
         )}
       </main>
+
+      {/* Booking modal */}
+      {bookingSlot && (
+        <Modal title={`Book Slot — ${bookingSlot.professor_name}`} onClose={() => setBookingSlot(null)}>
+          <div className="px-5 py-5 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+              <Avatar name={bookingSlot.professor_name} />
+              <div>
+                <p className="text-white text-sm font-semibold">{bookingSlot.professor_name}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{bookingSlot.department} · {bookingSlot.day} {bookingSlot.time_start?.slice(0, 5)}–{bookingSlot.time_end?.slice(0, 5)}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-gray-500 text-xs mb-2">Nature of Advising <span className="text-gray-700">(select all that apply)</span></p>
+              <div className="space-y-1.5">
+                {NATURE_OPTIONS.map(opt => {
+                  const checked = bookForm.nature_of_advising.includes(opt);
+                  return (
+                    <label key={opt}
+                      className={`flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                        checked ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30' : 'bg-[#1a1a1a] hover:bg-white/5'
+                      }`}>
+                      <span className={`mt-0.5 w-3.5 h-3.5 rounded flex-shrink-0 border flex items-center justify-center ${
+                        checked ? 'border-[#CC0000] bg-[#CC0000]' : 'border-gray-600'
+                      }`}>
+                        {checked && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                      </span>
+                      <span className="text-sm text-gray-300">{opt}</span>
+                      <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(opt)} />
+                    </label>
+                  );
+                })}
+              </div>
+              {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
+                <input
+                  className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                  placeholder="Please specify…"
+                  value={bookForm.nature_of_advising_specify}
+                  onChange={e => setBookForm(f => ({ ...f, nature_of_advising_specify: e.target.value }))}
+                />
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-gray-500 text-xs mb-1.5">Mode</p>
+                <select value={bookForm.mode} onChange={e => setBookForm(f => ({ ...f, mode: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
+                  <option value="F2F">Face-to-Face (F2F)</option>
+                  <option value="OL">Online (OL)</option>
+                </select>
+                {bookForm.mode === 'OL' && <p className="text-cyan-400 text-xs mt-1">A meeting link will be generated for you.</p>}
+                {bookForm.mode === 'F2F' && bookingSlot.location && <p className="text-purple-400 text-xs mt-1">Location: {bookingSlot.location}</p>}
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs mb-1.5">Date <span className="text-gray-700">({bookingSlot.day}s only)</span></p>
+                <select value={bookForm.date} onChange={e => setBookForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
+                  <option value="">Select a date…</option>
+                  {getUpcomingDates(bookingSlot.day).map(dateStr => {
+                    const isBooked = (bookedDates[bookingSlot.id] || []).includes(dateStr);
+                    const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-PH', {
+                      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+                    });
+                    return <option key={dateStr} value={dateStr} disabled={isBooked}>{isBooked ? `${label} — Booked` : label}</option>;
+                  })}
+                </select>
+              </div>
+            </div>
+
+            {bookError && <p className="text-red-400 text-xs">{bookError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setBookingSlot(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleBook} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20">
+                Confirm Booking
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

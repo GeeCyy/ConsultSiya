@@ -16,7 +16,7 @@ router.get('/booked-dates', authenticate, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT DISTINCT date::text FROM consultations
-       WHERE professor_id = $1 AND status NOT IN ('cancelled') AND date >= CURRENT_DATE`,
+       WHERE professor_id = $1 AND status IN ('pending', 'confirmed') AND date >= CURRENT_DATE`,
       [professor_id]
     );
     res.json(result.rows.map(r => r.date));
@@ -62,7 +62,7 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
 
     const conflictCheck = await pool.query(
       `SELECT id FROM consultations
-       WHERE professor_id = $1 AND date = $2 AND status NOT IN ('cancelled')`,
+       WHERE professor_id = $1 AND date = $2 AND status IN ('pending', 'confirmed')`,
       [professor_id, date]
     );
     if (conflictCheck.rows.length > 0) {

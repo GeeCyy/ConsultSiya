@@ -176,6 +176,19 @@ export default function AdminDashboard() {
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    return true;
+  });
+
+  const toggleTheme = () => {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
+
   const stats = {
     total: consultations.length,
     pending: consultations.filter(c => c.status === 'pending').length,
@@ -344,7 +357,7 @@ export default function AdminDashboard() {
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <div className="flex h-screen bg-[#0c0c0c] overflow-hidden">
+    <div data-theme={isDark ? 'dark' : 'light'} className="flex h-screen bg-[#0c0c0c] overflow-hidden">
 
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
@@ -386,7 +399,15 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/5">
+        <div className="px-3 py-4 border-t border-white/5 space-y-1">
+          <button onClick={toggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+            {isDark ? (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
+            ) : (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z" /></svg>
+            )}
+            {isDark ? 'Light Mode' : 'Dark Mode'}
+          </button>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" />
@@ -397,7 +418,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-[#0c0c0c]">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
