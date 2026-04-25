@@ -5,7 +5,8 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, nature_of_advising, nature_of_advising_specify, mode } = req.body;
+  const { professor_id, schedule_id, nature_of_advising, nature_of_advising_specify, mode } = req.body;
+  const date = req.body.date || new Date().toISOString().split('T')[0];
 
   try {
     const studentResult = await pool.query(
