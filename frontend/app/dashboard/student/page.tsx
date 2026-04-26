@@ -110,14 +110,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function ProfileField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
-  return (
-    <div className={className}>
-      <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">{label}</p>
-      <p className="text-gray-200 text-sm font-medium">{value || '—'}</p>
-    </div>
-  );
-}
 
 function Avatar({ name }: { name: string }) {
   const initials = name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -420,7 +412,7 @@ export default function StudentDashboard() {
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <div data-theme={isDark ? 'dark' : 'light'} className="flex h-screen bg-[#0c0c0c] overflow-hidden">
+    <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-screen ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
       <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
 
       {/* Sidebar */}
@@ -477,7 +469,7 @@ export default function StudentDashboard() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto bg-[#0c0c0c]">
+      <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'}`}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
@@ -613,92 +605,178 @@ export default function StudentDashboard() {
           </div>
 
         ) : view === 'profile' ? (
-          <div className="max-w-lg mx-auto px-8 py-8">
-            <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">Profile</h1>
-              <p className="text-gray-500 text-sm mt-1">Your student account information</p>
-            </div>
-            {profileMode === 'view' ? (
-              <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-2xl font-bold flex-shrink-0">
-                      {profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
-                    </div>
-                    <div>
-                      <h2 className="text-white text-lg font-bold leading-tight">{profile.full_name || '—'}</h2>
-                      <span className="inline-block mt-1.5 text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-medium">Student</span>
-                    </div>
-                  </div>
+          <div className="px-8 py-10">
+            <div className="max-w-5xl mx-auto">
+
+              {/* Avatar hero */}
+              <div className="relative flex flex-col items-center pb-8 mb-8 border-b border-white/10">
+                {profileMode === 'view' && (
                   <button
                     onClick={() => { setProfileBeforeEdit({ ...profile }); setProfileMode('edit'); setProfileMsg(''); }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200 transition-colors flex-shrink-0">
+                    className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold border border-white/20 bg-[#2a2a2a] text-white hover:bg-[#353535] transition-colors">
                     Edit Profile
                   </button>
-                </div>
-                <div className="p-6 space-y-5">
-                  <div>
-                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">Student Information</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <ProfileField label="Student Number" value={profile.student_number} />
-                      <ProfileField label="Year Level" value={profile.year_level ? `${profile.year_level}${['','st','nd','rd'][+profile.year_level] ?? 'th'} Year` : ''} />
-                      <ProfileField label="Program" value={profile.program} className="col-span-2" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">Contact</p>
-                    <div className="space-y-3">
-                      <ProfileField label="Email" value={profile.email} />
-                      <ProfileField label="Phone" value={profile.phone} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 space-y-4">
-                <p className="text-white text-sm font-semibold">Edit Profile</p>
-                <div>
-                  <label className="text-gray-500 text-xs mb-1.5 block">Full Name</label>
-                  <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-gray-500 text-xs mb-1.5 block">Student Number</label>
-                    <input className={inputCls} value={profile.student_number} onChange={e => setProfile(p => ({ ...p, student_number: e.target.value }))} placeholder="e.g. 2020-12345" />
-                  </div>
-                  <div>
-                    <label className="text-gray-500 text-xs mb-1.5 block">Year Level</label>
-                    <input className={inputCls} type="number" min="1" max="6" value={profile.year_level} onChange={e => setProfile(p => ({ ...p, year_level: e.target.value }))} placeholder="1–6" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-gray-500 text-xs mb-1.5 block">Course / Program</label>
-                  <input className={inputCls} value={profile.program} onChange={e => setProfile(p => ({ ...p, program: e.target.value }))} placeholder="e.g. BS Computer Science" />
-                </div>
-                <div>
-                  <label className="text-gray-500 text-xs mb-1.5 block">Email</label>
-                  <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
-                </div>
-                <div>
-                  <label className="text-gray-500 text-xs mb-1.5 block">Phone (optional)</label>
-                  <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
-                </div>
-                {profileMsg && (
-                  <p className={`text-xs ${profileMsg.includes('success') ? 'text-emerald-400' : 'text-red-400'}`}>{profileMsg}</p>
                 )}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => { setProfile({ ...profileBeforeEdit! }); setProfileMode('view'); setProfileMsg(''); }}
-                    className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
-                    Cancel
-                  </button>
-                  <button onClick={handleSaveProfile} disabled={profileSaving}
-                    className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
-                    {profileSaving ? 'Saving…' : 'Save Changes'}
-                  </button>
+
+                <div className="w-24 h-24 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-3xl font-bold select-none ring-4 ring-[#CC0000]/15">
+                  {profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
+                </div>
+
+                <h2 className="text-white text-xl font-bold mt-4 text-center">{profile.full_name || '—'}</h2>
+                <p className="text-gray-500 text-sm mt-1 text-center">
+                  {profile.program ? `${profile.program} · ` : ''}{profile.email || 'No email set'}
+                </p>
+
+                <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#CC0000]/10 text-[#ff7777] ring-1 ring-[#CC0000]/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#CC0000]" />
+                    Student
+                  </span>
+                  <span className="text-gray-700 text-xs">·</span>
+                  <span className="text-gray-500 text-xs">Mapúa University</span>
                 </div>
               </div>
-            )}
+
+              {/* Two-column layout */}
+              <div className="grid grid-cols-[3fr_2fr] gap-5 items-start">
+
+                {/* Left column */}
+                <div className="space-y-5">
+
+                  {/* Personal Information */}
+                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-white/10">
+                      <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Personal Information</p>
+                    </div>
+                    <div className="divide-y divide-white/10">
+                      <div className="flex items-center gap-4 px-5 py-3.5">
+                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Full Name</span>
+                        {profileMode === 'view' ? (
+                          <span className="text-white text-sm font-medium">{profile.full_name || '—'}</span>
+                        ) : (
+                          <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 px-5 py-3.5">
+                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Student No.</span>
+                        {profileMode === 'view' ? (
+                          <span className="text-white text-sm font-medium font-mono">{profile.student_number || '—'}</span>
+                        ) : (
+                          <input className={inputCls} value={profile.student_number} onChange={e => setProfile(p => ({ ...p, student_number: e.target.value }))} placeholder="e.g. 2020-12345" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Academic Information */}
+                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-white/10">
+                      <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Academic Information</p>
+                    </div>
+                    <div className="divide-y divide-white/10">
+                      <div className="flex items-center gap-4 px-5 py-3.5">
+                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Program</span>
+                        {profileMode === 'view' ? (
+                          <span className="text-white text-sm font-medium">{profile.program || '—'}</span>
+                        ) : (
+                          <input className={inputCls} value={profile.program} onChange={e => setProfile(p => ({ ...p, program: e.target.value }))} placeholder="e.g. BS Computer Science" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 px-5 py-3.5">
+                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Year Level</span>
+                        {profileMode === 'view' ? (
+                          <span className="text-white text-sm font-medium">
+                            {profile.year_level ? `${profile.year_level}${['','st','nd','rd'][+profile.year_level] ?? 'th'} Year` : '—'}
+                          </span>
+                        ) : (
+                          <input className={inputCls} type="number" min="1" max="6" value={profile.year_level} onChange={e => setProfile(p => ({ ...p, year_level: e.target.value }))} placeholder="1–6" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 px-5 py-3.5">
+                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">School</span>
+                        <span className="text-white text-sm font-medium">School of Information Technology</span>
+                      </div>
+                      <div className="flex items-center gap-4 px-5 py-3.5">
+                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">University</span>
+                        <span className="text-white text-sm font-medium">Mapúa University</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Right column */}
+                <div className="space-y-5">
+
+                  {/* Contact Information */}
+                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-white/10">
+                      <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Contact Information</p>
+                    </div>
+                    <div className="divide-y divide-white/10">
+                      <div className="px-5 py-3.5">
+                        <p className="text-gray-400 text-xs font-medium mb-1.5">Email Address</p>
+                        {profileMode === 'view' ? (
+                          <p className="text-white text-sm font-medium break-all">{profile.email || '—'}</p>
+                        ) : (
+                          <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
+                        )}
+                      </div>
+                      <div className="px-5 py-3.5">
+                        <p className="text-gray-400 text-xs font-medium mb-1.5">Phone Number</p>
+                        {profileMode === 'view' ? (
+                          <p className="text-white text-sm font-medium">{profile.phone || '—'}</p>
+                        ) : (
+                          <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Account */}
+                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-white/10">
+                      <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Account</p>
+                    </div>
+                    <div className="divide-y divide-white/10">
+                      <div className="px-5 py-3.5">
+                        <p className="text-gray-400 text-xs font-medium mb-1.5">Role</p>
+                        <p className="text-white text-sm font-medium">Student</p>
+                      </div>
+                      <div className="px-5 py-3.5">
+                        <p className="text-gray-400 text-xs font-medium mb-1.5">Status</p>
+                        <span className="inline-flex items-center gap-1.5 text-sm text-emerald-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Active
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Edit mode actions */}
+                  {profileMode === 'edit' && (
+                    <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 space-y-4">
+                      {profileMsg && (
+                        <p className={`text-xs ${profileMsg.includes('success') ? 'text-emerald-400' : 'text-red-400'}`}>{profileMsg}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setProfile({ ...profileBeforeEdit! }); setProfileMode('view'); setProfileMsg(''); }}
+                          className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 border border-white/5 hover:bg-white/5 transition-colors">
+                          Cancel
+                        </button>
+                        <button onClick={handleSaveProfile} disabled={profileSaving}
+                          className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
+                          {profileSaving ? 'Saving…' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+
+            </div>
           </div>
 
         ) : (
