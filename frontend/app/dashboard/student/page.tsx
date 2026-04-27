@@ -130,6 +130,8 @@ function parseNature(natureStr: string | null): string[] {
   }
 }
 
+type TimeRange = { time_start: string; time_end: string };
+
 type Schedule = {
   id: number;
   professor_id: number;
@@ -138,6 +140,7 @@ type Schedule = {
   day: string;
   time_start: string;
   time_end: string;
+  time_ranges?: TimeRange[];
   is_available: boolean;
   location?: string;
   date?: string;
@@ -293,6 +296,7 @@ export default function StudentDashboard() {
   });
   const [bookError, setBookError] = useState('');
   const [bookedDates, setBookedDates] = useState<Record<number, string[]>>({});
+  const [bookedTimes, setBookedTimes] = useState<Record<string, string[]>>({});
 
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [downloadingSlip, setDownloadingSlip] = useState<number | null>(null);
@@ -346,7 +350,7 @@ export default function StudentDashboard() {
     setBookForm({ nature_of_advising: [], nature_of_advising_specify: '', mode: 'F2F', date: '', time: '' });
     setBookError('');
     try {
-      const data = await api.get(`/api/consultations/booked-dates?professor_id=${schedule.professor_id}`, token!);
+      const data = await api.get(`/api/consultations/booked-dates?schedule_id=${schedule.id}`, token!);
       if (Array.isArray(data)) setBookedDates(prev => ({ ...prev, [schedule.id]: data }));
     } catch {}
   };
@@ -589,7 +593,14 @@ export default function StudentDashboard() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-gray-200 text-sm font-medium">{s.day}</p>
-                          <p className="text-gray-500 text-xs mt-0.5 font-mono">{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</p>
+                          {(s.time_ranges?.length
+                            ? s.time_ranges
+                            : [{ time_start: s.time_start, time_end: s.time_end }]
+                          ).map((r, i) => (
+                            <p key={i} className="text-gray-500 text-xs mt-0.5 font-mono">
+                              {r.time_start?.slice(0, 5)}–{r.time_end?.slice(0, 5)}
+                            </p>
+                          ))}
                         </div>
                       </div>
                       <div className="mt-4 flex items-center justify-between">
@@ -1005,7 +1016,13 @@ export default function StudentDashboard() {
               <Avatar name={bookingSlot.professor_name} />
               <div>
                 <p className="text-white text-sm font-semibold">{bookingSlot.professor_name}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{bookingSlot.department} · {bookingSlot.day} {bookingSlot.time_start?.slice(0, 5)}–{bookingSlot.time_end?.slice(0, 5)}</p>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {bookingSlot.department} · {bookingSlot.day}{' '}
+                  {(bookingSlot.time_ranges?.length
+                    ? bookingSlot.time_ranges
+                    : [{ time_start: bookingSlot.time_start, time_end: bookingSlot.time_end }]
+                  ).map(r => `${r.time_start?.slice(0, 5)}–${r.time_end?.slice(0, 5)}`).join(', ')}
+                </p>
               </div>
             </div>
 
@@ -1062,33 +1079,60 @@ export default function StudentDashboard() {
                 specificDate={bookingSlot.date}
                 bookedDates={bookedDates[bookingSlot.id] || []}
                 selected={bookForm.date}
-                onSelect={dateStr => setBookForm(f => ({ ...f, date: dateStr, time: '' }))}
+                onSelect={dateStr => {
+                  setBookForm(f => ({ ...f, date: dateStr, time: '' }));
+                  const key = `${bookingSlot!.id}-${dateStr}`;
+                  if (bookedTimes[key] === undefined) {
+                    api.get(`/api/schedules/${bookingSlot!.id}/booked-times?date=${dateStr}`, token!)
+                      .then(data => {
+                        if (Array.isArray(data)) setBookedTimes(prev => ({ ...prev, [key]: data }));
+                      });
+                  }
+                }}
               />
             </div>
 
             <div>
-              <p className="text-gray-500 text-xs mb-1.5">
-                Preferred Start Time
-                <span className="text-gray-700 ml-1">
-                  ({formatTime12(bookingSlot.time_start.slice(0, 5))} – {formatTime12(bookingSlot.time_end.slice(0, 5))})
-                </span>
-              </p>
-              <div className="relative">
-                <select
-                  value={bookForm.time}
-                  onChange={e => setBookForm(f => ({ ...f, time: e.target.value }))}
-                  className={`w-full px-3 py-2.5 pr-9 rounded-lg text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 appearance-none cursor-pointer transition-colors ${
-                    bookForm.time ? 'text-white' : 'text-gray-500'
-                  }`}>
-                  <option value="" disabled>— Select a time —</option>
-                  {getTimeSlots(bookingSlot.time_start, bookingSlot.time_end).map(slot => (
-                    <option key={slot} value={slot}>{formatTime12(slot)}</option>
-                  ))}
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+              <p className="text-gray-500 text-xs mb-1.5">Preferred Start Time</p>
+              {(() => {
+                const ranges = bookingSlot.time_ranges?.length
+                  ? bookingSlot.time_ranges
+                  : [{ time_start: bookingSlot.time_start, time_end: bookingSlot.time_end }];
+                const taken = bookedTimes[`${bookingSlot.id}-${bookForm.date}`] || [];
+                return (
+                  <div className="relative">
+                    <select
+                      value={bookForm.time}
+                      onChange={e => setBookForm(f => ({ ...f, time: e.target.value }))}
+                      className={`w-full px-3 py-2.5 pr-9 rounded-lg text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 appearance-none cursor-pointer transition-colors ${
+                        bookForm.time ? 'text-white' : 'text-gray-500'
+                      }`}>
+                      <option value="" disabled>— Select a time —</option>
+                      {ranges.map((range, i) => {
+                        const slots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
+                        const startHour = parseInt(range.time_start.slice(0, 2), 10);
+                        const session = startHour < 12 ? 'Morning Session' : 'Afternoon Session';
+                        const label = `${session} (${formatTime12(range.time_start.slice(0, 5))} – ${formatTime12(range.time_end.slice(0, 5))})`;
+                        return (
+                          <optgroup key={i} label={label}>
+                            {slots.map(slot => {
+                              const isTaken = taken.includes(slot);
+                              return (
+                                <option key={slot} value={slot} disabled={isTaken}>
+                                  {formatTime12(slot)}{isTaken ? ' — Taken' : ''}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                    <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                );
+              })()}
             </div>
 
             {bookError && <p className="text-red-400 text-xs">{bookError}</p>}

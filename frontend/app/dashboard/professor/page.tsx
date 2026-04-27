@@ -46,12 +46,15 @@ type Consultation = {
   meeting_link?: string | null;
 };
 
+type TimeRange = { time_start: string; time_end: string };
+
 type Schedule = {
   id: number;
   day: string;
   date?: string;
   time_start: string;
   time_end: string;
+  time_ranges?: TimeRange[];
   is_available: boolean;
   location?: string;
   upcoming_count?: number;
@@ -326,7 +329,7 @@ export default function ProfessorDashboard() {
   const [rescheduleError, setRescheduleError] = useState('');
 
   // Add schedule
-  const [newSched, setNewSched] = useState({ day: 'Monday', time_start: '', time_end: '', location: '' });
+  const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
   const [newSchedDate, setNewSchedDate] = useState('');
   const [schedError, setSchedError] = useState('');
   const [showConfirmSched, setShowConfirmSched] = useState(false);
@@ -334,7 +337,7 @@ export default function ProfessorDashboard() {
 
   // Edit schedule modal
   const [editingScheduleSlot, setEditingScheduleSlot] = useState<Schedule | null>(null);
-  const [editSched, setEditSched] = useState({ day: 'Monday', time_start: '', time_end: '', location: '' });
+  const [editSched, setEditSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
   const [editSchedDate, setEditSchedDate] = useState('');
   const [editSchedError, setEditSchedError] = useState('');
   const [showConfirmEdit, setShowConfirmEdit] = useState(false);
@@ -469,8 +472,11 @@ export default function ProfessorDashboard() {
   const handleRequestAddSchedule = () => {
     setSchedError('');
     if (!newSchedDate) { setSchedError('Please select a date.'); return; }
-    if (!newSched.time_start || !newSched.time_end) { setSchedError('Please fill in both time fields.'); return; }
-    if (newSched.time_start >= newSched.time_end) { setSchedError('End time must be after start time.'); return; }
+    if (newSched.time_ranges.length === 0) { setSchedError('At least one time range is required.'); return; }
+    for (const r of newSched.time_ranges) {
+      if (!r.time_start || !r.time_end) { setSchedError('Please fill in all time range fields.'); return; }
+      if (r.time_start >= r.time_end) { setSchedError('End time must be after start time in each range.'); return; }
+    }
     setPendingSched({ ...newSched });
     setShowConfirmSched(true);
   };
@@ -483,7 +489,7 @@ export default function ProfessorDashboard() {
     const data = await api.post('/api/schedules', payload, token!);
     if (data.error) { setSchedError(data.error); return; }
     console.log('[Schedule] Saved — server returned date:', data.date);
-    setNewSched({ day: 'Monday', time_start: '', time_end: '', location: '' });
+    setNewSched({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] });
     setNewSchedDate('');
     setPendingSched(null);
     fetchAll();
@@ -492,7 +498,13 @@ export default function ProfessorDashboard() {
   // Schedule edit modal
   const openEditModal = (s: Schedule) => {
     setEditingScheduleSlot(s);
-    setEditSched({ day: s.day, time_start: s.time_start.slice(0, 5), time_end: s.time_end.slice(0, 5), location: s.location || '' });
+    setEditSched({
+      day: s.day,
+      location: s.location || '',
+      time_ranges: s.time_ranges?.length
+        ? s.time_ranges.map(r => ({ time_start: r.time_start.slice(0, 5), time_end: r.time_end.slice(0, 5) }))
+        : [{ time_start: s.time_start.slice(0, 5), time_end: s.time_end.slice(0, 5) }],
+    });
     setEditSchedDate(s.date || '');
     setEditSchedError('');
   };
@@ -500,8 +512,11 @@ export default function ProfessorDashboard() {
   const handleRequestEditSchedule = () => {
     setEditSchedError('');
     if (!editSchedDate) { setEditSchedError('Please select a date.'); return; }
-    if (!editSched.time_start || !editSched.time_end) { setEditSchedError('Both time fields are required.'); return; }
-    if (editSched.time_start >= editSched.time_end) { setEditSchedError('End time must be after start time.'); return; }
+    if (editSched.time_ranges.length === 0) { setEditSchedError('At least one time range is required.'); return; }
+    for (const r of editSched.time_ranges) {
+      if (!r.time_start || !r.time_end) { setEditSchedError('Please fill in all time range fields.'); return; }
+      if (r.time_start >= r.time_end) { setEditSchedError('End time must be after start time in each range.'); return; }
+    }
     setPendingEdit({ id: editingScheduleSlot!.id, ...editSched, date: editSchedDate });
     setShowConfirmEdit(true);
   };
@@ -660,8 +675,9 @@ export default function ProfessorDashboard() {
             <h2 className="text-white font-bold text-lg mb-4">Confirm New Schedule</h2>
             <div className="space-y-2 mb-5">
               <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {newSchedDate ? new Date(newSchedDate + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingSched.day}</p>
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">Start:</span> {pendingSched.time_start}</p>
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">End:</span> {pendingSched.time_end}</p>
+              {pendingSched.time_ranges.map((r, i) => (
+                <p key={i} className="text-gray-400 text-sm"><span className="text-gray-600">Range {i + 1}:</span> {r.time_start} – {r.time_end}</p>
+              ))}
               {pendingSched.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingSched.location}</p>}
             </div>
             <div className="flex gap-2">
@@ -726,8 +742,9 @@ export default function ProfessorDashboard() {
             <h2 className="text-white font-bold text-lg mb-4">Confirm Schedule Edit</h2>
             <div className="space-y-2 mb-5">
               <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {pendingEdit.date ? new Date(pendingEdit.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingEdit.day}</p>
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">Start:</span> {pendingEdit.time_start}</p>
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">End:</span> {pendingEdit.time_end}</p>
+              {pendingEdit.time_ranges.map((r, i) => (
+                <p key={i} className="text-gray-400 text-sm"><span className="text-gray-600">Range {i + 1}:</span> {r.time_start} – {r.time_end}</p>
+              ))}
               {pendingEdit.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingEdit.location}</p>}
             </div>
             <div className="flex gap-2">
@@ -978,24 +995,55 @@ export default function ProfessorDashboard() {
                   disabledDates={schedules.map(s => s.date).filter((d): d is string => !!d)}
                 />
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-gray-500 text-xs mb-1.5 block">Location (F2F, optional)</Label>
-                  <input
-                    type="text"
-                    value={newSched.location}
-                    onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
-                    placeholder="e.g. Room 201"
-                    className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                  />
+              <div className="mb-3">
+                <Label className="text-gray-500 text-xs mb-1.5 block">Location (F2F, optional)</Label>
+                <input
+                  type="text"
+                  value={newSched.location}
+                  onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
+                  placeholder="e.g. Room 201"
+                  className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-gray-500 text-xs">Time Ranges</Label>
+                  <button type="button"
+                    onClick={() => setNewSched(s => ({ ...s, time_ranges: [...s.time_ranges, { time_start: '', time_end: '' }] }))}
+                    className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
+                    + Add Time Range
+                  </button>
                 </div>
-                <div>
-                  <Label className="text-gray-500 text-xs mb-1.5 block">Start Time</Label>
-                  <TimePicker value={newSched.time_start} onChange={v => setNewSched(s => ({ ...s, time_start: v }))} dark={isDark} />
-                </div>
-                <div>
-                  <Label className="text-gray-500 text-xs mb-1.5 block">End Time</Label>
-                  <TimePicker value={newSched.time_end} onChange={v => setNewSched(s => ({ ...s, time_end: v }))} dark={isDark} />
+                <div className="space-y-2">
+                  {newSched.time_ranges.map((r, i) => (
+                    <div key={i} className="flex items-end gap-2">
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-gray-600 text-[10px] mb-1 block">Start</Label>
+                          <TimePicker
+                            value={r.time_start}
+                            onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_start: v } : x) }))}
+                            dark={isDark}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-gray-600 text-[10px] mb-1 block">End</Label>
+                          <TimePicker
+                            value={r.time_end}
+                            onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_end: v } : x) }))}
+                            dark={isDark}
+                          />
+                        </div>
+                      </div>
+                      {newSched.time_ranges.length > 1 && (
+                        <button type="button"
+                          onClick={() => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.filter((_, j) => j !== i) }))}
+                          className="pb-1.5 text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
               {schedError && <p className="text-red-400 text-xs mt-2">{schedError}</p>}
@@ -1026,7 +1074,10 @@ export default function ProfessorDashboard() {
                                 : s.day}
                             </span>
                           </div>
-                          <span className="text-gray-400 text-sm font-mono">{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</span>
+                          <span className="text-gray-400 text-sm font-mono">
+                            {(s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
+                              .map(r => `${r.time_start?.slice(0, 5)}–${r.time_end?.slice(0, 5)}`).join(', ')}
+                          </span>
                           {s.location && <span className="text-gray-600 text-xs">{s.location}</span>}
                         </div>
                         <div className="flex items-center gap-2">
@@ -1439,14 +1490,43 @@ export default function ProfessorDashboard() {
                 placeholder="Optional"
                 className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Start Time</Label>
-                <TimePicker value={editSched.time_start} onChange={v => setEditSched(f => ({ ...f, time_start: v }))} />
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-gray-500 text-xs">Time Ranges</Label>
+                <button type="button"
+                  onClick={() => setEditSched(f => ({ ...f, time_ranges: [...f.time_ranges, { time_start: '', time_end: '' }] }))}
+                  className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
+                  + Add Time Range
+                </button>
               </div>
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">End Time</Label>
-                <TimePicker value={editSched.time_end} onChange={v => setEditSched(f => ({ ...f, time_end: v }))} />
+              <div className="space-y-2">
+                {editSched.time_ranges.map((r, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-gray-600 text-[10px] mb-1 block">Start</Label>
+                        <TimePicker
+                          value={r.time_start}
+                          onChange={v => setEditSched(f => ({ ...f, time_ranges: f.time_ranges.map((x, j) => j === i ? { ...x, time_start: v } : x) }))}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-gray-600 text-[10px] mb-1 block">End</Label>
+                        <TimePicker
+                          value={r.time_end}
+                          onChange={v => setEditSched(f => ({ ...f, time_ranges: f.time_ranges.map((x, j) => j === i ? { ...x, time_end: v } : x) }))}
+                        />
+                      </div>
+                    </div>
+                    {editSched.time_ranges.length > 1 && (
+                      <button type="button"
+                        onClick={() => setEditSched(f => ({ ...f, time_ranges: f.time_ranges.filter((_, j) => j !== i) }))}
+                        className="pb-1.5 text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
             {editSchedError && <p className="text-red-400 text-xs">{editSchedError}</p>}

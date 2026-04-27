@@ -8,10 +8,51 @@ const DAY_MAP = {
   Thursday: 4, Friday: 5, Saturday: 6,
 };
 
-// Get booked (non-cancelled) future dates for a professor (for student date picker)
+// Get fully-booked future dates for a schedule slot (all time slots taken) — for student date picker
 router.get('/booked-dates', authenticate, async (req, res) => {
-  const { professor_id } = req.query;
-  if (!professor_id) return res.status(400).json({ error: 'professor_id is required.' });
+  const { professor_id, schedule_id } = req.query;
+
+  if (schedule_id) {
+    try {
+      const schedResult = await pool.query(
+        `SELECT time_start, time_end, time_ranges FROM schedules WHERE id = $1`,
+        [schedule_id]
+      );
+      if (schedResult.rows.length === 0) return res.json([]);
+      const sched = schedResult.rows[0];
+
+      const ranges = Array.isArray(sched.time_ranges) && sched.time_ranges.length > 0
+        ? sched.time_ranges
+        : [{ time_start: sched.time_start, time_end: sched.time_end }];
+
+      const timeToMins = t => {
+        const [h, m] = (t || '00:00').slice(0, 5).split(':').map(Number);
+        return h * 60 + (m || 0);
+      };
+      const totalSlots = ranges.reduce((sum, r) => {
+        const start = timeToMins(r.time_start);
+        const end = timeToMins(r.time_end);
+        return sum + Math.max(0, Math.floor((end - start) / 30));
+      }, 0);
+
+      if (totalSlots === 0) return res.json([]);
+
+      const result = await pool.query(
+        `SELECT date::text FROM consultations
+         WHERE schedule_id = $1 AND status IN ('pending', 'confirmed') AND date >= CURRENT_DATE
+         GROUP BY date
+         HAVING COUNT(*) >= $2`,
+        [schedule_id, totalSlots]
+      );
+      return res.json(result.rows.map(r => r.date));
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Legacy fallback by professor_id
+  if (!professor_id) return res.status(400).json({ error: 'professor_id or schedule_id is required.' });
   try {
     const result = await pool.query(
       `SELECT DISTINCT date::text FROM consultations
@@ -40,7 +81,7 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
     const student_id = studentResult.rows[0].id;
 
     const scheduleResult = await pool.query(
-      `SELECT id, day, date::text AS date FROM schedules WHERE id = $1`,
+      `SELECT id, day, date::text AS date, time_start, time_end, time_ranges FROM schedules WHERE id = $1`,
       [schedule_id]
     );
     if (scheduleResult.rows.length === 0) {
@@ -69,13 +110,24 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       }
     }
 
+    // Validate chosen time falls within one of the schedule's time ranges
+    if (time) {
+      const ranges = Array.isArray(schedule.time_ranges) && schedule.time_ranges.length > 0
+        ? schedule.time_ranges
+        : [{ time_start: schedule.time_start, time_end: schedule.time_end }];
+      const inRange = ranges.some(r => time >= r.time_start.slice(0, 5) && time < r.time_end.slice(0, 5));
+      if (!inRange) {
+        return res.status(400).json({ error: 'Selected time is not within the available time ranges for this slot.' });
+      }
+    }
+
     const conflictCheck = await pool.query(
       `SELECT id FROM consultations
-       WHERE professor_id = $1 AND date = $2 AND status IN ('pending', 'confirmed')`,
-      [professor_id, date]
+       WHERE professor_id = $1 AND date = $2 AND time = $3 AND status IN ('pending', 'confirmed')`,
+      [professor_id, date, time || null]
     );
     if (conflictCheck.rows.length > 0) {
-      return res.status(400).json({ error: 'This date is already booked for this professor.' });
+      return res.status(400).json({ error: 'This time slot is already booked. Please choose a different time.' });
     }
 
     const natureValue = Array.isArray(nature_of_advising)

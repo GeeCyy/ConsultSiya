@@ -34,3 +34,6 @@ ALTER TABLE schedules ADD COLUMN IF NOT EXISTS date DATE;
 
 -- Add student-chosen consultation time within the professor's availability window
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS time TIME;
+
+-- Add multiple time ranges per schedule slot (JSONB array of {time_start, time_end})
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS time_ranges JSONB;
