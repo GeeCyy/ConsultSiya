@@ -17,28 +17,107 @@ const NATURE_OPTIONS = [
   'Others (Please Specify)',
 ];
 
-const DAY_MAP: Record<string, number> = {
-  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-  Thursday: 4, Friday: 5, Saturday: 6,
-};
 
-function getUpcomingDates(dayName: string, count = 10): string[] {
-  const targetDay = DAY_MAP[dayName];
-  if (targetDay === undefined) return [];
-  const dates: string[] = [];
+function getTimeSlots(start: string, end: string): string[] {
+  const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const slots: string[] = [];
+  for (let mins = toMins(start); mins < toMins(end); mins += 30) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  }
+  return slots;
+}
+
+function formatTime12(t: string): string {
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+const BOOKING_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function BookingCalendar({ specificDate, bookedDates, selected, onSelect }: {
+  specificDate: string | undefined;
+  bookedDates: string[];
+  selected: string;
+  onSelect: (dateStr: string) => void;
+}) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const d = new Date(today);
-  while (dates.length < count) {
-    d.setDate(d.getDate() + 1);
-    if (d.getDay() === targetDay) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      dates.push(`${y}-${m}-${day}`);
-    }
-  }
-  return dates;
+  const initDate = specificDate ? new Date(specificDate + 'T12:00:00') : today;
+  const [viewYear, setViewYear] = useState(initDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initDate.getMonth());
+  const [mounted, setMounted] = useState(false);
+
+  const specificDow = specificDate ? new Date(specificDate + 'T12:00:00').getDay() : -1;
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+
+  const prevMonth = () => {
+    if (isCurrentMonth) return;
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-3 min-h-[220px]" />;
+
+  return (
+    <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-3 select-none">
+      <div className="flex items-center justify-between mb-3">
+        <button type="button" onClick={prevMonth} disabled={isCurrentMonth}
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <span className="text-white text-sm font-medium">{BOOKING_MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button type="button" onClick={nextMonth}
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) => (
+          <div key={d} className={`text-center text-[10px] font-medium py-1 ${i === specificDow ? 'text-[#CC0000]' : 'text-gray-700'}`}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const isTarget = dateStr === specificDate;
+          const isPast = new Date(viewYear, viewMonth, day) < today;
+          const isBooked = bookedDates.includes(dateStr);
+          const isDisabled = !isTarget || isPast || isBooked;
+          const isSelected = selected === dateStr;
+          return (
+            <button key={dateStr} type="button" disabled={isDisabled} onClick={() => onSelect(dateStr)}
+              className={[
+                'rounded-lg text-xs py-1.5 font-medium transition-colors w-full',
+                isSelected              ? 'bg-[#CC0000] text-white' :
+                isTarget && isBooked    ? 'text-gray-700 line-through cursor-not-allowed' :
+                isTarget && !isPast     ? 'text-[#CC0000] font-semibold hover:bg-[#CC0000]/20' :
+                                          'text-gray-800 cursor-not-allowed',
+              ].join(' ')}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <p className="text-[#CC0000] text-[10px] text-center mt-2.5 font-medium">
+          {new Date(selected + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function parseNature(natureStr: string | null): string[] {
@@ -61,6 +140,7 @@ type Schedule = {
   time_end: string;
   is_available: boolean;
   location?: string;
+  date?: string;
 };
 
 type Consultation = {
@@ -209,6 +289,7 @@ export default function StudentDashboard() {
     nature_of_advising_specify: '',
     mode: 'F2F',
     date: '',
+    time: '',
   });
   const [bookError, setBookError] = useState('');
   const [bookedDates, setBookedDates] = useState<Record<number, string[]>>({});
@@ -262,7 +343,7 @@ export default function StudentDashboard() {
 
   const openBookingModal = async (schedule: Schedule) => {
     setBookingSlot(schedule);
-    setBookForm({ nature_of_advising: [], nature_of_advising_specify: '', mode: 'F2F', date: '' });
+    setBookForm({ nature_of_advising: [], nature_of_advising_specify: '', mode: 'F2F', date: '', time: '' });
     setBookError('');
     try {
       const data = await api.get(`/api/consultations/booked-dates?professor_id=${schedule.professor_id}`, token!);
@@ -292,11 +373,13 @@ export default function StudentDashboard() {
       setBookError('Please specify the nature of advising.'); return;
     }
     if (!bookForm.date) { setBookError('Please select a date.'); return; }
+    if (!bookForm.time) { setBookError('Please select a preferred time.'); return; }
 
     const data = await api.post('/api/consultations', {
       professor_id: bookingSlot.professor_id,
       schedule_id: bookingSlot.id,
       date: bookForm.date,
+      time: bookForm.time,
       nature_of_advising: bookForm.nature_of_advising,
       nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
       mode: bookForm.mode,
@@ -826,11 +909,13 @@ export default function StudentDashboard() {
                         {c.mode === 'F2F' && c.location && (
                           <p className="text-gray-500 text-xs mt-0.5">{c.location}</p>
                         )}
-                        {c.mode === 'OL' && c.meeting_link && (
-                          <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
-                            className="text-cyan-400 text-xs mt-0.5 block hover:underline truncate">
-                            Join Meeting →
-                          </a>
+                        {c.mode === 'OL' && c.status === 'confirmed' && (
+                          c.meeting_link
+                            ? <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
+                                className="text-cyan-400 text-xs mt-0.5 block hover:underline truncate">
+                                Join Meeting →
+                              </a>
+                            : <p className="text-gray-600 text-xs mt-0.5 italic">No meeting link added yet</p>
                         )}
                       </div>
                     </div>
@@ -955,30 +1040,54 @@ export default function StudentDashboard() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-gray-500 text-xs mb-1.5">Mode</p>
-                <select value={bookForm.mode} onChange={e => setBookForm(f => ({ ...f, mode: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
-                  <option value="F2F">Face-to-Face (F2F)</option>
-                  <option value="OL">Online (OL)</option>
+            <div>
+              <p className="text-gray-500 text-xs mb-1.5">Mode</p>
+              <select value={bookForm.mode} onChange={e => setBookForm(f => ({ ...f, mode: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
+                <option value="F2F">Face-to-Face (F2F)</option>
+                <option value="OL">Online (OL)</option>
+              </select>
+              {bookForm.mode === 'OL' && <p className="text-cyan-400 text-xs mt-1">A meeting link will be generated for you.</p>}
+              {bookForm.mode === 'F2F' && bookingSlot.location && <p className="text-purple-400 text-xs mt-1">Location: {bookingSlot.location}</p>}
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-1.5">Select Date
+                <span className="text-gray-700 ml-1">
+                  {bookingSlot.date
+                    ? `(${new Date(bookingSlot.date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })})`
+                    : `(${bookingSlot.day}s only)`}
+                </span>
+              </p>
+              <BookingCalendar
+                specificDate={bookingSlot.date}
+                bookedDates={bookedDates[bookingSlot.id] || []}
+                selected={bookForm.date}
+                onSelect={dateStr => setBookForm(f => ({ ...f, date: dateStr, time: '' }))}
+              />
+            </div>
+
+            <div>
+              <p className="text-gray-500 text-xs mb-1.5">
+                Preferred Start Time
+                <span className="text-gray-700 ml-1">
+                  ({formatTime12(bookingSlot.time_start.slice(0, 5))} – {formatTime12(bookingSlot.time_end.slice(0, 5))})
+                </span>
+              </p>
+              <div className="relative">
+                <select
+                  value={bookForm.time}
+                  onChange={e => setBookForm(f => ({ ...f, time: e.target.value }))}
+                  className={`w-full px-3 py-2.5 pr-9 rounded-lg text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 appearance-none cursor-pointer transition-colors ${
+                    bookForm.time ? 'text-white' : 'text-gray-500'
+                  }`}>
+                  <option value="" disabled>— Select a time —</option>
+                  {getTimeSlots(bookingSlot.time_start, bookingSlot.time_end).map(slot => (
+                    <option key={slot} value={slot}>{formatTime12(slot)}</option>
+                  ))}
                 </select>
-                {bookForm.mode === 'OL' && <p className="text-cyan-400 text-xs mt-1">A meeting link will be generated for you.</p>}
-                {bookForm.mode === 'F2F' && bookingSlot.location && <p className="text-purple-400 text-xs mt-1">Location: {bookingSlot.location}</p>}
-              </div>
-              <div>
-                <p className="text-gray-500 text-xs mb-1.5">Date <span className="text-gray-700">({bookingSlot.day}s only)</span></p>
-                <select value={bookForm.date} onChange={e => setBookForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1a1a1a] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
-                  <option value="">Select a date…</option>
-                  {getUpcomingDates(bookingSlot.day).map(dateStr => {
-                    const isBooked = (bookedDates[bookingSlot.id] || []).includes(dateStr);
-                    const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-PH', {
-                      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                    });
-                    return <option key={dateStr} value={dateStr} disabled={isBooked}>{isBooked ? `${label} — Booked` : label}</option>;
-                  })}
-                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
             </div>
 

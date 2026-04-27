@@ -112,16 +112,15 @@ router.patch('/users/:id/approve', authenticate, authorize('admin'), async (req,
   }
 });
 
-// Reject (unapprove) an account
+// Reject a pending account — deletes it so the user must re-register
 router.patch('/users/:id/reject', authenticate, authorize('admin'), async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query(
-      `UPDATE users SET is_approved = false WHERE id = $1 AND role != 'admin' RETURNING id`,
-      [id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
-    res.json({ message: 'Account rejected.' });
+    const user = await pool.query(`SELECT role, is_approved FROM users WHERE id = $1`, [id]);
+    if (user.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    if (user.rows[0].role === 'admin') return res.status(403).json({ error: 'Cannot reject admin accounts.' });
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    res.json({ message: 'Account rejected and removed.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

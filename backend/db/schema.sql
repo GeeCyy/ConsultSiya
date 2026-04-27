@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS schedules (
   time_start TIME NOT NULL,
   time_end TIME NOT NULL,
   is_available BOOLEAN DEFAULT TRUE,
-  location TEXT
+  location TEXT,
+  date DATE
 );
 
 CREATE TABLE IF NOT EXISTS consultations (
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS consultations (
   professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE,
   schedule_id INTEGER REFERENCES schedules(id) ON DELETE CASCADE,
   date DATE NOT NULL,
+  time TIME,
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'rescheduled')),
   nature_of_advising TEXT,
   nature_of_advising_specify TEXT,

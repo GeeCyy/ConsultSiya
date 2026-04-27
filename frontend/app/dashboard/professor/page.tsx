@@ -6,7 +6,6 @@ import { api } from '@/lib/api';
 import { Label } from '@/components/ui/label';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const REFERRAL_OPTIONS = [
   'Peer Advising (W501-Intramuros / R203-Makati)',
@@ -50,6 +49,7 @@ type Consultation = {
 type Schedule = {
   id: number;
   day: string;
+  date?: string;
   time_start: string;
   time_end: string;
   is_available: boolean;
@@ -83,7 +83,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
-  const initials = name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (name || '').split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
   return (
     <div className={`rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 font-semibold flex-shrink-0 ${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'}`}>
       {initials}
@@ -170,6 +170,101 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+function ScheduleDatePicker({
+  selected,
+  onSelect,
+  disabledDates,
+}: {
+  selected: string;
+  onSelect: (dateStr: string, dayName: string) => void;
+  disabledDates: string[];
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const initDate = selected ? new Date(selected + 'T12:00:00') : today;
+  const [viewYear, setViewYear] = useState(initDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initDate.getMonth());
+  const [mounted, setMounted] = useState(false);
+
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+
+  const prevMonth = () => {
+    if (isCurrentMonth) return;
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-3 min-h-[220px]" />;
+
+  return (
+    <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-3 select-none">
+      <div className="flex items-center justify-between mb-3">
+        <button type="button" onClick={prevMonth} disabled={isCurrentMonth}
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <span className="text-white text-sm font-medium">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button type="button" onClick={nextMonth}
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+          <div key={d} className="text-center text-gray-600 text-[10px] font-medium py-1">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const date = new Date(viewYear, viewMonth, day);
+          const dow = date.getDay();
+          const dayName = DAY_NAMES[dow];
+          const isPast = date < today;
+          const isSunday = dow === 0;
+          const hasSlot = disabledDates.includes(dateStr);
+          const isDisabled = isPast || isSunday || hasSlot;
+          const isSelected = selected === dateStr;
+          const isToday = date.getTime() === today.getTime();
+          return (
+            <button
+              key={dateStr}
+              type="button"
+              disabled={isDisabled}
+              onClick={() => onSelect(dateStr, dayName)}
+              className={[
+                'rounded-lg text-xs py-1.5 font-medium transition-colors w-full',
+                isSelected ? 'bg-[#CC0000] text-white' :
+                isDisabled ? 'text-gray-700 cursor-not-allowed' :
+                isToday ? 'text-white ring-1 ring-inset ring-[#CC0000]/40 hover:bg-white/10' :
+                'text-gray-300 hover:bg-white/10',
+              ].join(' ')}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <p className="text-[#CC0000] text-[10px] text-center mt-2.5 font-medium">
+          {new Date(selected + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function TimePicker({ value, onChange, dark = true }: { value: string; onChange: (v: string) => void; dark?: boolean }) {
   const parse = (v: string) => {
     if (!v) return { h: '', m: '00', ampm: 'AM' as 'AM' | 'PM' };
@@ -190,7 +285,7 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
     onChange(`${String(h24).padStart(2, '0')}:${nm}`);
   };
   const HOURS = ['1','2','3','4','5','6','7','8','9','10','11','12'];
-  const MINS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+  const MINS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
   const sel = dark
     ? 'bg-[#0a0a0a] border border-white/15 text-white text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#CC0000]/50 cursor-pointer hover:border-white/30 transition-colors'
     : 'bg-white border border-gray-300 text-gray-900 text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#CC0000]/60 cursor-pointer hover:border-gray-400 transition-colors';
@@ -232,6 +327,7 @@ export default function ProfessorDashboard() {
 
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', time_start: '', time_end: '', location: '' });
+  const [newSchedDate, setNewSchedDate] = useState('');
   const [schedError, setSchedError] = useState('');
   const [showConfirmSched, setShowConfirmSched] = useState(false);
   const [pendingSched, setPendingSched] = useState<typeof newSched | null>(null);
@@ -239,11 +335,20 @@ export default function ProfessorDashboard() {
   // Edit schedule modal
   const [editingScheduleSlot, setEditingScheduleSlot] = useState<Schedule | null>(null);
   const [editSched, setEditSched] = useState({ day: 'Monday', time_start: '', time_end: '', location: '' });
+  const [editSchedDate, setEditSchedDate] = useState('');
   const [editSchedError, setEditSchedError] = useState('');
   const [showConfirmEdit, setShowConfirmEdit] = useState(false);
-  const [pendingEdit, setPendingEdit] = useState<{ id: number } & typeof editSched | null>(null);
+  const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string } & typeof editSched | null>(null);
 
   const [downloadingForm, setDownloadingForm] = useState<number | null>(null);
+
+  // Meeting link modal (for confirming OL consultations)
+  const [meetingLinkConsult, setMeetingLinkConsult] = useState<Consultation | null>(null);
+  const [meetingLinkInput, setMeetingLinkInput] = useState('');
+
+  // Edit meeting link modal (for already-confirmed OL consultations)
+  const [editLinkConsult, setEditLinkConsult] = useState<Consultation | null>(null);
+  const [editLinkInput, setEditLinkInput] = useState('');
 
   // Profile
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '' });
@@ -283,9 +388,26 @@ export default function ProfessorDashboard() {
     setLoading(false);
   };
 
-  const handleConfirm = async (id: number) => {
-    const data = await api.patch(`/api/consultations/${id}/confirm`, {}, token!);
+  const handleConfirm = async (id: number, meetingLink?: string) => {
+    const body = meetingLink ? { meeting_link: meetingLink } : {};
+    const data = await api.patch(`/api/consultations/${id}/confirm`, body, token!);
     if (data.error) { alert(data.error); return; }
+    fetchAll();
+  };
+
+  const handleConfirmWithLink = async () => {
+    if (!meetingLinkConsult) return;
+    await handleConfirm(meetingLinkConsult.id, meetingLinkInput.trim() || undefined);
+    setMeetingLinkConsult(null);
+    setMeetingLinkInput('');
+  };
+
+  const handleSaveMeetingLink = async () => {
+    if (!editLinkConsult) return;
+    const data = await api.patch(`/api/consultations/${editLinkConsult.id}/meeting-link`, { meeting_link: editLinkInput.trim() || null }, token!);
+    if (data.error) { alert(data.error); return; }
+    setEditLinkConsult(null);
+    setEditLinkInput('');
     fetchAll();
   };
 
@@ -346,6 +468,7 @@ export default function ProfessorDashboard() {
   // Schedule add — show confirmation dialog first
   const handleRequestAddSchedule = () => {
     setSchedError('');
+    if (!newSchedDate) { setSchedError('Please select a date.'); return; }
     if (!newSched.time_start || !newSched.time_end) { setSchedError('Please fill in both time fields.'); return; }
     if (newSched.time_start >= newSched.time_end) { setSchedError('End time must be after start time.'); return; }
     setPendingSched({ ...newSched });
@@ -355,9 +478,13 @@ export default function ProfessorDashboard() {
   const handleConfirmAddSchedule = async () => {
     if (!pendingSched) return;
     setShowConfirmSched(false);
-    const data = await api.post('/api/schedules', pendingSched, token!);
+    const payload = { ...pendingSched, date: newSchedDate };
+    console.log('[Schedule] Sending payload to backend:', JSON.stringify(payload));
+    const data = await api.post('/api/schedules', payload, token!);
     if (data.error) { setSchedError(data.error); return; }
+    console.log('[Schedule] Saved — server returned date:', data.date);
     setNewSched({ day: 'Monday', time_start: '', time_end: '', location: '' });
+    setNewSchedDate('');
     setPendingSched(null);
     fetchAll();
   };
@@ -366,14 +493,16 @@ export default function ProfessorDashboard() {
   const openEditModal = (s: Schedule) => {
     setEditingScheduleSlot(s);
     setEditSched({ day: s.day, time_start: s.time_start.slice(0, 5), time_end: s.time_end.slice(0, 5), location: s.location || '' });
+    setEditSchedDate(s.date || '');
     setEditSchedError('');
   };
 
   const handleRequestEditSchedule = () => {
     setEditSchedError('');
+    if (!editSchedDate) { setEditSchedError('Please select a date.'); return; }
     if (!editSched.time_start || !editSched.time_end) { setEditSchedError('Both time fields are required.'); return; }
     if (editSched.time_start >= editSched.time_end) { setEditSchedError('End time must be after start time.'); return; }
-    setPendingEdit({ id: editingScheduleSlot!.id, ...editSched });
+    setPendingEdit({ id: editingScheduleSlot!.id, ...editSched, date: editSchedDate });
     setShowConfirmEdit(true);
   };
 
@@ -530,7 +659,7 @@ export default function ProfessorDashboard() {
           <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-4">Confirm New Schedule</h2>
             <div className="space-y-2 mb-5">
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">Day:</span> {pendingSched.day}</p>
+              <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {newSchedDate ? new Date(newSchedDate + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingSched.day}</p>
               <p className="text-gray-400 text-sm"><span className="text-gray-600">Start:</span> {pendingSched.time_start}</p>
               <p className="text-gray-400 text-sm"><span className="text-gray-600">End:</span> {pendingSched.time_end}</p>
               {pendingSched.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingSched.location}</p>}
@@ -543,12 +672,60 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
+      {editLinkConsult && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+            <h2 className="text-white font-bold text-lg mb-1">Edit Meeting Link</h2>
+            <p className="text-gray-500 text-sm mb-5">Update the Zoom or Google Meet link for this consultation.</p>
+            <div className="mb-5">
+              <label className="text-gray-500 text-xs mb-1.5 block">Meeting Link</label>
+              <input
+                type="url"
+                placeholder="https://zoom.us/j/... or https://meet.google.com/..."
+                value={editLinkInput}
+                onChange={e => setEditLinkInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveMeetingLink()}
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setEditLinkConsult(null); setEditLinkInput(''); }} className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+              <button onClick={handleSaveMeetingLink} className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {meetingLinkConsult && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+            <h2 className="text-white font-bold text-lg mb-1">Confirm Online Consultation</h2>
+            <p className="text-gray-500 text-sm mb-5">Provide a Zoom or Google Meet link for the student to join.</p>
+            <div className="mb-5">
+              <label className="text-gray-500 text-xs mb-1.5 block">Meeting Link</label>
+              <input
+                type="url"
+                placeholder="https://zoom.us/j/... or https://meet.google.com/..."
+                value={meetingLinkInput}
+                onChange={e => setMeetingLinkInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleConfirmWithLink()}
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setMeetingLinkConsult(null); setMeetingLinkInput(''); }} className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+              <button onClick={handleConfirmWithLink} className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showConfirmEdit && pendingEdit && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
           <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-4">Confirm Schedule Edit</h2>
             <div className="space-y-2 mb-5">
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">Day:</span> {pendingEdit.day}</p>
+              <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {pendingEdit.date ? new Date(pendingEdit.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingEdit.day}</p>
               <p className="text-gray-400 text-sm"><span className="text-gray-600">Start:</span> {pendingEdit.time_start}</p>
               <p className="text-gray-400 text-sm"><span className="text-gray-600">End:</span> {pendingEdit.time_end}</p>
               {pendingEdit.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingEdit.location}</p>}
@@ -630,10 +807,29 @@ export default function ProfessorDashboard() {
                             <p className="text-gray-500 text-xs mt-0.5 truncate">{c.location}</p>
                           )}
                           {c.mode === 'OL' && c.meeting_link && (
-                            <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
-                              className="text-cyan-400 text-xs mt-0.5 truncate block hover:underline">
-                              Join Meeting →
-                            </a>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
+                                className="text-cyan-400 text-xs truncate hover:underline flex-1 min-w-0">
+                                Join Meeting →
+                              </a>
+                              {c.status === 'confirmed' && (
+                                <button
+                                  onClick={() => { setEditLinkConsult(c); setEditLinkInput(c.meeting_link || ''); }}
+                                  className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0 p-0.5 rounded"
+                                  title="Edit meeting link">
+                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 0 1 2.828 2.828L11.828 15.828a2 2 0 0 1-1.414.586H7v-3a2 2 0 0 1 .586-1.414z" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {c.mode === 'OL' && c.status === 'confirmed' && !c.meeting_link && (
+                            <button
+                              onClick={() => { setEditLinkConsult(c); setEditLinkInput(''); }}
+                              className="text-cyan-600 hover:text-cyan-400 text-xs mt-0.5 transition-colors">
+                              + Add Meeting Link
+                            </button>
                           )}
                         </div>
                       </div>
@@ -662,7 +858,10 @@ export default function ProfessorDashboard() {
                         {(c.status === 'pending' || c.status === 'confirmed') && (
                           <div className="flex items-center gap-2">
                             {c.status === 'pending' && (
-                              <button onClick={() => handleConfirm(c.id)}
+                              <button
+                                onClick={() => c.mode === 'OL'
+                                  ? (setMeetingLinkConsult(c), setMeetingLinkInput(''))
+                                  : handleConfirm(c.id)}
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
                                 Confirm
                               </button>
@@ -771,26 +970,25 @@ export default function ProfessorDashboard() {
             {/* Add new slot form */}
             <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 mb-6">
               <p className="text-white text-sm font-semibold mb-4">Add New Slot</p>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <Label className="text-gray-500 text-xs mb-1.5 block">Day</Label>
-                  <select value={newSched.day} onChange={e => setNewSched(s => ({ ...s, day: e.target.value }))}
-                    className={`w-full ${fieldCls}`}>
-                    {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
+              <div className="mb-3">
+                <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
+                <ScheduleDatePicker
+                  selected={newSchedDate}
+                  onSelect={(dateStr, dayName) => { setNewSchedDate(dateStr); setNewSched(s => ({ ...s, day: dayName })); }}
+                  disabledDates={schedules.map(s => s.date).filter((d): d is string => !!d)}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label className="text-gray-500 text-xs mb-1.5 block">Location (F2F, optional)</Label>
                   <input
                     type="text"
                     value={newSched.location}
                     onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
-                    placeholder="e.g. Room 201, Building A"
+                    placeholder="e.g. Room 201"
                     className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-gray-500 text-xs mb-1.5 block">Start Time</Label>
                   <TimePicker value={newSched.time_start} onChange={v => setNewSched(s => ({ ...s, time_start: v }))} dark={isDark} />
@@ -821,7 +1019,13 @@ export default function ProfessorDashboard() {
                       <div className="flex items-center justify-between px-4 py-3.5">
                         <div className="flex items-center gap-4">
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${hasBookings ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                          <span className="text-white text-sm font-medium w-24">{s.day}</span>
+                          <div>
+                            <span className="text-white text-sm font-medium">
+                              {s.date
+                                ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+                                : s.day}
+                            </span>
+                          </div>
                           <span className="text-gray-400 text-sm font-mono">{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</span>
                           {s.location && <span className="text-gray-600 text-xs">{s.location}</span>}
                         </div>
@@ -1221,20 +1425,19 @@ export default function ProfessorDashboard() {
       {editingScheduleSlot && (
         <Modal title="Edit Schedule Slot" onClose={() => setEditingScheduleSlot(null)}>
           <div className="px-5 py-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Day</Label>
-                <select value={editSched.day} onChange={e => setEditSched(f => ({ ...f, day: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50">
-                  {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
-                <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
-                  placeholder="Optional"
-                  className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
-              </div>
+            <div>
+              <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
+              <ScheduleDatePicker
+                selected={editSchedDate}
+                onSelect={(dateStr, dayName) => { setEditSchedDate(dateStr); setEditSched(f => ({ ...f, day: dayName })); }}
+                disabledDates={schedules.filter(s => s.id !== editingScheduleSlot!.id).map(s => s.date).filter((d): d is string => !!d)}
+              />
+            </div>
+            <div>
+              <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
+              <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
+                placeholder="Optional"
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

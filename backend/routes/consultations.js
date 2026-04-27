@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { randomUUID } = require('crypto');
 const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 
@@ -28,7 +27,7 @@ router.get('/booked-dates', authenticate, async (req, res) => {
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, nature_of_advising, nature_of_advising_specify, mode } = req.body;
+  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode } = req.body;
 
   try {
     const studentResult = await pool.query(
@@ -41,7 +40,7 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
     const student_id = studentResult.rows[0].id;
 
     const scheduleResult = await pool.query(
-      `SELECT id, day FROM schedules WHERE id = $1`,
+      `SELECT id, day, date::text AS date FROM schedules WHERE id = $1`,
       [schedule_id]
     );
     if (scheduleResult.rows.length === 0) {
@@ -49,14 +48,24 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
     }
     const schedule = scheduleResult.rows[0];
 
-    const expectedDay = DAY_MAP[schedule.day];
-    if (expectedDay !== undefined) {
-      const [y, m, d] = date.split('-').map(Number);
-      const selectedDate = new Date(y, m - 1, d);
-      if (selectedDate.getDay() !== expectedDay) {
+    if (schedule.date) {
+      // Slot has a specific saved date — enforce exact match
+      if (date !== schedule.date) {
         return res.status(400).json({
-          error: `This slot is only available on ${schedule.day}s. Please select a valid ${schedule.day}.`,
+          error: `This slot is only available on ${new Date(schedule.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.`,
         });
+      }
+    } else {
+      // Legacy: validate by day-of-week
+      const expectedDay = DAY_MAP[schedule.day];
+      if (expectedDay !== undefined) {
+        const [y, m, d] = date.split('-').map(Number);
+        const selectedDate = new Date(y, m - 1, d);
+        if (selectedDate.getDay() !== expectedDay) {
+          return res.status(400).json({
+            error: `This slot is only available on ${schedule.day}s. Please select a valid ${schedule.day}.`,
+          });
+        }
       }
     }
 
@@ -73,16 +82,13 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       ? JSON.stringify(nature_of_advising)
       : (nature_of_advising || null);
 
-    // Generate meeting link for online consultations
-    const meeting_link = mode === 'OL'
-      ? `https://meet.consultsiya.app/room/${randomUUID()}`
-      : null;
+    const meeting_link = null;
 
     const result = await pool.query(
       `INSERT INTO consultations
-       (student_id, professor_id, schedule_id, date, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [student_id, professor_id, schedule_id, date, natureValue, nature_of_advising_specify || null, mode, meeting_link]
+       (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, meeting_link]
     );
 
     res.status(201).json(result.rows[0]);
@@ -162,7 +168,7 @@ router.patch('/:id/confirm', authenticate, authorize('professor'), async (req, r
     const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
     if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
 
-    const consultation = await pool.query(`SELECT professor_id, status FROM consultations WHERE id = $1`, [id]);
+    const consultation = await pool.query(`SELECT professor_id, status, mode FROM consultations WHERE id = $1`, [id]);
     if (consultation.rows.length === 0) return res.status(404).json({ error: 'Consultation not found.' });
     if (consultation.rows[0].professor_id !== prof.rows[0].id) {
       return res.status(403).json({ error: 'You can only confirm your own consultations.' });
@@ -171,8 +177,42 @@ router.patch('/:id/confirm', authenticate, authorize('professor'), async (req, r
       return res.status(400).json({ error: 'Only pending consultations can be confirmed.' });
     }
 
+    const { meeting_link } = req.body;
+    const link = consultation.rows[0].mode === 'OL' ? (meeting_link || null) : null;
     const result = await pool.query(
-      `UPDATE consultations SET status = 'confirmed' WHERE id = $1 RETURNING *`, [id]
+      `UPDATE consultations SET status = 'confirmed', meeting_link = $2 WHERE id = $1 RETURNING *`,
+      [id, link]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Professor updates meeting link on a confirmed OL consultation
+router.patch('/:id/meeting-link', authenticate, authorize('professor'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+    if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
+
+    const consultation = await pool.query(`SELECT professor_id, status, mode FROM consultations WHERE id = $1`, [id]);
+    if (consultation.rows.length === 0) return res.status(404).json({ error: 'Consultation not found.' });
+    if (consultation.rows[0].professor_id !== prof.rows[0].id) {
+      return res.status(403).json({ error: 'You can only edit your own consultations.' });
+    }
+    if (consultation.rows[0].status !== 'confirmed') {
+      return res.status(400).json({ error: 'Meeting link can only be updated on confirmed consultations.' });
+    }
+    if (consultation.rows[0].mode !== 'OL') {
+      return res.status(400).json({ error: 'Meeting link only applies to online consultations.' });
+    }
+
+    const { meeting_link } = req.body;
+    const result = await pool.query(
+      `UPDATE consultations SET meeting_link = $2 WHERE id = $1 RETURNING *`,
+      [id, meeting_link || null]
     );
     res.json(result.rows[0]);
   } catch (err) {

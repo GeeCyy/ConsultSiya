@@ -243,7 +243,7 @@ export default function AdminDashboard() {
   };
 
   const handleReject = async (id: number) => {
-    if (!confirm('Reject this account? The user will be unable to log in.')) return;
+    if (!confirm('Reject this account? The registration will be deleted and the user must re-register.')) return;
     const data = await api.patch(`/api/admin/users/${id}/reject`, {}, token!);
     if (data.error) { alert(data.error); return; }
     fetchAll();

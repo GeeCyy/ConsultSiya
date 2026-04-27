@@ -28,3 +28,9 @@ ALTER TABLE students ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
 -- Add profile fields to professors
 ALTER TABLE professors ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 ALTER TABLE professors ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+
+-- Add specific date to schedule slots (professor picks an exact date, not a recurring day)
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS date DATE;
+
+-- Add student-chosen consultation time within the professor's availability window
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS time TIME;

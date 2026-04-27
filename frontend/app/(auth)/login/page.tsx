@@ -36,9 +36,17 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (searchParams.get('registered') === '1') {
-      setSuccess('Account created! You can now sign in.');
+      setSuccess('Account created! Please wait for admin approval before logging in.');
+      const timer = setTimeout(() => setSuccess(''), 5000);
+      return () => clearTimeout(timer);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(''), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   const handleLogin = async () => {
     setLoading(true);

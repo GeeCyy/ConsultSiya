@@ -5,7 +5,13 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 
 // Professor sets their available schedules
 router.post('/', authenticate, authorize('professor'), async (req, res) => {
-  const { day, time_start, time_end, location } = req.body;
+  const { day, time_start, time_end, location, date } = req.body;
+
+  // Normalize date: accept only non-empty strings, keep only YYYY-MM-DD portion
+  const dateValue = (typeof date === 'string' && date.trim().length >= 8)
+    ? date.trim().slice(0, 10)
+    : null;
+  console.log('[schedules POST] received date:', JSON.stringify(date), '→ stored as:', dateValue);
 
   try {
     const profResult = await pool.query(
@@ -18,10 +24,11 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
     const professor_id = profResult.rows[0].id;
 
     const result = await pool.query(
-      `INSERT INTO schedules (professor_id, day, time_start, time_end, location)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [professor_id, day, time_start, time_end, location || null]
+      `INSERT INTO schedules (professor_id, day, time_start, time_end, location, date)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, day, time_start, time_end, location, date::text AS date`,
+      [professor_id, day, time_start, time_end, location || null, dateValue]
     );
+    console.log('[schedules POST] row saved — id:', result.rows[0].id, 'date:', result.rows[0].date);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -33,11 +40,11 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
 router.get('/', authenticate, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location,
+      `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
               p.id AS professor_id, p.full_name AS professor_name, p.department
        FROM schedules s
        JOIN professors p ON s.professor_id = p.id
-       ORDER BY s.day, s.time_start`
+       ORDER BY s.date NULLS LAST, s.day, s.time_start`
     );
     res.json(result.rows);
   } catch (err) {
@@ -50,11 +57,11 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/all', authenticate, authorize('admin'), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location,
+      `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
               p.id AS professor_id, p.full_name AS professor_name, p.department
        FROM schedules s
        JOIN professors p ON s.professor_id = p.id
-       ORDER BY p.full_name, s.day, s.time_start`
+       ORDER BY p.full_name, s.date NULLS LAST, s.day, s.time_start`
     );
     res.json(result.rows);
   } catch (err) {
@@ -76,7 +83,7 @@ router.get('/mine', authenticate, authorize('professor'), async (req, res) => {
     const professor_id = profResult.rows[0].id;
 
     const result = await pool.query(
-      `SELECT s.*,
+      `SELECT s.id, s.professor_id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
          (SELECT COUNT(*)::int FROM consultations c
           WHERE c.schedule_id = s.id AND c.status NOT IN ('cancelled') AND c.date >= CURRENT_DATE) AS upcoming_count
        FROM schedules s
@@ -94,7 +101,7 @@ router.get('/mine', authenticate, authorize('professor'), async (req, res) => {
 // Professor edits their own schedule slot
 router.patch('/:id', authenticate, authorize('professor'), async (req, res) => {
   const { id } = req.params;
-  const { day, time_start, time_end, location } = req.body;
+  const { day, time_start, time_end, location, date } = req.body;
 
   if (!day || !time_start || !time_end) {
     return res.status(400).json({ error: 'day, time_start, and time_end are required.' });
@@ -141,9 +148,9 @@ router.patch('/:id', authenticate, authorize('professor'), async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE schedules SET day = $1, time_start = $2, time_end = $3, location = $4
-       WHERE id = $5 RETURNING *`,
-      [day, time_start, time_end, location || null, id]
+      `UPDATE schedules SET day = $1, time_start = $2, time_end = $3, location = $4, date = $5
+       WHERE id = $6 RETURNING *`,
+      [day, time_start, time_end, location || null, date || null, id]
     );
     res.json(result.rows[0]);
   } catch (err) {
