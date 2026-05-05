@@ -193,6 +193,39 @@ function CalendarView() {
   );
 }
 
+const NAV_ITEMS: Record<string, { label: string; icon: React.ReactNode; path: string }[]> = {
+  student: [
+    { label: 'Book a Slot', path: '/dashboard/student?view=book', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg> },
+    { label: 'My Consultations', path: '/dashboard/student?view=my', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg> },
+    { label: 'History', path: '/dashboard/student?view=history', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg> },
+    { label: 'Profile', path: '/dashboard/student?view=profile', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" /></svg> },
+  ],
+  professor: [
+    { label: 'Manage Schedules', path: '/dashboard/professor?view=schedules', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg> },
+    { label: 'My Consultations', path: '/dashboard/professor?view=consultations', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg> },
+    { label: 'Export Report', path: '/dashboard/professor?view=reports', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" /></svg> },
+    { label: 'Profile', path: '/dashboard/professor?view=profile', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" /></svg> },
+  ],
+  admin: [
+    { label: 'Manage Users', path: '/dashboard/admin?view=users', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 1 1 0 5.292M15 21H3v-1a6 6 0 0 1 12 0v1zm0 0h6v-1a6 6 0 0 0-9-5.197M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg> },
+    { label: 'Reports', path: '/dashboard/admin?view=reports', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" /></svg> },
+    { label: 'Profile', path: '/dashboard/admin?view=profile', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" /></svg> },
+  ],
+};
+
+function NavItem({ icon, label, active, onClick }: {
+  icon: React.ReactNode; label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+        active ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
+      }`}>
+      {icon}{label}
+    </button>
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -204,7 +237,7 @@ export default function HomePage() {
     if (!token) { router.push('/login'); return; }
     setRole(r);
     setMounted(true);
-  }, []);
+  }, [router]);
 
   if (!mounted) return null;
 
@@ -218,38 +251,56 @@ export default function HomePage() {
   const nextWeek = currentWeek ? currentWeek + 1 : null;
   const nextMode = nextWeek && nextWeek <= CURRENT_TERM.totalWeeks ? getWeekMode(CURRENT_TERM, nextWeek) : null;
 
-  const dashPath = role === 'student' ? '/dashboard/student'
-    : role === 'professor' ? '/dashboard/professor'
-    : role === 'admin' ? '/dashboard/admin'
-    : '/login';
+  const navItems = NAV_ITEMS[role ?? ''] ?? [];
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
 
   return (
-    <DashboardShell>
-      <div className="min-h-screen" style={{ backgroundColor: '#1e1f22' }}>
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10" style={{ backgroundColor: '#2b2d31' }}>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push(dashPath)}
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Dashboard
-            </button>
-            <span className="text-gray-700">/</span>
-            <span className="text-white font-semibold text-sm">Home</span>
-          </div>
-          <p className="text-xs text-gray-500">{CURRENT_TERM.label}</p>
-        </div>
+    <DashboardShell weekBadge={false}>
+      <div className="flex h-full overflow-hidden bg-[#0c0c0c]">
 
-        <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+        <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5 h-full">
+          {/* Logo */}
+          <div className="px-5 py-5 border-b border-white/5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white font-bold text-sm leading-none">ConsultSiya</p>
+                <p className="text-gray-600 text-xs mt-0.5">Mapúa SOIT</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Role badge */}
+          <div className="px-5 py-3 border-b border-white/5">
+            <span className="text-[10px] font-semibold text-[#CC0000] uppercase tracking-widest">{roleLabel}</span>
+          </div>
+
+          {/* Nav */}
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <NavItem active icon={
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+            } label="Home" onClick={() => {}} />
+
+            {navItems.map(item => (
+              <NavItem key={item.label} active={false} icon={item.icon} label={item.label} onClick={() => router.push(item.path)} />
+            ))}
+          </nav>
+        </aside>
+
+        {/* ── Main content ──────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto">
+
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
           {/* ── Hero: current week ────────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Current week card */}
-            <div className="md:col-span-2 rounded-2xl p-6 border border-white/10 flex items-center gap-6" style={{ backgroundColor: '#2b2d31' }}>
-              <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center" style={{ backgroundColor: '#CC0000' }}>
+            <div className="md:col-span-2 rounded-2xl p-6 border border-white/10 flex items-center gap-6 bg-[#2b2d31]">
+              <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center bg-[#CC0000]">
                 <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
                 <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider mt-0.5">Week</span>
               </div>
@@ -272,7 +323,7 @@ export default function HomePage() {
             </div>
 
             {/* Next week preview */}
-            <div className="rounded-2xl p-5 border border-white/10 flex flex-col justify-between" style={{ backgroundColor: '#2b2d31' }}>
+            <div className="rounded-2xl p-5 border border-white/10 flex flex-col justify-between bg-[#2b2d31]">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Week</p>
               {nextWeek && nextMode ? (
                 <>
@@ -297,12 +348,12 @@ export default function HomePage() {
           {/* ── Countdown timers ───────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Days to Finals', value: daysToFinals, color: 'text-amber-400', bg: 'bg-amber-500/10', ring: 'ring-amber-500/20' },
-              { label: 'Days to End of Term', value: daysToEnd, color: 'text-red-400', bg: 'bg-red-500/10', ring: 'ring-red-500/20' },
-              { label: 'Weeks Remaining', value: currentWeek ? Math.max(0, CURRENT_TERM.totalWeeks - currentWeek) : '–', color: 'text-blue-400', bg: 'bg-blue-500/10', ring: 'ring-blue-500/20' },
-              { label: 'Term Progress', value: `${Math.round(progress)}%`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20' },
-            ].map(({ label, value, color, bg, ring }) => (
-              <div key={label} className={`rounded-2xl p-5 border border-white/10 ${bg} ring-1 ${ring} flex flex-col items-center justify-center text-center`} style={{ backgroundColor: '#2b2d31' }}>
+              { label: 'Days to Finals', value: daysToFinals, color: 'text-amber-400', ring: 'ring-amber-500/20' },
+              { label: 'Days to End of Term', value: daysToEnd, color: 'text-red-400', ring: 'ring-red-500/20' },
+              { label: 'Weeks Remaining', value: currentWeek ? Math.max(0, CURRENT_TERM.totalWeeks - currentWeek) : '–', color: 'text-blue-400', ring: 'ring-blue-500/20' },
+              { label: 'Term Progress', value: `${Math.round(progress)}%`, color: 'text-emerald-400', ring: 'ring-emerald-500/20' },
+            ].map(({ label, value, color, ring }) => (
+              <div key={label} className={`rounded-2xl p-5 border border-white/10 bg-[#2b2d31] ring-1 ${ring} flex flex-col items-center justify-center text-center`}>
                 <p className={`text-3xl font-black ${color}`}>{value}</p>
                 <p className="text-xs text-gray-500 mt-1 font-medium">{label}</p>
               </div>
@@ -310,7 +361,7 @@ export default function HomePage() {
           </div>
 
           {/* ── Progress bar ───────────────────────────────────────────────── */}
-          <div className="rounded-2xl p-6 border border-white/10" style={{ backgroundColor: '#2b2d31' }}>
+          <div className="rounded-2xl p-6 border border-white/10 bg-[#2b2d31]">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-semibold text-white">Term Progress</p>
               <p className="text-xs text-gray-500">{CURRENT_TERM.label}</p>
@@ -328,8 +379,8 @@ export default function HomePage() {
             <div className="relative h-3 rounded-full overflow-hidden bg-white/5">
               {/* Filled */}
               <div
-                className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-                style={{ width: `${progress}%`, backgroundColor: '#CC0000' }}
+                className="absolute left-0 top-0 h-full rounded-full transition-all duration-700 bg-[#CC0000]"
+                style={{ width: `${progress}%` }}
               />
               {/* Midterm marker */}
               <div
@@ -354,17 +405,17 @@ export default function HomePage() {
           {/* ── Calendar + Announcements ───────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Calendar */}
-            <div className="lg:col-span-3 rounded-2xl p-6 border border-white/10" style={{ backgroundColor: '#2b2d31' }}>
+            <div className="lg:col-span-3 rounded-2xl p-6 border border-white/10 bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Academic Calendar</p>
               <CalendarView />
             </div>
 
             {/* Announcements */}
-            <div className="lg:col-span-2 rounded-2xl p-6 border border-white/10 flex flex-col" style={{ backgroundColor: '#2b2d31' }}>
+            <div className="lg:col-span-2 rounded-2xl p-6 border border-white/10 flex flex-col bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Announcements</p>
               <div className="space-y-3 flex-1">
                 {ANNOUNCEMENTS.map(a => (
-                  <div key={a.id} className="flex gap-3 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors" style={{ backgroundColor: '#383a40' }}>
+                  <div key={a.id} className="flex gap-3 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors bg-[#383a40]">
                     <AnnouncementIcon type={a.type} />
                     <div>
                       <p className="text-sm font-semibold text-white leading-tight">{a.title}</p>
@@ -377,6 +428,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        </main>
       </div>
     </DashboardShell>
   );

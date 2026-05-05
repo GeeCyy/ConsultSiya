@@ -96,9 +96,7 @@ function LoginContent() {
       setLocked(false);
       localStorage.setItem('token', data.token);
       localStorage.setItem('role', data.role);
-      if (data.role === 'student') router.push('/dashboard/student');
-      else if (data.role === 'professor') router.push('/dashboard/professor');
-      else if (data.role === 'admin') router.push('/dashboard/admin');
+      router.push('/dashboard/home');
     } else {
       if (data.locked) setLocked(true);
       setError(data.error || 'Login failed. Please try again.');
