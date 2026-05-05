@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide browser's native password reveal button */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* ── Discord-inspired ash gray palette ───────────────────────────────────────
    --bg-primary    #1e1f22  (darkest background — body, sidebar)
    --bg-secondary  #2b2d31  (card / panel surfaces)
