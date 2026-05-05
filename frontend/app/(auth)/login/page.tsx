@@ -8,6 +8,39 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const UPDATES = [
+  {
+    version: 'v1.2.0',
+    date: 'May 2026',
+    items: [
+      'Account approval flow for new registrations',
+      'Login lockout after 5 failed attempts',
+      'Multiple time ranges per schedule slot',
+      'Rescheduled consultation status added',
+    ],
+  },
+  {
+    version: 'v1.1.0',
+    date: 'Apr 2026',
+    items: [
+      'Digital advising slip generation (PDF)',
+      'File upload for signed consultation forms',
+      'Professor report exports (Excel & PDF)',
+      'Online meeting link support for OL sessions',
+    ],
+  },
+  {
+    version: 'v1.0.0',
+    date: 'Mar 2026',
+    items: [
+      'Initial release of ConsultSiya',
+      'Student, Professor, and Admin dashboards',
+      'Booking, confirmation, and completion flow',
+      'Role-based access control',
+    ],
+  },
+];
+
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
     return (
@@ -51,8 +84,6 @@ function LoginContent() {
 
   const handleLogin = async () => {
     setError('');
-
-    // Client-side validation before hitting the server
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim()) { setError('Email is required.'); return; }
     if (!emailRe.test(email)) { setError('Please enter a valid email address.'); return; }
@@ -65,7 +96,6 @@ function LoginContent() {
       setLocked(false);
       localStorage.setItem('token', data.token);
       localStorage.setItem('role', data.role);
-
       if (data.role === 'student') router.push('/dashboard/student');
       else if (data.role === 'professor') router.push('/dashboard/professor');
       else if (data.role === 'admin') router.push('/dashboard/admin');
@@ -73,99 +103,159 @@ function LoginContent() {
       if (data.locked) setLocked(true);
       setError(data.error || 'Login failed. Please try again.');
     }
-
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1e1f22' }}>
-      <div className="w-full max-w-md px-8 py-10 rounded-2xl border border-white/10" style={{ backgroundColor: '#2b2d31' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ backgroundColor: '#1e1f22' }}>
+      <div className="flex flex-col lg:flex-row w-full max-w-4xl gap-6">
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>
-            ConsultSiya
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            SOIT Academic Consultation System
-          </p>
-          <p className="text-gray-500 text-xs mt-1">
-            Mapúa University
-          </p>
-        </div>
-
-        {/* Success / Error */}
-        {success && (
-          <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#003a0e', color: '#6bff9e' }}>
-            {success}
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 px-4 py-3 rounded-xl text-sm border" style={{ backgroundColor: '#3a0000', color: '#ff6b6b', borderColor: '#7f1d1d' }}>
-            {locked && (
-              <p className="font-semibold mb-0.5">Account Locked</p>
-            )}
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="email" className="text-gray-300">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              className="border text-white placeholder-gray-500"
-              style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
-            />
+        {/* ── Login Form ──────────────────────────────────────────────────── */}
+        <div
+          className="w-full lg:max-w-md flex-shrink-0 px-8 py-10 rounded-2xl border border-white/10 flex flex-col justify-center"
+          style={{ backgroundColor: '#2b2d31' }}
+        >
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>ConsultSiya</h1>
+            <p className="text-gray-400 text-sm mt-1">SOIT Academic Consultation System</p>
+            <p className="text-gray-500 text-xs mt-1">Mapúa University</p>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="password" className="text-gray-300">Password</Label>
-            <div className="relative">
+          {success && (
+            <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#003a0e', color: '#6bff9e' }}>
+              {success}
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 px-4 py-3 rounded-xl text-sm border" style={{ backgroundColor: '#3a0000', color: '#ff6b6b', borderColor: '#7f1d1d' }}>
+              {locked && <p className="font-semibold mb-0.5">Account Locked</p>}
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="email" className="text-gray-300">Email</Label>
               <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                className="border text-white placeholder-gray-500 pr-10"
+                className="border text-white placeholder-gray-500"
                 style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
               />
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => setShowPassword(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-                <EyeIcon open={showPassword} />
-              </button>
             </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="password" className="text-gray-300">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                  className="border text-white placeholder-gray-500 pr-10"
+                  style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  <EyeIcon open={showPassword} />
+                </button>
+              </div>
+            </div>
+
+            <Button
+              className="w-full text-white font-semibold mt-2"
+              style={{ backgroundColor: '#CC0000' }}
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? 'Logging in...' : 'Sign In'}
+            </Button>
           </div>
 
-          <Button
-            className="w-full text-white font-semibold mt-2"
-            style={{ backgroundColor: '#CC0000' }}
-            onClick={handleLogin}
-            disabled={loading}
-          >
-            {loading ? 'Logging in...' : 'Sign In'}
-          </Button>
+          <p className="text-center text-sm text-gray-500 mt-5">
+            No account yet?{' '}
+            <Link href="/register" className="text-[#CC0000] hover:underline">Register</Link>
+          </p>
+          <p className="text-center text-gray-600 text-xs mt-4">© 2026 Mapúa University SOIT</p>
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-5">
-          No account yet?{' '}
-          <Link href="/register" className="text-[#CC0000] hover:underline">Register</Link>
-        </p>
+        {/* ── Developer Updates Board ─────────────────────────────────────── */}
+        <div
+          className="flex flex-col flex-1 rounded-2xl border border-white/10 overflow-hidden"
+          style={{ backgroundColor: '#2b2d31' }}
+        >
+          {/* Header */}
+          <div
+            className="px-6 py-4 border-b border-white/10 flex items-center gap-3"
+            style={{ backgroundColor: '#1e1f22' }}
+          >
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: '#CC0000' }}
+            >
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">System Updates</p>
+              <p className="text-[11px] text-gray-500">Patch notes & release history</p>
+            </div>
+            <span
+              className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: '#CC0000', color: 'white' }}
+            >
+              LIVE
+            </span>
+          </div>
 
-        <p className="text-center text-gray-600 text-xs mt-4">
-          © 2026 Mapúa University SOIT
-        </p>
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+            {UPDATES.map((release) => (
+              <div key={release.version}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-md"
+                    style={{ backgroundColor: '#383a40', color: '#CC0000' }}
+                  >
+                    {release.version}
+                  </span>
+                  <span className="text-[11px] text-gray-500">{release.date}</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                </div>
+                <ul className="space-y-1.5">
+                  {release.items.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#CC0000' }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div
+            className="px-6 py-3 border-t border-white/5 flex items-center justify-between"
+            style={{ backgroundColor: '#1e1f22' }}
+          >
+            <span className="text-[10px] text-gray-600">ConsultSiya © 2026 Mapúa University SOIT</span>
+            <span className="text-[10px] text-gray-600">Build 2026.05</span>
+          </div>
+        </div>
+
       </div>
     </div>
   );
