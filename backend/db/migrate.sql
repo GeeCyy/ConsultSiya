@@ -37,3 +37,15 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS time TIME;
 
 -- Add multiple time ranges per schedule slot (JSONB array of {time_start, time_end})
 ALTER TABLE schedules ADD COLUMN IF NOT EXISTS time_ranges JSONB;
+
+-- Login lockout: track failed attempts and lockout expiry
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
+
+-- Chatbot: store professor concern-ownership mappings
+CREATE TABLE IF NOT EXISTS professor_responsibilities (
+  id SERIAL PRIMARY KEY,
+  professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE,
+  concern_type VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);

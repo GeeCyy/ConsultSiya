@@ -33,6 +33,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     if (searchParams.get('registered') === '1') {
@@ -49,12 +50,19 @@ export default function LoginPage() {
   }, [error]);
 
   const handleLogin = async () => {
-    setLoading(true);
     setError('');
 
-    const data = await api.post('/api/auth/login', { email, password });
+    // Client-side validation before hitting the server
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) { setError('Email is required.'); return; }
+    if (!emailRe.test(email)) { setError('Please enter a valid email address.'); return; }
+    if (!password) { setError('Password is required.'); return; }
+
+    setLoading(true);
+    const data = await api.post('/api/auth/login', { email: email.trim(), password });
 
     if (data.token) {
+      setLocked(false);
       localStorage.setItem('token', data.token);
       localStorage.setItem('role', data.role);
 
@@ -62,6 +70,7 @@ export default function LoginPage() {
       else if (data.role === 'professor') router.push('/dashboard/professor');
       else if (data.role === 'admin') router.push('/dashboard/admin');
     } else {
+      if (data.locked) setLocked(true);
       setError(data.error || 'Login failed. Please try again.');
     }
 
@@ -69,8 +78,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1a1a1a' }}>
-      <div className="w-full max-w-md px-8 py-10 rounded-xl" style={{ backgroundColor: '#222222' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1e1f22' }}>
+      <div className="w-full max-w-md px-8 py-10 rounded-2xl border border-white/10" style={{ backgroundColor: '#2b2d31' }}>
 
         {/* Header */}
         <div className="text-center mb-8">
@@ -92,7 +101,10 @@ export default function LoginPage() {
           </div>
         )}
         {error && (
-          <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#3a0000', color: '#ff6b6b' }}>
+          <div className="mb-4 px-4 py-3 rounded-xl text-sm border" style={{ backgroundColor: '#3a0000', color: '#ff6b6b', borderColor: '#7f1d1d' }}>
+            {locked && (
+              <p className="font-semibold mb-0.5">Account Locked</p>
+            )}
             {error}
           </div>
         )}
@@ -104,11 +116,12 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
-              placeholder="you@mymapua.edu.ph"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              className="bg-gray-800 border-gray-600 text-white placeholder-gray-500"
+              className="border text-white placeholder-gray-500"
+              style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
             />
           </div>
 
@@ -122,7 +135,8 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                className="bg-gray-800 border-gray-600 text-white placeholder-gray-500 pr-10"
+                className="border text-white placeholder-gray-500 pr-10"
+                style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
               />
               <button
                 type="button"

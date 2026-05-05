@@ -1,5 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 require('dotenv').config();
 
@@ -8,14 +11,59 @@ const { authenticate } = require('./middleware/auth.middleware');
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// ── Security headers ──────────────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'same-site' },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+}));
 
-// Static uploads (serve uploaded forms)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ── CORS ──────────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
 
-// Routes
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ── Body parser + cookies ─────────────────────────────────────────────────────
+app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
+
+// ── Global rate limiter (all API endpoints) ───────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
+app.use('/api/', globalLimiter);
+
+// ── Static uploads (serve uploaded forms) ─────────────────────────────────────
+// Authenticated access is enforced at the route level (/api/forms/download/:id)
+// Exposing the raw /uploads path is intentionally disabled for security.
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ── Routes ─────────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/schedules', require('./routes/schedules'));
@@ -23,7 +71,7 @@ app.use('/api/consultations', require('./routes/consultations'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/forms', require('./routes/forms'));
 
-// Health check routes
+// ── Health checks ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'ConsultSiya API is running!' });
 });
@@ -33,16 +81,16 @@ app.get('/db-health', async (req, res) => {
     const result = await pool.query('SELECT NOW()');
     res.json({ status: 'ok', time: result.rows[0].now });
   } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+    res.status(500).json({ status: 'error', message: 'Database unavailable' });
   }
 });
 
-// Protected test route
+// ── Protected test route ───────────────────────────────────────────────────────
 app.get('/api/protected', authenticate, (req, res) => {
   res.json({ message: `Hello ${req.user.role}!`, user: req.user });
 });
 
-// Start server
+// ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

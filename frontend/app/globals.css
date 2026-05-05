@@ -2,12 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Prevent white flash on dark-themed pages */
-body {
-  background-color: #0c0c0c;
+/* ── Discord-inspired ash gray palette ───────────────────────────────────────
+   --bg-primary    #1e1f22  (darkest background — body, sidebar)
+   --bg-secondary  #2b2d31  (card / panel surfaces)
+   --bg-tertiary   #313338  (input, hover, code blocks)
+   --bg-modifier   #383a40  (subtle overlays, hovered items)
+   --text-normal   #dbdee1  (main content text)
+   --text-muted    #80848e  (secondary / hint text)
+   --text-link     #00a8fc  (links, interactive elements)
+   --accent        #CC0000  (Mapúa red — primary accent)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg-primary:   #1e1f22;
+  --bg-secondary: #2b2d31;
+  --bg-tertiary:  #313338;
+  --bg-modifier:  #383a40;
+  --text-normal:  #dbdee1;
+  --text-muted:   #80848e;
+  --accent:       #CC0000;
 }
 
-/* Smooth transitions when switching themes */
+/* Prevent white flash */
+html, body {
+  background-color: var(--bg-primary);
+  color: var(--text-normal);
+}
+
+/* Smooth theme transitions for main content area */
 main,
 main .rounded-2xl,
 main .rounded-xl,
@@ -27,85 +49,80 @@ main div {
   transition: background-color 0.2s ease, color 0.15s ease, border-color 0.2s ease;
 }
 
-/* ─── Light mode overrides (main content only — sidebar stays dark) ─── */
+/* Scrollbar styling (Webkit) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #4e5058;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6d6f78;
+}
+
+/* ── Light mode overrides (main content only — sidebar stays dark) ─────────── */
+
+[data-theme="light"] body {
+  background-color: #f2f3f5;
+  color: #2e3338;
+}
 
 [data-theme="light"] main {
-  background-color: #f9fafb;
+  background-color: #f2f3f5;
 }
 
 /* Card backgrounds */
-[data-theme="light"] main .bg-\[\#161616\] {
+[data-theme="light"] main .bg-\[\#1e1f22\],
+[data-theme="light"] main .bg-\[\#161616\],
+[data-theme="light"] main .bg-\[\#0c0c0c\] {
   background-color: #ffffff;
 }
 
-/* Sub-card / form area backgrounds */
-[data-theme="light"] main .bg-\[\#0f0f0f\] {
-  background-color: #f3f4f6;
-}
-[data-theme="light"] main .bg-\[\#0c0c0c\] {
-  background-color: #f3f4f6;
+/* Secondary panel backgrounds */
+[data-theme="light"] main .bg-\[\#2b2d31\] {
+  background-color: #ffffff;
 }
 
-/* Input / option-row backgrounds */
+/* Tertiary / input backgrounds */
+[data-theme="light"] main .bg-\[\#313338\],
+[data-theme="light"] main .bg-\[\#383a40\],
+[data-theme="light"] main .bg-\[\#0f0f0f\],
 [data-theme="light"] main .bg-\[\#1a1a1a\] {
-  background-color: #f3f4f6;
+  background-color: #f2f3f5;
 }
 
-/* Subtle overlay backgrounds */
-[data-theme="light"] main .bg-white\/3 {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-[data-theme="light"] main .bg-white\/5 {
-  background-color: rgba(0, 0, 0, 0.06);
-}
-[data-theme="light"] main .bg-white\/10 {
-  background-color: #e5e7eb;
-}
+/* Subtle overlays */
+[data-theme="light"] main .bg-white\/3  { background-color: rgba(0, 0, 0, 0.03); }
+[data-theme="light"] main .bg-white\/5  { background-color: rgba(0, 0, 0, 0.05); }
+[data-theme="light"] main .bg-white\/10 { background-color: #e3e5e8; }
 
 /* Borders */
-[data-theme="light"] main .border-white\/5 {
-  border-color: #e5e7eb;
-}
-[data-theme="light"] main .border-white\/10 {
-  border-color: #d1d5db;
-}
+[data-theme="light"] main .border-white\/5  { border-color: #e3e5e8; }
+[data-theme="light"] main .border-white\/10 { border-color: #d4d7dc; }
 
 /* Table / list dividers */
 [data-theme="light"] main .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #e5e7eb;
+  border-color: #e3e5e8;
 }
 
-/* Primary text — only on elements without an arbitrary hex background */
-[data-theme="light"] main .text-white:not([class*="bg-[#"]) {
-  color: #111827;
-}
+/* Primary text */
+[data-theme="light"] main .text-white:not([class*="bg-["]) { color: #2e3338; }
+[data-theme="light"] main .text-gray-200 { color: #4e5058; }
+[data-theme="light"] main .text-gray-300 { color: #6d6f78; }
+[data-theme="light"] main .text-gray-400 { color: #80848e; }
 
-/* Secondary content text */
-[data-theme="light"] main .text-gray-200 {
-  color: #374151;
-}
-[data-theme="light"] main .text-gray-300 {
-  color: #6b7280;
-}
+/* Hover overrides */
+[data-theme="light"] main .hover\:bg-white\/5:hover  { background-color: #e3e5e8; }
+[data-theme="light"] main .hover\:bg-white\/10:hover { background-color: #d4d7dc; }
+[data-theme="light"] main .hover\:bg-white\/\[0\.02\]:hover { background-color: rgba(0,0,0,0.02); }
+[data-theme="light"] main .hover\:text-gray-200:hover { color: #4e5058; }
+[data-theme="light"] main .hover\:border-white\/10:hover { border-color: #d4d7dc; }
 
-/* Hover state overrides */
-[data-theme="light"] main .hover\:bg-white\/5:hover {
-  background-color: #f3f4f6;
-}
-[data-theme="light"] main .hover\:bg-white\/10:hover {
-  background-color: #e5e7eb;
-}
-[data-theme="light"] main .hover\:bg-white\/\[0\.02\]:hover {
-  background-color: rgba(0, 0, 0, 0.03);
-}
-[data-theme="light"] main .hover\:text-gray-200:hover {
-  color: #374151;
-}
-[data-theme="light"] main .hover\:border-white\/10:hover {
-  border-color: #d1d5db;
-}
-
-/* Placeholder text */
-[data-theme="light"] main .placeholder-gray-600::placeholder {
-  color: #9ca3af;
-}
+/* Placeholder */
+[data-theme="light"] main .placeholder-gray-600::placeholder { color: #80848e; }
+[data-theme="light"] main .placeholder-gray-500::placeholder { color: #96989d; }
