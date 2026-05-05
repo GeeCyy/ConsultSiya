@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Label } from '@/components/ui/label';
+import DashboardShell from '@/components/DashboardShell';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -90,15 +91,6 @@ function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
   return (
     <div className={`rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 font-semibold flex-shrink-0 ${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'}`}>
       {initials}
-    </div>
-  );
-}
-
-function ProfileField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
-  return (
-    <div className={className}>
-      <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-0.5">{label}</p>
-      <p className="text-gray-200 text-sm font-medium">{value || '—'}</p>
     </div>
   );
 }
@@ -627,6 +619,7 @@ export default function ProfessorDashboard() {
   ];
 
   return (
+    <DashboardShell weekBadge={false}>
     <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-screen ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
 
       {/* Sidebar */}
@@ -651,6 +644,16 @@ export default function ProfessorDashboard() {
           {navItems.map(item => (
             <NavItem key={item.key} active={tab === item.key} onClick={() => setTab(item.key)} label={item.label} icon={item.icon} />
           ))}
+          <div className="pt-2 mt-2 border-t border-white/5 space-y-1">
+            <button onClick={() => router.push('/dashboard/home')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+              Home
+            </button>
+            <button onClick={() => router.push('/dashboard/help')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Help Center
+            </button>
+          </div>
         </nav>
         <div className="px-3 py-4 border-t border-white/5 space-y-1">
           <button onClick={toggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
@@ -1542,5 +1545,6 @@ export default function ProfessorDashboard() {
         </Modal>
       )}
     </div>
+    </DashboardShell>
   );
 }

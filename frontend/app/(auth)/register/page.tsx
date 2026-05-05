@@ -80,12 +80,21 @@ export default function RegisterPage() {
       setError('Email, password, and full name are required.');
       return;
     }
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(form.email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     if (form.password !== form.confirm_password) {
       setError('Passwords do not match.');
       return;
     }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (!form.full_name.trim()) {
+      setError('Full name cannot be blank.');
       return;
     }
     if (role === 'student' && (!form.student_number || !form.program || !form.year_level)) {

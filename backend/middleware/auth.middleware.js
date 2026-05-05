@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
 
 const authenticate = (req, res, next) => {
+  // Accept token from httpOnly cookie (preferred) OR Authorization: Bearer header (SPA fallback)
+  const cookieToken = req.cookies?.auth_token;
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  const token = cookieToken || bearerToken;
 
   if (!token) {
     return res.status(401).json({ error: 'Access denied. No token provided.' });
