@@ -298,20 +298,76 @@ export default function DashboardShell({
   children: React.ReactNode;
   weekBadge?: boolean;
 }) {
+  const router = useRouter();
   const [faqOpen, setFaqOpen] = useState(false);
+  const [isDark, setIsDark] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('consultsiya-theme');
+    const dark = saved !== 'light';
+    setIsDark(dark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  }, []);
+
+  const toggleTheme = () => {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+      window.dispatchEvent(new CustomEvent('consultsiya-theme-change', { detail: { dark: next } }));
+      return next;
+    });
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    router.push('/login');
+  };
 
   return (
-    <>
-      {weekBadge && (
-        <div className="fixed top-3 right-20 z-40 pointer-events-none">
-          <WeekBadge />
+    <div className="flex flex-col h-screen overflow-hidden bg-[#0c0c0c]">
+      {/* ── Global top bar ─────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 bg-[#111] border-b border-white/5 z-30">
+        <div className="flex items-center gap-2">
+          {weekBadge && <WeekBadge />}
         </div>
-      )}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => router.push('/dashboard/help')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Help
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all"
+          >
+            {isDark ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z" /></svg>
+            )}
+            {isDark ? 'Light' : 'Dark'}
+          </button>
+          <div className="w-px h-4 bg-white/10 mx-1" />
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" /></svg>
+            Sign Out
+          </button>
+        </div>
+      </div>
 
-      {children}
+      {/* ── Page content ───────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden">
+        {children}
+      </div>
 
       <FaqButton onClick={() => setFaqOpen(v => !v)} open={faqOpen} />
       {faqOpen && <FaqPanel onClose={() => setFaqOpen(false)} />}
-    </>
+    </div>
   );
 }
