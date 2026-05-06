@@ -13,7 +13,9 @@ import {
   isSchoolDay,
   isHoliday,
   isExamWeek,
+  type CalendarOverride,
 } from '@/lib/academicCalendar';
+import { fetchPhHolidays, type PhHoliday } from '@/lib/phHolidays';
 
 const MONTH_NAMES = [
   'January','February','March','April','May','June',
@@ -21,30 +23,13 @@ const MONTH_NAMES = [
 ];
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// ── Announcements (static; replace with API call if needed) ──────────────────
-const ANNOUNCEMENTS = [
-  {
-    id: 1,
-    title: 'Finals Week Approaching',
-    body: 'Finals examinations begin on Week 15. Prepare your requirements and schedule consultations early.',
-    date: '2026-05-04',
-    type: 'warning',
-  },
-  {
-    id: 2,
-    title: 'Consultation Slots Now Open',
-    body: 'Professors have updated their schedules for the remaining weeks. Book your slot now.',
-    date: '2026-05-01',
-    type: 'info',
-  },
-  {
-    id: 3,
-    title: 'Advising Slip Reminder',
-    body: 'All students with consultations must upload a signed advising slip within 48 hours of their session.',
-    date: '2026-04-28',
-    type: 'info',
-  },
-];
+type Announcement = {
+  id: number;
+  title: string;
+  body: string;
+  type: 'info' | 'warning';
+  created_at: string;
+};
 
 function AnnouncementIcon({ type }: { type: string }) {
   if (type === 'warning') {
@@ -61,12 +46,30 @@ function AnnouncementIcon({ type }: { type: string }) {
   );
 }
 
-function CalendarView() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+function CalendarView({
+  overrides = [],
+  phHolidays = [],
+}: {
+  overrides?: CalendarOverride[];
+  phHolidays?: PhHoliday[];
+}) {
+  const [today, setToday] = useState<Date | null>(null);
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+
+  useEffect(() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    setToday(t);
+  }, []);
   const [selected, setSelected] = useState<Date | null>(null);
+
+  const examWeekSet     = new Set(overrides.filter(o => o.type === 'exam_week'     && o.value === 'exam'    && o.week_number).map(o => o.week_number!));
+  const suppressExamSet = new Set(overrides.filter(o => o.type === 'exam_week'     && o.value === 'normal'  && o.week_number).map(o => o.week_number!));
+  const modeMap         = new Map(overrides.filter(o => o.type === 'mode_override' && o.week_number && o.value).map(o => [o.week_number!, o.value as 'Online' | 'In-Person']));
+  const blockedSet      = new Set(overrides.filter(o => o.type === 'blocked_date'  && o.date).map(o => o.date!));
+  const phSet           = new Set(phHolidays.map(h => h.date));
+  const phNames         = new Map(phHolidays.map(h => [h.date, h.name]));
 
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -84,14 +87,6 @@ function CalendarView() {
     ...Array(firstDow).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => new Date(viewYear, viewMonth, i + 1)),
   ];
-
-  const getLabel = (d: Date) => {
-    const w = getAcademicWeek(CURRENT_TERM, d);
-    if (!w) return '';
-    if (isExamWeek(CURRENT_TERM, d)) return '📝';
-    if (!isSchoolDay(d)) return '';
-    return '';
-  };
 
   return (
     <div>
@@ -118,14 +113,25 @@ function CalendarView() {
         {cells.map((date, i) => {
           if (!date) return <div key={`empty-${i}`} />;
 
-          const isToday = date.getTime() === today.getTime();
+          const isToday = today ? date.getTime() === today.getTime() : false;
           const isSelected = selected?.getTime() === date.getTime();
           const week = getAcademicWeek(CURRENT_TERM, date);
-          const holiday = isHoliday(date);
-          const exam = week ? isExamWeek(CURRENT_TERM, date) : false;
+          const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+          const holiday = isHoliday(date) || phSet.has(dateStr) || blockedSet.has(dateStr);
+          const staticExam = week ? isExamWeek(CURRENT_TERM, date) : false;
+          const exam = week
+            ? (examWeekSet.has(week) || (staticExam && !suppressExamSet.has(week)))
+            : false;
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const mode = week ? getWeekMode(CURRENT_TERM, week) : null;
-          const label = getLabel(date);
+          const mode = week ? (modeMap.get(week) ?? getWeekMode(CURRENT_TERM, week)) : null;
+
+          const cellBg = isSelected && !isToday
+            ? 'bg-white/10'
+            : holiday
+              ? 'bg-red-500/20'
+              : exam
+                ? 'bg-amber-400/20'
+                : '';
 
           return (
             <button
@@ -133,18 +139,16 @@ function CalendarView() {
               onClick={() => setSelected(isSelected ? null : date)}
               className={`
                 relative flex flex-col items-center justify-center rounded-lg h-9 text-xs transition-colors
-                ${isToday ? 'ring-1 ring-[#CC0000] text-white font-bold' : ''}
-                ${isSelected && !isToday ? 'bg-white/10 text-white' : ''}
+                ${isToday ? 'ring-1 ring-[#CC0000] font-bold' : ''}
+                ${cellBg}
                 ${holiday ? 'text-red-400' : isWeekend ? 'text-gray-600' : week ? 'text-gray-200' : 'text-gray-700'}
                 ${!isToday && !isSelected ? 'hover:bg-white/5' : ''}
               `}
             >
               <span>{date.getDate()}</span>
-              {exam && <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-amber-400" />}
-              {!exam && mode === 'Online' && week && !isWeekend && (
+              {mode === 'Online' && week && !isWeekend && !exam && (
                 <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />
               )}
-              {label && <span className="text-[8px] leading-none">{label}</span>}
             </button>
           );
         })}
@@ -153,36 +157,42 @@ function CalendarView() {
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-4 pt-3 border-t border-white/10">
         <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-          <span className="w-2 h-2 rounded-full bg-[#CC0000]" />Today
+          <span className="w-3 h-3 rounded-sm ring-1 ring-[#CC0000] bg-transparent" />Today
         </span>
         <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Exam week
+          <span className="w-3 h-3 rounded-sm bg-amber-400/20" />Exam week
         </span>
         <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />Online
         </span>
-        <span className="flex items-center gap-1.5 text-[10px] text-red-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Holiday
+        <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+          <span className="w-3 h-3 rounded-sm bg-red-500/20" />Holiday
         </span>
       </div>
 
       {/* Tooltip for selected date */}
       {selected && (() => {
+        const selStr = `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}-${String(selected.getDate()).padStart(2, '0')}`;
         const w = getAcademicWeek(CURRENT_TERM, selected);
-        const holiday = isHoliday(selected);
-        const school = isSchoolDay(selected);
-        const mode = w ? getWeekMode(CURRENT_TERM, w) : null;
-        const exam = w ? isExamWeek(CURRENT_TERM, selected) : false;
+        const isHol = isHoliday(selected) || phSet.has(selStr) || blockedSet.has(selStr);
+        const school = isSchoolDay(selected) && !phSet.has(selStr) && !blockedSet.has(selStr);
+        const staticExam = w ? isExamWeek(CURRENT_TERM, selected) : false;
+        const effectiveExam = w ? (examWeekSet.has(w) || (staticExam && !suppressExamSet.has(w))) : false;
+        const effectiveMode = w ? (modeMap.get(w) ?? getWeekMode(CURRENT_TERM, w)) : null;
+        const holName = phNames.get(selStr)
+          ?? overrides.find(o => o.type === 'blocked_date' && o.date === selStr)?.label
+          ?? (isHoliday(selected) ? 'Public Holiday' : null)
+          ?? (blockedSet.has(selStr) ? 'Blocked' : null);
         return (
           <div className="mt-3 p-3 rounded-xl bg-[#383a40] border border-white/10 text-sm">
             <p className="font-semibold text-white">
               {MONTH_NAMES[selected.getMonth()]} {selected.getDate()}, {selected.getFullYear()}
             </p>
-            {holiday && <p className="text-red-400 text-xs mt-1">Holiday</p>}
-            {!holiday && !school && <p className="text-gray-400 text-xs mt-1">Weekend / No class</p>}
+            {isHol && <p className="text-red-400 text-xs mt-1">Holiday{holName ? ` — ${holName}` : ''}</p>}
+            {!isHol && !school && <p className="text-gray-400 text-xs mt-1">Weekend / No class</p>}
             {school && w && (
               <p className="text-gray-300 text-xs mt-1">
-                Week {w} of {CURRENT_TERM.totalWeeks} — {mode}{exam ? ' (Exam Week)' : ''}
+                Week {w} of {CURRENT_TERM.totalWeeks} — {effectiveMode}{effectiveExam ? ' · Exam Week' : ''}
               </p>
             )}
             {school && !w && <p className="text-gray-500 text-xs mt-1">Outside current term</p>}
@@ -230,6 +240,9 @@ export default function HomePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
+  const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -237,6 +250,26 @@ export default function HomePage() {
     if (!token) { router.push('/login'); return; }
     setRole(r);
     setMounted(true);
+
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+    // Fetch calendar overrides — public endpoint, no auth required
+    fetch(`${base}/api/calendar`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => { if (Array.isArray(data)) setCalOverrides(data); })
+      .catch(() => {});
+
+    // Fetch announcements — public endpoint
+    fetch(`${base}/api/announcements`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => { if (Array.isArray(data)) setAnnouncements(data); })
+      .catch(() => {});
+
+    // Fetch PH public holidays for the current and next year (covers academic terms spanning year boundary)
+    const year = new Date().getFullYear();
+    Promise.all([fetchPhHolidays(year), fetchPhHolidays(year + 1)]).then(([a, b]) => {
+      setPhHolidays([...a, ...b]);
+    });
   }, [router]);
 
   if (!mounted) return null;
@@ -407,20 +440,24 @@ export default function HomePage() {
             {/* Calendar */}
             <div className="lg:col-span-3 rounded-2xl p-6 border border-white/10 bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Academic Calendar</p>
-              <CalendarView />
+              <CalendarView overrides={calOverrides} phHolidays={phHolidays} />
             </div>
 
             {/* Announcements */}
             <div className="lg:col-span-2 rounded-2xl p-6 border border-white/10 flex flex-col bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Announcements</p>
               <div className="space-y-3 flex-1">
-                {ANNOUNCEMENTS.map(a => (
+                {announcements.length === 0 ? (
+                  <p className="text-gray-600 text-sm text-center py-8">No announcements</p>
+                ) : announcements.map(a => (
                   <div key={a.id} className="flex gap-3 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors bg-[#383a40]">
                     <AnnouncementIcon type={a.type} />
                     <div>
                       <p className="text-sm font-semibold text-white leading-tight">{a.title}</p>
                       <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{a.body}</p>
-                      <p className="text-[10px] text-gray-600 mt-1">{a.date}</p>
+                      <p className="text-[10px] text-gray-600 mt-1">
+                        {new Date(a.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
                     </div>
                   </div>
                 ))}

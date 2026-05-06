@@ -1,6 +1,16 @@
 // Academic calendar configuration for Mapúa University
 // Adjust TERM_START and TOTAL_WEEKS to match the current semester.
 
+export type CalendarOverride = {
+  id: number;
+  type: 'exam_week' | 'mode_override' | 'blocked_date';
+  date: string | null;
+  week_number: number | null;
+  value: string | null;
+  label: string | null;
+  created_at: string;
+};
+
 export type TermConfig = {
   label: string;
   start: Date;
@@ -15,20 +25,18 @@ export type TermConfig = {
 };
 
 // ── Current term ──────────────────────────────────────────────────────────────
-// 2nd Semester 2025–2026  (January 12 → May 16, 2026)
+// 3rd Trimester 2025–2026  (April 2 → July 9, 2026)
 export const CURRENT_TERM: TermConfig = {
-  label: '2nd Semester, A.Y. 2025–2026',
-  start: new Date('2026-01-12T00:00:00'),
-  totalWeeks: 18,
+  label: '3rd Trimester, A.Y. 2025–2026',
+  start: new Date('2026-04-02T00:00:00'),
+  totalWeeks: 14,
   midtermWeek: 7,
-  finalsWeek: 15,
-  holidayWeeks: [8],               // Midterm break
+  finalsWeek: 13,
   modeByWeek: {
-    1: 'In-Person',  2: 'In-Person',  3: 'In-Person',  4: 'In-Person',
-    5: 'In-Person',  6: 'In-Person',  7: 'In-Person',  8: 'Online',
-    9: 'In-Person', 10: 'In-Person', 11: 'In-Person', 12: 'In-Person',
-    13: 'In-Person', 14: 'In-Person', 15: 'In-Person', 16: 'Online',
-    17: 'In-Person', 18: 'In-Person',
+     1: 'In-Person',  2: 'In-Person',  3: 'In-Person',  4: 'In-Person',
+     5: 'In-Person',  6: 'In-Person',  7: 'In-Person',  8: 'In-Person',
+     9: 'In-Person', 10: 'In-Person', 11: 'In-Person', 12: 'In-Person',
+    13: 'In-Person', 14: 'In-Person',
   },
 };
 
@@ -74,6 +82,7 @@ const PH_HOLIDAYS_2026 = [
   '2026-04-03', // Good Friday
   '2026-04-09', // Araw ng Kagitingan
   '2026-05-01', // Labor Day
+  '2026-06-12', // Independence Day
 ];
 
 export function isSchoolDay(date: Date): boolean {

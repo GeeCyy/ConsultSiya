@@ -170,4 +170,115 @@ router.patch('/demote-admin/:id', authenticate, authorize('admin'), async (req, 
   }
 });
 
+// ── Calendar management ────────────────────────────────────────────────────────
+
+// POST /api/admin/exam-weeks — upsert exam week override
+router.post('/exam-weeks', authenticate, authorize('admin'), async (req, res) => {
+  const { week_number, value } = req.body;
+  if (!week_number || !['exam', 'normal'].includes(value)) {
+    return res.status(400).json({ error: 'week_number and value (exam|normal) required.' });
+  }
+  try {
+    await pool.query(
+      `DELETE FROM calendar_overrides WHERE type = 'exam_week' AND week_number = $1`,
+      [week_number]
+    );
+    const result = await pool.query(
+      `INSERT INTO calendar_overrides (type, week_number, value, created_by)
+       VALUES ('exam_week', $1, $2, $3)
+       RETURNING id, type, date::text AS date, week_number, value, label, created_at`,
+      [week_number, value, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/exam-weeks/:weekNumber — reset week to static default
+router.delete('/exam-weeks/:weekNumber', authenticate, authorize('admin'), async (req, res) => {
+  const { weekNumber } = req.params;
+  try {
+    await pool.query(
+      `DELETE FROM calendar_overrides WHERE type = 'exam_week' AND week_number = $1`,
+      [weekNumber]
+    );
+    res.json({ message: 'Exam week override removed.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/blocked-dates — add a blocked/special date
+router.post('/blocked-dates', authenticate, authorize('admin'), async (req, res) => {
+  const { date, label } = req.body;
+  if (!date) return res.status(400).json({ error: 'date is required.' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO calendar_overrides (type, date, label, created_by)
+       VALUES ('blocked_date', $1, $2, $3)
+       RETURNING id, type, date::text AS date, week_number, value, label, created_at`,
+      [date, label || null, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/blocked-dates/:id — remove a blocked date
+router.delete('/blocked-dates/:id', authenticate, authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `DELETE FROM calendar_overrides WHERE id = $1 AND type = 'blocked_date' RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Blocked date not found.' });
+    res.json({ message: 'Blocked date removed.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/calendar-overrides — generic override create
+router.post('/calendar-overrides', authenticate, authorize('admin'), async (req, res) => {
+  const { type, date, week_number, value, label } = req.body;
+  if (!type || !['exam_week', 'mode_override', 'blocked_date'].includes(type)) {
+    return res.status(400).json({ error: 'type must be exam_week, mode_override, or blocked_date.' });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO calendar_overrides (type, date, week_number, value, label, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, type, date::text AS date, week_number, value, label, created_at`,
+      [type, date || null, week_number || null, value || null, label || null, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/calendar-overrides/:id — generic override delete
+router.delete('/calendar-overrides/:id', authenticate, authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `DELETE FROM calendar_overrides WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Override not found.' });
+    res.json({ message: 'Override deleted.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -3,7 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import DashboardShell from '@/components/DashboardShell';
+import {
+  CURRENT_TERM,
+  getAcademicWeek,
+  getWeekMode,
+  daysUntil,
+  getTermDates,
+  getTermProgress,
+  isHoliday,
+  type CalendarOverride,
+} from '@/lib/academicCalendar';
+import { fetchPhHolidays, type PhHoliday } from '@/lib/phHolidays';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -63,6 +73,15 @@ type AdminUser = {
   email: string;
   role: string;
   created_at: string;
+};
+
+type Announcement = {
+  id: number;
+  title: string;
+  body: string;
+  type: 'info' | 'warning';
+  created_at: string;
+  updated_at: string;
 };
 
 const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
@@ -139,12 +158,12 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
   return action_taken;
 }
 
-type Tab = 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history';
+type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar';
 type ReportPeriod = '' | 'week' | 'year' | 'semester';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('consultations');
+  const [tab, setTab] = useState<Tab>('home');
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -175,12 +194,45 @@ export default function AdminDashboard() {
   const [transferTargetId, setTransferTargetId] = useState('');
   const [transferError, setTransferError] = useState('');
 
+  // Calendar overrides
+  const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
+  const [calSaving, setCalSaving] = useState<string | null>(null);
+  const [calError, setCalError] = useState<string | null>(null);
+  const [addBlockedLabel, setAddBlockedLabel] = useState('');
+  const [calViewYear, setCalViewYear] = useState(() => new Date().getFullYear());
+  const [calViewMonth, setCalViewMonth] = useState(() => new Date().getMonth());
+  const [calModalDate, setCalModalDate] = useState<string | null>(null);
+  const [calSelectedDates, setCalSelectedDates] = useState<Set<string>>(new Set());
+  const [calShiftAnchor, setCalShiftAnchor] = useState<string | null>(null);
+  const [calHiddenFilters, setCalHiddenFilters] = useState<Set<string>>(new Set());
+  const [calSearch, setCalSearch] = useState('');
+  const [calAuditLog, setCalAuditLog] = useState<{ id: number; ts: Date; action: string; target: string; from: string; to: string }[]>([]);
+  const [calUndoStack, setCalUndoStack] = useState<{ desc: string; fn: () => Promise<void> }[]>([]);
+  const [calBulkLabel, setCalBulkLabel] = useState('');
+  const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
+
+  // Announcements
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [annSaving, setAnnSaving] = useState(false);
+  const [annError, setAnnError] = useState<string | null>(null);
+  const [annForm, setAnnForm] = useState({ title: '', body: '', type: 'info' as 'info' | 'warning' });
+  const [annEditId, setAnnEditId] = useState<number | null>(null);
+  const [annFormOpen, setAnnFormOpen] = useState(false);
+
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
     return true;
   });
+
+  const toggleTheme = () => {
+    setIsDark(d => {
+      const next = !d;
+      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
 
   const stats = {
     total: consultations.length,
@@ -190,23 +242,23 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
-    window.addEventListener('consultsiya-theme-change', handler);
-    return () => window.removeEventListener('consultsiya-theme-change', handler);
-  }, []);
-
-  useEffect(() => {
     if (!token) { router.push('/login'); return; }
     fetchAll();
+    const year = new Date().getFullYear();
+    Promise.all([fetchPhHolidays(year), fetchPhHolidays(year + 1)]).then(([a, b]) => {
+      setPhHolidays([...a, ...b]);
+    });
   }, []);
 
   const fetchAll = async () => {
-    const [consultData, schedData, profData, usersData, adminsData] = await Promise.all([
+    const [consultData, schedData, profData, usersData, adminsData, calData, annData] = await Promise.all([
       api.get('/api/consultations', token!),
       api.get('/api/schedules/all', token!),
       api.get('/api/reports/professors', token!),
       api.get('/api/admin/users', token!),
       api.get('/api/admin/admins', token!),
+      api.get('/api/calendar/overrides', token!),
+      fetch(`${API_URL}/api/announcements`).then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
 
     const list: Consultation[] = Array.isArray(consultData) ? consultData : [];
@@ -215,8 +267,21 @@ export default function AdminDashboard() {
     setProfessors(Array.isArray(profData) ? profData : []);
     setUsers(Array.isArray(usersData) ? usersData : []);
     setAdmins(Array.isArray(adminsData) ? adminsData : []);
+    setCalOverrides(Array.isArray(calData) ? calData : []);
+    setAnnouncements(Array.isArray(annData) ? annData : []);
     setLoading(false);
   };
+
+  const refreshCalOverrides = async () => {
+    // Use the public endpoint — same data, no auth required
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/calendar`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) setCalOverrides(data);
+    }
+  };
+
+  const handleLogout = () => { localStorage.clear(); router.push('/login'); };
 
   const handleDownload = async (url: string, filename: string, key: string) => {
     setExporting(key);
@@ -318,7 +383,132 @@ export default function AdminDashboard() {
     { key: 'completed', label: 'Completed', value: stats.completed, color: 'text-emerald-400', accent: 'border-emerald-500/20', activeBg: 'bg-emerald-500/10' },
   ];
 
+  // ── Calendar computed state (shared between Home and Calendar tabs) ──────────
+  const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const CAL_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,'0')}-${String(todayDate.getDate()).padStart(2,'0')}`;
+  const currentAcademicWeek = getAcademicWeek(CURRENT_TERM, todayDate);
+
+  const prevCalMonth = () => {
+    if (calViewMonth === 0) { setCalViewMonth(11); setCalViewYear((y: number) => y - 1); }
+    else setCalViewMonth((m: number) => m - 1);
+  };
+  const nextCalMonth = () => {
+    if (calViewMonth === 11) { setCalViewMonth(0); setCalViewYear((y: number) => y + 1); }
+    else setCalViewMonth((m: number) => m + 1);
+  };
+
+  const examWeekSet     = new Set(calOverrides.filter(o => o.type === 'exam_week'     && o.value === 'exam'   && o.week_number).map(o => o.week_number!));
+  const suppressExamSet = new Set(calOverrides.filter(o => o.type === 'exam_week'     && o.value === 'normal' && o.week_number).map(o => o.week_number!));
+  const modeMap         = new Map(calOverrides.filter(o => o.type === 'mode_override' && o.week_number && o.value).map(o => [o.week_number!, o.value!]));
+  const blockedDates    = calOverrides.filter(o => o.type === 'blocked_date' && o.date);
+  const blockedSet      = new Set(blockedDates.map(o => o.date!));
+  const phSet           = new Set(phHolidays.map(h => h.date));
+
+  const effectiveExam = (w: number) => {
+    if (examWeekSet.has(w)) return true;
+    const staticExam = w === CURRENT_TERM.midtermWeek || w === CURRENT_TERM.finalsWeek;
+    return staticExam && !suppressExamSet.has(w);
+  };
+  const effectiveMode = (w: number): string => modeMap.get(w) ?? getWeekMode(CURRENT_TERM, w);
+
+  const handleExamToggle = async (w: number) => {
+    setCalSaving(`exam-${w}`);
+    const dbEntry = calOverrides.find(o => o.type === 'exam_week' && o.week_number === w);
+    const currently = effectiveExam(w);
+    const staticIsExam = w === CURRENT_TERM.midtermWeek || w === CURRENT_TERM.finalsWeek;
+    if (currently) {
+      if (dbEntry?.value === 'exam') {
+        await api.delete(`/api/calendar/overrides/${dbEntry.id}`, token!);
+      } else if (!dbEntry && staticIsExam) {
+        await api.post('/api/calendar/overrides', { type: 'exam_week', week_number: w, value: 'normal' }, token!);
+      }
+    } else {
+      if (dbEntry?.value === 'normal') {
+        await api.delete(`/api/calendar/overrides/${dbEntry.id}`, token!);
+      } else if (!dbEntry) {
+        await api.post('/api/calendar/overrides', { type: 'exam_week', week_number: w, value: 'exam' }, token!);
+      }
+    }
+    await refreshCalOverrides();
+    setCalSaving(null);
+  };
+
+  const handleModeToggle = async (w: number) => {
+    setCalSaving(`mode-${w}`);
+    const dbEntry = calOverrides.find(o => o.type === 'mode_override' && o.week_number === w);
+    const current = effectiveMode(w);
+    const newMode = current === 'Online' ? 'In-Person' : 'Online';
+    const staticMode = getWeekMode(CURRENT_TERM, w);
+    if (dbEntry) {
+      if (newMode === staticMode) {
+        await api.delete(`/api/calendar/overrides/${dbEntry.id}`, token!);
+      } else {
+        await api.patch(`/api/calendar/overrides/${dbEntry.id}`, { value: newMode }, token!);
+      }
+    } else if (newMode !== staticMode) {
+      await api.post('/api/calendar/overrides', { type: 'mode_override', week_number: w, value: newMode }, token!);
+    }
+    await refreshCalOverrides();
+    setCalSaving(null);
+  };
+
+  const handleDeleteOverride = async (id: number, type?: string) => {
+    setCalError(null);
+    const endpoint = type === 'blocked_date'
+      ? `/api/admin/blocked-dates/${id}`
+      : `/api/calendar/overrides/${id}`;
+    const result = await api.delete(endpoint, token!);
+    if (result?.error) {
+      setCalError(`Failed to delete: ${result.error}`);
+    } else {
+      await refreshCalOverrides();
+    }
+  };
+
+  // ── Announcement handlers ────────────────────────────────────────────────────
+  const handleSaveAnn = async () => {
+    if (!annForm.title.trim() || !annForm.body.trim()) return;
+    setAnnSaving(true);
+    setAnnError(null);
+    const result = annEditId
+      ? await api.patch(`/api/announcements/${annEditId}`, annForm, token!)
+      : await api.post('/api/announcements', annForm, token!);
+    setAnnSaving(false);
+    if (result?.error) { setAnnError(result.error); return; }
+    setAnnForm({ title: '', body: '', type: 'info' });
+    setAnnEditId(null);
+    setAnnFormOpen(false);
+    await fetchAll();
+  };
+
+  const handleDeleteAnn = async (id: number) => {
+    if (!confirm('Delete this announcement?')) return;
+    const result = await api.delete(`/api/announcements/${id}`, token!);
+    if (result?.error) { setAnnError(result.error); return; }
+    await fetchAll();
+  };
+
+  // ── Term stats (used by Home tab) ────────────────────────────────────────────
+  const now = new Date();
+  const currentWeek = getAcademicWeek(CURRENT_TERM, now);
+  const currentMode = currentWeek ? getWeekMode(CURRENT_TERM, currentWeek) : null;
+  const { finalsDate, endDate } = getTermDates(CURRENT_TERM);
+  const daysToFinals = daysUntil(finalsDate, now);
+  const daysToEnd = daysUntil(endDate, now);
+  const termProgress = getTermProgress(CURRENT_TERM, now);
+  const nextWeek = currentWeek ? currentWeek + 1 : null;
+  const nextWeekMode = nextWeek && nextWeek <= CURRENT_TERM.totalWeeks ? getWeekMode(CURRENT_TERM, nextWeek) : null;
+
   const navItems: { key: Tab; label: string; count?: number; icon: React.ReactNode }[] = [
+    {
+      key: 'home' as Tab,
+      label: 'Home',
+      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
+    },
     {
       key: 'consultations',
       label: 'Consultations',
@@ -349,13 +539,18 @@ export default function AdminDashboard() {
       count: consultations.filter(c => c.status === 'completed').length,
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>,
     },
+    {
+      key: 'calendar' as Tab,
+      label: 'Calendar',
+      count: calOverrides.length || undefined,
+      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>,
+    },
   ];
 
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <DashboardShell weekBadge={false}>
-    <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-full ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
+    <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-screen ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
 
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
@@ -378,35 +573,45 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
-          <button onClick={() => router.push('/dashboard/home')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-            Home
-          </button>
-          <div className="border-t border-white/5 pt-2 mt-1 space-y-1">
-            {navItems.map(item => (
-              <button key={item.key} onClick={() => setTab(item.key)}
-                className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  tab === item.key
-                    ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30'
-                    : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
+          {navItems.map(item => (
+            <button key={item.key} onClick={() => setTab(item.key)}
+              className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                tab === item.key
+                  ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30'
+                  : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
+              }`}>
+              <span className="flex items-center gap-3">{item.icon}{item.label}</span>
+              {item.count !== undefined && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                  tab === item.key ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-600'
                 }`}>
-                <span className="flex items-center gap-3">{item.icon}{item.label}</span>
-                {item.count !== undefined && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-md ${
-                    tab === item.key ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-600'
-                  }`}>
-                    {item.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+                  {item.count}
+                </span>
+              )}
+            </button>
+          ))}
         </nav>
+
+        <div className="px-3 py-4 border-t border-white/5 space-y-1">
+          <button onClick={toggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+            {isDark ? (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
+            ) : (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z" /></svg>
+            )}
+            {isDark ? 'Light Mode' : 'Dark Mode'}
+          </button>
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" />
+            </svg>
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Main content */}
-      <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'}`}>
+      <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
@@ -942,10 +1147,952 @@ export default function AdminDashboard() {
               </>
             )}
 
+            {/* ── Home ── */}
+            {tab === 'home' && (
+              <>
+                <div className="mb-7">
+                  <h1 className="text-white text-2xl font-bold">Dashboard</h1>
+                  <p className="text-gray-500 text-sm mt-1">{CURRENT_TERM.label} · Admin Overview</p>
+                </div>
+
+                {/* Term stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="md:col-span-2 rounded-2xl p-6 border border-white/5 bg-[#161616] flex items-center gap-6">
+                    <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center bg-[#CC0000]">
+                      <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
+                      <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider mt-0.5">Week</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Current Academic Week</p>
+                      <h2 className="text-2xl font-bold text-white">
+                        {currentWeek ? `Week ${currentWeek} of ${CURRENT_TERM.totalWeeks}` : 'Term Not Active'}
+                      </h2>
+                      {currentMode && (
+                        <span className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                          currentMode === 'Online'
+                            ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30'
+                            : 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${currentMode === 'Online' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                          {currentMode}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl p-5 border border-white/5 bg-[#161616] flex flex-col justify-between">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Week</p>
+                    {nextWeek && nextWeekMode ? (
+                      <>
+                        <div className="mt-3">
+                          <p className="text-xl font-bold text-white">Week {nextWeek}</p>
+                          <span className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            nextWeekMode === 'Online' ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'
+                          }`}>{nextWeekMode}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-600 mt-3">Plan ahead for upcoming consultations</p>
+                      </>
+                    ) : (
+                      <p className="text-gray-500 text-sm mt-3">End of term</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Countdown cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  {[
+                    { label: 'Days to Finals', value: daysToFinals, color: 'text-amber-400', ring: 'ring-amber-500/20' },
+                    { label: 'Days to End', value: daysToEnd, color: 'text-red-400', ring: 'ring-red-500/20' },
+                    { label: 'Weeks Left', value: currentWeek ? Math.max(0, CURRENT_TERM.totalWeeks - currentWeek) : '–', color: 'text-blue-400', ring: 'ring-blue-500/20' },
+                    { label: 'Progress', value: `${Math.round(termProgress)}%`, color: 'text-emerald-400', ring: 'ring-emerald-500/20' },
+                  ].map(({ label, value, color, ring }) => (
+                    <div key={label} className={`rounded-2xl p-5 border border-white/5 bg-[#161616] ring-1 ${ring} flex flex-col items-center justify-center text-center`}>
+                      <p className={`text-3xl font-black ${color}`}>{value}</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress bar */}
+                <div className="rounded-2xl p-6 border border-white/5 bg-[#161616] mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-white">Term Progress</p>
+                    <p className="text-xs text-gray-500">{CURRENT_TERM.label}</p>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-gray-600 mb-1">
+                    <span>Start</span>
+                    <span>Midterm (W{CURRENT_TERM.midtermWeek})</span>
+                    <span>Finals (W{CURRENT_TERM.finalsWeek})</span>
+                    <span>End</span>
+                  </div>
+                  <div className="relative h-3 rounded-full overflow-hidden bg-white/5">
+                    <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700 bg-[#CC0000]" style={{ width: `${termProgress}%` }} />
+                    <div className="absolute top-0 h-full w-0.5 bg-amber-400/60" style={{ left: `${((CURRENT_TERM.midtermWeek - 1) / CURRENT_TERM.totalWeeks) * 100}%` }} />
+                    <div className="absolute top-0 h-full w-0.5 bg-orange-400/60" style={{ left: `${((CURRENT_TERM.finalsWeek - 1) / CURRENT_TERM.totalWeeks) * 100}%` }} />
+                  </div>
+                  {currentWeek && (
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      Currently at <span className="text-white font-semibold">Week {currentWeek}</span> of {CURRENT_TERM.totalWeeks} weeks
+                    </p>
+                  )}
+                </div>
+
+                {/* Calendar + Announcements */}
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                  {/* Compact interactive calendar */}
+                  <div className="lg:col-span-3 rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                    <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                      <p className="text-white font-semibold text-sm">Academic Calendar</p>
+                      <div className="flex items-center gap-1">
+                        <button onClick={prevCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <span className="text-gray-300 text-sm font-medium min-w-[120px] text-center">{CAL_MONTHS[calViewMonth]} {calViewYear}</span>
+                        <button onClick={nextCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <div className="grid grid-cols-7 mb-2">
+                        {CAL_DAYS_SHORT.map(d => (
+                          <div key={d} className="text-center text-[10px] font-semibold text-gray-600 uppercase tracking-wider py-1">{d}</div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-y-1">
+                        {(() => {
+                          const fd = new Date(calViewYear, calViewMonth, 1).getDay();
+                          const dim = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+                          const cells: (Date | null)[] = [
+                            ...Array(fd).fill(null),
+                            ...Array.from({ length: dim }, (_, i) => new Date(calViewYear, calViewMonth, i + 1)),
+                          ];
+                          return cells.map((date, i) => {
+                            if (!date) return <div key={`he-${i}`} />;
+                            const dStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                            const dWeek = getAcademicWeek(CURRENT_TERM, date);
+                            const isToday = dStr === todayStr;
+                            const isBlocked = blockedSet.has(dStr) || phSet.has(dStr) || isHoliday(date);
+                            const isExam = dWeek ? effectiveExam(dWeek) : false;
+                            const dMode = dWeek ? effectiveMode(dWeek) : null;
+                            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                            let cellBg = '';
+                            let numCls = 'text-gray-200';
+                            if (!dWeek) { numCls = 'text-gray-700'; }
+                            else if (isBlocked) { cellBg = 'bg-red-500/25'; numCls = 'text-red-300'; }
+                            else if (isExam) { cellBg = 'bg-amber-500/15'; numCls = 'text-amber-200'; }
+                            else if (dMode === 'Online') { cellBg = 'bg-blue-500/15'; numCls = 'text-blue-200'; }
+                            else if (!isWeekend) { cellBg = 'bg-emerald-500/10'; numCls = 'text-emerald-300'; }
+                            return (
+                              <button
+                                key={date.toISOString()}
+                                onClick={() => { setCalModalDate(dStr); setAddBlockedLabel(''); }}
+                                className={`relative flex items-center justify-center h-9 rounded-lg text-xs transition-all ${cellBg} hover:brightness-125 cursor-pointer`}
+                              >
+                                {isToday ? (
+                                  <span className="w-6 h-6 rounded-full bg-[#CC0000] flex items-center justify-center text-[11px] font-bold text-white shadow shadow-red-900/50">
+                                    {date.getDate()}
+                                  </span>
+                                ) : (
+                                  <span className={numCls}>{date.getDate()}</span>
+                                )}
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 pt-3 border-t border-white/5">
+                        {([
+                          { cls: 'bg-emerald-500/25', label: 'In-Person' },
+                          { cls: 'bg-blue-500/25', label: 'Online' },
+                          { cls: 'bg-amber-500/25', label: 'Exam' },
+                          { cls: 'bg-red-500/30', label: 'Holiday/Blocked' },
+                        ] as { cls: string; label: string }[]).map(({ cls, label }) => (
+                          <span key={label} className="flex items-center gap-1 text-[10px] text-gray-500">
+                            <span className={`w-2.5 h-2.5 rounded-sm ${cls}`} />{label}
+                          </span>
+                        ))}
+                        <span className="text-[10px] text-gray-600">· Click any date to edit</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Announcements CRUD */}
+                  <div className="lg:col-span-2 rounded-2xl border border-white/5 bg-[#161616] flex flex-col overflow-hidden">
+                    <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                      <p className="text-white font-semibold text-sm">Announcements</p>
+                      <button
+                        onClick={() => {
+                          setAnnEditId(null);
+                          setAnnForm({ title: '', body: '', type: 'info' });
+                          setAnnError(null);
+                          setAnnFormOpen(f => !f);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                        {annFormOpen && !annEditId ? 'Cancel' : 'Add'}
+                      </button>
+                    </div>
+
+                    {/* Add/edit form */}
+                    {annFormOpen && (
+                      <div className="px-5 py-4 border-b border-white/5 space-y-3 bg-white/[0.02]">
+                        <div className="flex gap-2">
+                          {(['info', 'warning'] as const).map(t => (
+                            <button key={t} onClick={() => setAnnForm(f => ({ ...f, type: t }))}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                annForm.type === t
+                                  ? t === 'info' ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30' : 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
+                                  : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                              }`}>
+                              {t === 'info' ? 'Info' : 'Warning'}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
+                          placeholder="Title *"
+                          value={annForm.title}
+                          onChange={e => setAnnForm(f => ({ ...f, title: e.target.value }))}
+                        />
+                        <textarea
+                          rows={3}
+                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700 resize-none"
+                          placeholder="Body *"
+                          value={annForm.body}
+                          onChange={e => setAnnForm(f => ({ ...f, body: e.target.value }))}
+                        />
+                        {annError && <p className="text-red-400 text-xs">{annError}</p>}
+                        <button
+                          onClick={handleSaveAnn}
+                          disabled={annSaving || !annForm.title.trim() || !annForm.body.trim()}
+                          className="w-full py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-40"
+                        >
+                          {annSaving ? 'Saving…' : annEditId ? 'Update' : 'Post Announcement'}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+                      {announcements.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                          <p className="text-gray-600 text-sm">No announcements yet</p>
+                        </div>
+                      ) : announcements.map(a => (
+                        <div key={a.id} className="px-5 py-4 hover:bg-white/[0.02] transition-colors">
+                          <div className="flex items-start gap-2.5">
+                            {a.type === 'warning' ? (
+                              <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                            ) : (
+                              <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-white leading-tight">{a.title}</p>
+                              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{a.body}</p>
+                              <p className="text-[10px] text-gray-600 mt-1">
+                                {new Date(a.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => {
+                                  setAnnEditId(a.id);
+                                  setAnnForm({ title: a.title, body: a.body, type: a.type });
+                                  setAnnError(null);
+                                  setAnnFormOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg text-gray-600 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAnn(a.id)}
+                                className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Calendar ── */}
+            {tab === 'calendar' && (() => {
+              const firstDow = new Date(calViewYear, calViewMonth, 1).getDay();
+              const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+              const rawCells: (Date | null)[] = [
+                ...Array(firstDow).fill(null),
+                ...Array.from({ length: daysInMonth }, (_, i) => new Date(calViewYear, calViewMonth, i + 1)),
+              ];
+              while (rawCells.length % 7 !== 0) rawCells.push(null);
+              const calWeeks: (Date | null)[][] = [];
+              for (let i = 0; i < rawCells.length; i += 7) calWeeks.push(rawCells.slice(i, i + 7));
+
+              const calSelectedArr = [...calSelectedDates];
+              const calSingle = calSelectedArr.length === 1 ? calSelectedArr[0] : null;
+              const detailDate = calSingle ? new Date(calSingle + 'T12:00:00') : null;
+              const detailWeek = detailDate ? getAcademicWeek(CURRENT_TERM, detailDate) : null;
+              const detailMode = detailWeek ? effectiveMode(detailWeek) : null;
+              const detailIsExam = detailWeek ? effectiveExam(detailWeek) : false;
+              const detailIsBlocked = calSingle ? blockedSet.has(calSingle) : false;
+              const detailBlockedEntry = calSingle ? blockedDates.find((o: CalendarOverride) => o.date === calSingle) : undefined;
+
+              const CAL_LEGEND = [
+                { key: 'inPerson', cls: 'bg-emerald-500/25', label: 'In-Person' },
+                { key: 'online',   cls: 'bg-blue-500/25',    label: 'Online' },
+                { key: 'exam',     cls: 'bg-amber-500/25',   label: 'Exam Week' },
+                { key: 'blocked',  cls: 'bg-red-500/30',     label: 'Blocked' },
+              ];
+
+              return (
+                <>
+                  {/* Error banner */}
+                  {calError && (
+                    <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                      <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                      <span>{calError}</span>
+                      <button onClick={() => setCalError(null)} className="ml-auto text-red-400/60 hover:text-red-400">✕</button>
+                    </div>
+                  )}
+
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <h1 className="text-white text-2xl font-bold">Academic Calendar</h1>
+                      <p className="text-gray-500 text-sm mt-0.5">
+                        {CURRENT_TERM.label} · {CURRENT_TERM.totalWeeks} weeks
+                        {calSelectedArr.length > 0 && (
+                          <span className="ml-2 text-[#CC0000] font-medium">· {calSelectedArr.length} date{calSelectedArr.length !== 1 ? 's' : ''} selected</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <input
+                        type="date"
+                        value={calSearch}
+                        onChange={e => {
+                          setCalSearch(e.target.value);
+                          if (e.target.value) {
+                            const d = new Date(e.target.value + 'T12:00:00');
+                            setCalViewYear(d.getFullYear());
+                            setCalViewMonth(d.getMonth());
+                            setCalSelectedDates(new Set([e.target.value]));
+                            setCalShiftAnchor(e.target.value);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-white text-xs bg-[#1a1a1a] border border-white/5 focus:outline-none focus:border-[#CC0000]/30 [color-scheme:dark]"
+                      />
+                      <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-xl border border-white/5 px-3 py-2">
+                        <button onClick={prevCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <span className="text-white font-semibold text-sm min-w-[130px] text-center">{CAL_MONTHS[calViewMonth]} {calViewYear}</span>
+                        <button onClick={nextCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                      </div>
+                      {calUndoStack.length > 0 && (
+                        <button
+                          onClick={async () => {
+                            const last = calUndoStack[calUndoStack.length - 1];
+                            setCalUndoStack(s => s.slice(0, -1));
+                            await last.fn();
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/10 border border-white/5 transition-colors"
+                          title={calUndoStack[calUndoStack.length - 1]?.desc}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                          Undo
+                        </button>
+                      )}
+                      {calSelectedArr.length > 0 && (
+                        <button onClick={() => setCalSelectedDates(new Set())} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                          Clear ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Two-panel layout */}
+                  <div className="flex gap-4 items-start">
+
+                    {/* Left: Calendar + blocked list */}
+                    <div className="flex-1 min-w-0">
+
+                      {/* Filter legend (clickable toggles) */}
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        {CAL_LEGEND.map(({ key, cls, label }) => (
+                          <button key={key}
+                            onClick={() => setCalHiddenFilters(prev => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key); else next.add(key);
+                              return next;
+                            })}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-all ${
+                              calHiddenFilters.has(key)
+                                ? 'opacity-30 bg-white/5 border-white/5 text-gray-600'
+                                : 'bg-white/[0.04] border-white/5 text-gray-400 hover:text-gray-200 hover:bg-white/8'
+                            }`}>
+                            <span className={`w-2.5 h-2.5 rounded-sm ${cls}`} />
+                            {label}
+                          </button>
+                        ))}
+                        <span className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                          <span className="w-5 h-5 rounded-full bg-[#CC0000] flex items-center justify-center text-[9px] text-white font-bold leading-none">T</span>
+                          Today
+                        </span>
+                        <span className="ml-auto text-[10px] text-gray-700 hidden lg:block">Ctrl+click multi · Shift+click range · W# selects week</span>
+                      </div>
+
+                      {/* Calendar grid */}
+                      <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden mb-4">
+                        <div className="grid grid-cols-[44px_repeat(7,1fr)] border-b border-white/5">
+                          <div className="py-2.5 border-r border-white/5" />
+                          {CAL_DAYS_SHORT.map((d: string) => (
+                            <div key={d} className="py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wider">{d}</div>
+                          ))}
+                        </div>
+                        {calWeeks.map((weekDays, rowIdx) => {
+                          const firstInMonth = weekDays.find(d => d && d.getMonth() === calViewMonth);
+                          const wNum = firstInMonth ? getAcademicWeek(CURRENT_TERM, firstInMonth) : null;
+                          const isCurrentRow = wNum !== null && wNum === currentAcademicWeek;
+                          return (
+                            <div key={rowIdx} className="grid grid-cols-[44px_repeat(7,1fr)] border-b border-white/5 last:border-0">
+                              <div className={`flex items-center justify-center border-r border-white/5 ${isCurrentRow ? 'bg-white/[0.02]' : ''}`}>
+                                {wNum ? (
+                                  <button
+                                    onClick={() => {
+                                      const wkDates = weekDays
+                                        .filter((d): d is Date => d !== null && d.getMonth() === calViewMonth)
+                                        .map(d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+                                      setCalSelectedDates(new Set(wkDates));
+                                    }}
+                                    title="Select whole week"
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors ${isCurrentRow ? 'text-emerald-400' : 'text-gray-600 hover:text-gray-400'}`}
+                                  >W{wNum}</button>
+                                ) : <span className="text-[10px] text-gray-800">·</span>}
+                              </div>
+                              {weekDays.map((date, di) => {
+                                if (!date) return <div key={di} className="min-h-[52px] border-r border-white/5 last:border-0" />;
+                                const dStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                                const dWeek = getAcademicWeek(CURRENT_TERM, date);
+                                const inMonth = date.getMonth() === calViewMonth;
+                                const isToday = dStr === todayStr;
+                                const isSelected = calSelectedDates.has(dStr);
+                                const isBlocked = blockedSet.has(dStr);
+                                const isExam = dWeek ? effectiveExam(dWeek) : false;
+                                const dMode = dWeek ? effectiveMode(dWeek) : null;
+                                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                let cellBg = '';
+                                let numCls = 'text-gray-200';
+                                if (!dWeek) { numCls = 'text-gray-700'; }
+                                else if (isBlocked && !calHiddenFilters.has('blocked')) { cellBg = 'bg-red-500/25'; numCls = 'text-red-300'; }
+                                else if (isExam && !calHiddenFilters.has('exam')) { cellBg = 'bg-amber-500/15'; numCls = 'text-amber-200'; }
+                                else if (dMode === 'Online' && !calHiddenFilters.has('online')) { cellBg = 'bg-blue-500/15'; numCls = 'text-blue-200'; }
+                                else if (!isWeekend && !calHiddenFilters.has('inPerson')) { cellBg = 'bg-emerald-500/10'; numCls = 'text-emerald-300'; }
+                                return (
+                                  <button key={di}
+                                    onClick={(e) => {
+                                      if (!inMonth) return;
+                                      if (e.ctrlKey || e.metaKey) {
+                                        setCalSelectedDates(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(dStr)) next.delete(dStr); else next.add(dStr);
+                                          return next;
+                                        });
+                                        setCalShiftAnchor(dStr);
+                                      } else if (e.shiftKey && calShiftAnchor) {
+                                        const a = new Date(Math.min(+new Date(calShiftAnchor + 'T12:00'), +new Date(dStr + 'T12:00')));
+                                        const b = new Date(Math.max(+new Date(calShiftAnchor + 'T12:00'), +new Date(dStr + 'T12:00')));
+                                        const range: string[] = [];
+                                        const cur = new Date(a);
+                                        while (cur <= b) {
+                                          range.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`);
+                                          cur.setDate(cur.getDate() + 1);
+                                        }
+                                        setCalSelectedDates(new Set(range));
+                                      } else {
+                                        setCalSelectedDates(new Set([dStr]));
+                                        setCalShiftAnchor(dStr);
+                                      }
+                                    }}
+                                    className={`relative flex items-center justify-center min-h-[52px] border-r border-white/5 last:border-0 transition-all ${cellBg} ${
+                                      isSelected ? 'ring-2 ring-inset ring-[#CC0000]/60 brightness-125 z-10' : ''
+                                    } ${inMonth ? 'cursor-pointer hover:brightness-125 hover:z-10' : 'opacity-20 cursor-default'}`}
+                                    title={inMonth ? `${dStr}${dWeek ? ` · W${dWeek}` : ''}` : undefined}
+                                  >
+                                    {isToday ? (
+                                      <span className="w-7 h-7 rounded-full bg-[#CC0000] flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-red-900/50">
+                                        {date.getDate()}
+                                      </span>
+                                    ) : (
+                                      <span className={`text-xs font-medium ${numCls}`}>{date.getDate()}</span>
+                                    )}
+                                    {isSelected && !isToday && (
+                                      <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#CC0000]" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Blocked dates list */}
+                      {blockedDates.length > 0 && (
+                        <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                          <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
+                            <div>
+                              <p className="text-white font-semibold text-sm">Blocked / Special Dates</p>
+                              <p className="text-gray-600 text-xs mt-0.5">Click to jump to date</p>
+                            </div>
+                            <span className="text-xs text-gray-600 bg-white/5 px-2 py-0.5 rounded">{blockedDates.length}</span>
+                          </div>
+                          <div className="divide-y divide-white/5">
+                            {blockedDates.map((o: CalendarOverride) => (
+                              <div key={o.id}
+                                className={`px-5 py-3 flex items-center justify-between gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors ${o.date && calSelectedDates.has(o.date) ? 'bg-[#CC0000]/5' : ''}`}
+                                onClick={() => {
+                                  if (o.date) {
+                                    const d = new Date(o.date + 'T12:00:00');
+                                    setCalViewYear(d.getFullYear());
+                                    setCalViewMonth(d.getMonth());
+                                    setCalSelectedDates(new Set([o.date]));
+                                    setCalShiftAnchor(o.date);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className="w-2.5 h-2.5 rounded-sm bg-red-500/30 border border-red-500/30 flex-shrink-0" />
+                                  <span className="text-gray-200 text-sm font-medium">
+                                    {o.date ? new Date(o.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : o.date}
+                                  </span>
+                                  {o.label && <span className="text-gray-500 text-xs">— {o.label}</span>}
+                                </div>
+                                <button
+                                  onClick={async (e) => { e.stopPropagation(); await handleDeleteOverride(o.id, o.type); }}
+                                  className="text-gray-600 hover:text-red-400 transition-colors text-xs px-2 py-1 rounded hover:bg-red-500/10"
+                                >Remove</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Control panel */}
+                    <div className="w-72 flex-shrink-0 space-y-3">
+
+                      {/* Empty state */}
+                      {calSelectedArr.length === 0 && (
+                        <div className="rounded-2xl border border-white/5 bg-[#161616] p-5">
+                          <p className="text-gray-300 text-sm font-semibold mb-1">Select a date</p>
+                          <p className="text-gray-600 text-xs leading-relaxed mb-4">
+                            Click any date to configure it. Use <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[10px]">Ctrl</kbd>+click for multi-select, <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[10px]">Shift</kbd>+click for ranges, or click a week number to select the full week.
+                          </p>
+                          <div className="space-y-2 pt-3 border-t border-white/5">
+                            {[
+                              { label: 'Blocked dates', value: blockedDates.length, color: 'text-red-400' },
+                              { label: 'Calendar overrides', value: calOverrides.length, color: 'text-amber-400' },
+                              { label: 'Current week', value: currentAcademicWeek ?? '–', color: 'text-emerald-400' },
+                            ].map(({ label, value, color }) => (
+                              <div key={label} className="flex items-center justify-between text-xs">
+                                <span className="text-gray-500">{label}</span>
+                                <span className={`font-bold ${color}`}>{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Single date detail */}
+                      {calSingle && (() => {
+                        const mSaving = calSaving === `exam-${detailWeek}` || calSaving === `mode-${detailWeek}` || calSaving === 'blocked';
+                        const displayDate = detailDate?.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                        return (
+                          <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                            <div className="px-5 py-4 border-b border-white/5 bg-[#CC0000]/5">
+                              <p className="text-white font-bold text-sm leading-snug">{displayDate}</p>
+                              {detailWeek ? (
+                                <p className="text-gray-500 text-xs mt-0.5">Week {detailWeek} of {CURRENT_TERM.totalWeeks}</p>
+                              ) : (
+                                <p className="text-gray-600 text-xs mt-0.5">Outside current term</p>
+                              )}
+                            </div>
+                            {detailWeek ? (
+                              <div className="p-4 space-y-3">
+                                {/* Mode */}
+                                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5">
+                                  <span className="text-gray-400 text-sm">Mode</span>
+                                  <button
+                                    onClick={async () => {
+                                      const prev = effectiveMode(detailWeek);
+                                      await handleModeToggle(detailWeek);
+                                      const next = prev === 'Online' ? 'In-Person' : 'Online';
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Mode changed', target: `Week ${detailWeek}`, from: prev, to: next }, ...log.slice(0, 19)]);
+                                      setCalUndoStack(s => [...s.slice(-9), { desc: `Undo mode on W${detailWeek}`, fn: async () => handleModeToggle(detailWeek) }]);
+                                    }}
+                                    disabled={mSaving}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                                      detailMode === 'Online' ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30' : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                                    }`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${detailMode === 'Online' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                                    {detailMode}
+                                    <span className="opacity-40 text-[10px]">↕</span>
+                                  </button>
+                                </div>
+                                {/* Exam week */}
+                                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5">
+                                  <span className="text-gray-400 text-sm">Exam Week</span>
+                                  <button
+                                    onClick={async () => {
+                                      const was = detailIsExam;
+                                      await handleExamToggle(detailWeek);
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Exam toggled', target: `Week ${detailWeek}`, from: was ? 'Exam' : 'Regular', to: was ? 'Regular' : 'Exam' }, ...log.slice(0, 19)]);
+                                      setCalUndoStack(s => [...s.slice(-9), { desc: `Undo exam on W${detailWeek}`, fn: async () => handleExamToggle(detailWeek) }]);
+                                    }}
+                                    disabled={mSaving}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                                      detailIsExam ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-300'
+                                    }`}
+                                  >
+                                    {detailIsExam ? (
+                                      <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Exam</>
+                                    ) : '– Regular'}
+                                  </button>
+                                </div>
+                                {/* Blocked */}
+                                <div className="px-4 py-3 rounded-xl bg-white/5">
+                                  <p className="text-gray-400 text-sm mb-2.5">Blocked / Special</p>
+                                  {detailIsBlocked ? (
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <span className="text-red-400 text-xs font-semibold">Blocked</span>
+                                        {detailBlockedEntry?.label && <span className="text-gray-500 text-xs ml-2 truncate">— {detailBlockedEntry.label}</span>}
+                                      </div>
+                                      <button
+                                        onClick={async () => {
+                                          if (detailBlockedEntry) {
+                                            await handleDeleteOverride(detailBlockedEntry.id, 'blocked_date');
+                                            setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Unblocked', target: calSingle!, from: 'Blocked', to: 'Normal' }, ...log.slice(0, 19)]);
+                                          }
+                                        }}
+                                        disabled={mSaving}
+                                        className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                                      >Remove</button>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <input
+                                        type="text"
+                                        placeholder="Label (optional)"
+                                        value={addBlockedLabel}
+                                        onChange={e => setAddBlockedLabel(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
+                                      />
+                                      <button
+                                        onClick={async () => {
+                                          const lbl = addBlockedLabel.trim();
+                                          setCalSaving('blocked'); setCalError(null);
+                                          const result = await api.post('/api/admin/blocked-dates', { date: calSingle, label: lbl || null }, token!);
+                                          if (result?.error) { setCalError(`Failed: ${result.error}`); }
+                                          else {
+                                            setAddBlockedLabel('');
+                                            await refreshCalOverrides();
+                                            setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Blocked', target: calSingle!, from: 'Normal', to: lbl || 'Blocked' }, ...log.slice(0, 19)]);
+                                          }
+                                          setCalSaving(null);
+                                        }}
+                                        disabled={mSaving}
+                                        className="w-full py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-40"
+                                      >
+                                        {calSaving === 'blocked' ? 'Saving…' : 'Mark as Blocked'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                {mSaving && <p className="text-center text-xs text-gray-600 animate-pulse">Saving…</p>}
+                              </div>
+                            ) : (
+                              <div className="p-4">
+                                <p className="text-gray-600 text-sm">Outside the current academic term. No edits available.</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Multi-select bulk panel */}
+                      {calSelectedArr.length > 1 && (() => {
+                        const selectedWeeks = [...new Set(
+                          calSelectedArr
+                            .map(d => getAcademicWeek(CURRENT_TERM, new Date(d + 'T12:00:00')))
+                            .filter((w): w is number => w !== null)
+                        )];
+                        const isSaving = calSaving !== null;
+                        return (
+                          <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                            <div className="px-5 py-4 border-b border-white/5 bg-[#CC0000]/5">
+                              <p className="text-white font-bold text-sm">{calSelectedArr.length} dates selected</p>
+                              <p className="text-gray-500 text-xs mt-0.5">{selectedWeeks.length} week{selectedWeeks.length !== 1 ? 's' : ''} affected</p>
+                            </div>
+                            <div className="p-4 space-y-4">
+                              {/* Bulk mode */}
+                              <div>
+                                <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-2">Set Mode (all affected weeks)</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      for (const w of selectedWeeks) { if (effectiveMode(w) !== 'In-Person') await handleModeToggle(w); }
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk In-Person', target: `W${selectedWeeks.join(',')}`, from: 'Mixed', to: 'In-Person' }, ...log.slice(0, 19)]);
+                                    }}
+                                    disabled={isSaving}
+                                    className="py-2 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors disabled:opacity-40"
+                                  >In-Person</button>
+                                  <button
+                                    onClick={async () => {
+                                      for (const w of selectedWeeks) { if (effectiveMode(w) !== 'Online') await handleModeToggle(w); }
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Online', target: `W${selectedWeeks.join(',')}`, from: 'Mixed', to: 'Online' }, ...log.slice(0, 19)]);
+                                    }}
+                                    disabled={isSaving}
+                                    className="py-2 rounded-lg text-xs font-semibold bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-40"
+                                  >Online</button>
+                                </div>
+                              </div>
+                              {/* Bulk exam */}
+                              <div>
+                                <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-2">Exam Weeks</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      for (const w of selectedWeeks) { if (!effectiveExam(w)) await handleExamToggle(w); }
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Mark Exam', target: `W${selectedWeeks.join(',')}`, from: 'Regular', to: 'Exam' }, ...log.slice(0, 19)]);
+                                    }}
+                                    disabled={isSaving}
+                                    className="py-2 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition-colors disabled:opacity-40"
+                                  >Mark Exam</button>
+                                  <button
+                                    onClick={async () => {
+                                      for (const w of selectedWeeks) { if (effectiveExam(w)) await handleExamToggle(w); }
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Clear Exam', target: `W${selectedWeeks.join(',')}`, from: 'Exam', to: 'Regular' }, ...log.slice(0, 19)]);
+                                    }}
+                                    disabled={isSaving}
+                                    className="py-2 rounded-lg text-xs font-semibold bg-white/5 text-gray-400 hover:bg-white/10 transition-colors disabled:opacity-40"
+                                  >Clear Exam</button>
+                                </div>
+                              </div>
+                              {/* Bulk block */}
+                              <div>
+                                <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-2">Block / Unblock</p>
+                                <input
+                                  type="text"
+                                  placeholder="Label (optional)"
+                                  value={calBulkLabel}
+                                  onChange={e => setCalBulkLabel(e.target.value)}
+                                  className="w-full px-3 py-2 mb-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      setCalSaving('blocked');
+                                      const lbl = calBulkLabel.trim();
+                                      for (const d of calSelectedArr) {
+                                        if (!blockedSet.has(d)) await api.post('/api/admin/blocked-dates', { date: d, label: lbl || null }, token!);
+                                      }
+                                      await refreshCalOverrides();
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Blocked', target: `${calSelectedArr.length} dates`, from: 'Normal', to: lbl || 'Blocked' }, ...log.slice(0, 19)]);
+                                      setCalBulkLabel(''); setCalSaving(null);
+                                    }}
+                                    disabled={isSaving}
+                                    className="py-2 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors disabled:opacity-40"
+                                  >Block All</button>
+                                  <button
+                                    onClick={async () => {
+                                      for (const d of calSelectedArr) {
+                                        const entry = blockedDates.find(o => o.date === d);
+                                        if (entry) await handleDeleteOverride(entry.id, 'blocked_date');
+                                      }
+                                      setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Unblocked', target: `${calSelectedArr.length} dates`, from: 'Blocked', to: 'Normal' }, ...log.slice(0, 19)]);
+                                    }}
+                                    disabled={isSaving}
+                                    className="py-2 rounded-lg text-xs font-semibold bg-white/5 text-gray-400 hover:bg-white/10 transition-colors disabled:opacity-40"
+                                  >Unblock All</button>
+                                </div>
+                              </div>
+                              {isSaving && <p className="text-center text-xs text-gray-600 animate-pulse">Applying…</p>}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Change history / audit trail */}
+                      <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                        <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
+                          <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">Change History</p>
+                          {calAuditLog.length > 0 && (
+                            <button onClick={() => setCalAuditLog([])} className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Clear</button>
+                          )}
+                        </div>
+                        {calAuditLog.length === 0 ? (
+                          <div className="px-5 py-6 text-center">
+                            <p className="text-gray-700 text-xs">No changes this session</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-white/5 max-h-60 overflow-y-auto">
+                            {calAuditLog.map(entry => (
+                              <div key={entry.id} className="px-5 py-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-gray-200 text-xs font-medium">{entry.action}</p>
+                                    <p className="text-gray-500 text-[11px] truncate">{entry.target}</p>
+                                    <p className="text-gray-700 text-[10px]">{entry.from} → {entry.to}</p>
+                                  </div>
+                                  <p className="text-[10px] text-gray-700 flex-shrink-0 mt-0.5">
+                                    {entry.ts.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Date edit modal — position:fixed, works from Home and Calendar tabs */}
+            {calModalDate && (() => {
+              const md = new Date(calModalDate + 'T12:00:00');
+              const mWeek = getAcademicWeek(CURRENT_TERM, md);
+              const mMode = mWeek ? effectiveMode(mWeek) : null;
+              const mIsExam = mWeek ? effectiveExam(mWeek) : false;
+              const mIsBlocked = blockedSet.has(calModalDate);
+              const mBlockedEntry = blockedDates.find((o: CalendarOverride) => o.date === calModalDate);
+              const mSaving = calSaving === `exam-${mWeek}` || calSaving === `mode-${mWeek}` || calSaving === 'blocked';
+              const displayDate = md.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+              return (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                  onClick={() => setCalModalDate(null)}
+                >
+                  <div
+                    className="bg-[#1e1f22] rounded-2xl border border-white/10 p-6 w-full max-w-sm mx-4 shadow-2xl"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-start justify-between mb-5">
+                      <div>
+                        <p className="text-white font-bold text-base leading-snug">{displayDate}</p>
+                        {mWeek ? (
+                          <p className="text-gray-500 text-sm mt-0.5">Week {mWeek} of {CURRENT_TERM.totalWeeks}</p>
+                        ) : (
+                          <p className="text-gray-600 text-sm mt-0.5">Outside current term</p>
+                        )}
+                      </div>
+                      <button onClick={() => setCalModalDate(null)} className="text-gray-600 hover:text-white transition-colors ml-4 flex-shrink-0 mt-0.5">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+
+                    {mWeek ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-gray-400 text-sm">Mode</span>
+                          <button
+                            onClick={() => handleModeToggle(mWeek)}
+                            disabled={mSaving}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                              mMode === 'Online' ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30' : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${mMode === 'Online' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                            {mMode ?? '—'}
+                            <span className="text-[10px] opacity-40 ml-1">tap to toggle</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-gray-400 text-sm">Exam Week</span>
+                          <button
+                            onClick={() => handleExamToggle(mWeek)}
+                            disabled={mSaving}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                              mIsExam ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-300'
+                            }`}
+                          >
+                            {mIsExam ? (
+                              <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Exam</>
+                            ) : (
+                              <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>Regular</>
+                            )}
+                            <span className="text-[10px] opacity-40 ml-1">tap to toggle</span>
+                          </button>
+                        </div>
+
+                        <div className="px-4 py-3 rounded-xl bg-white/5 border border-white/5">
+                          <p className="text-gray-400 text-sm mb-2.5">Blocked / Special Date</p>
+                          {mIsBlocked ? (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="text-red-400 text-xs font-semibold uppercase tracking-wide">Blocked</span>
+                                {mBlockedEntry?.label && <span className="text-gray-500 text-xs ml-2 truncate">— {mBlockedEntry.label}</span>}
+                              </div>
+                              <button
+                                onClick={async () => { if (mBlockedEntry) await handleDeleteOverride(mBlockedEntry.id, 'blocked_date'); }}
+                                disabled={mSaving}
+                                className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                              >Remove</button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                placeholder="Label (e.g. No Classes)"
+                                value={addBlockedLabel}
+                                onChange={e => setAddBlockedLabel(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
+                              />
+                              <button
+                                onClick={async () => {
+                                  setCalSaving('blocked');
+                                  setCalError(null);
+                                  const result = await api.post('/api/admin/blocked-dates', { date: calModalDate, label: addBlockedLabel.trim() || null }, token!);
+                                  if (result?.error) { setCalError(`Failed to save: ${result.error}`); }
+                                  else { setAddBlockedLabel(''); await refreshCalOverrides(); }
+                                  setCalSaving(null);
+                                }}
+                                disabled={mSaving}
+                                className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-40"
+                              >
+                                {calSaving === 'blocked' ? 'Saving…' : 'Mark as Blocked'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {mSaving && <p className="text-center text-xs text-gray-600 animate-pulse">Saving…</p>}
+                      </div>
+                    ) : (
+                      <p className="text-gray-600 text-sm">This date is outside the current academic term and cannot be configured.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
         )}
       </main>
     </div>
-    </DashboardShell>
   );
 }
