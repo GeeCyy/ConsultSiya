@@ -38,6 +38,19 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS time TIME;
 -- Add multiple time ranges per schedule slot (JSONB array of {time_start, time_end})
 ALTER TABLE schedules ADD COLUMN IF NOT EXISTS time_ranges JSONB;
 
+-- Admin-managed calendar overrides (exam weeks, mode overrides, blocked dates)
+CREATE TABLE IF NOT EXISTS calendar_overrides (
+  id          SERIAL PRIMARY KEY,
+  type        VARCHAR(20) NOT NULL
+                CHECK (type IN ('exam_week', 'mode_override', 'blocked_date')),
+  date        DATE,
+  week_number INTEGER,
+  value       VARCHAR(50),
+  label       TEXT,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Login lockout: track failed attempts and lockout expiry
 ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
@@ -48,4 +61,14 @@ CREATE TABLE IF NOT EXISTS professor_responsibilities (
   professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE,
   concern_type VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Announcements: admin-managed notices shown on all dashboards
+CREATE TABLE IF NOT EXISTS announcements (
+  id         SERIAL PRIMARY KEY,
+  title      VARCHAR(255) NOT NULL,
+  body       TEXT NOT NULL,
+  type       VARCHAR(20) DEFAULT 'info' CHECK (type IN ('info', 'warning')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
