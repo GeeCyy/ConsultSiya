@@ -181,7 +181,13 @@ function LoginContent() {
             </Button>
           </div>
 
-          <p className="text-center text-sm text-gray-500 mt-5">
+          <p className="text-center text-sm mt-3">
+            <Link href="/forgot-password" className="text-gray-500 hover:text-[#CC0000] transition-colors text-xs">
+              Forgot password?
+            </Link>
+          </p>
+
+          <p className="text-center text-sm text-gray-500 mt-3">
             No account yet?{' '}
             <Link href="/register" className="text-[#CC0000] hover:underline">Register</Link>
           </p>

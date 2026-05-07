@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/db');
@@ -246,6 +247,89 @@ router.patch(
     } catch (err) {
       console.error('[Profile PATCH]', err.message);
       res.status(500).json({ error: 'Failed to update profile.' });
+    }
+  }
+);
+
+// ── POST /api/auth/forgot-password ───────────────────────────────────────────
+router.post(
+  '/forgot-password',
+  authLimiter,
+  [body('email').isEmail().withMessage('A valid email address is required.')],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+
+    const email = req.body.email.trim().toLowerCase();
+    console.log(`[Forgot Password] Received request for email: "${email}"`);
+    try {
+      const result = await pool.query(`SELECT id, email FROM users WHERE LOWER(email) = $1`, [email]);
+      console.log(`[Forgot Password] DB rows found: ${result.rows.length}`, result.rows.map(r => r.email));
+
+      // Always return success to avoid leaking which emails are registered
+      if (result.rows.length === 0) {
+        console.log(`[Forgot Password] No user found for "${email}" — no link generated`);
+        return res.json({ message: 'If that email is registered, a reset link has been sent.' });
+      }
+
+      const userId = result.rows[0].id;
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await pool.query(
+        `UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3`,
+        [token, expires, userId]
+      );
+
+      const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
+      console.log(`[Password Reset] Link for ${email}: ${resetUrl}`);
+
+      res.json({ message: 'If that email is registered, a reset link has been sent.' });
+    } catch (err) {
+      console.error('[Forgot Password]', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  }
+);
+
+// ── POST /api/auth/reset-password ────────────────────────────────────────────
+router.post(
+  '/reset-password',
+  authLimiter,
+  [
+    body('token').notEmpty().withMessage('Reset token is required.'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters.'),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+
+    const { token, password } = req.body;
+    try {
+      const result = await pool.query(
+        `SELECT id FROM users WHERE password_reset_token = $1 AND password_reset_expires > NOW()`,
+        [token]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(400).json({ error: 'Reset link is invalid or has expired.' });
+      }
+
+      const userId = result.rows[0].id;
+      const password_hash = await bcrypt.hash(password, 12);
+
+      await pool.query(
+        `UPDATE users
+         SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL,
+             failed_attempts = 0, locked_until = NULL
+         WHERE id = $2`,
+        [password_hash, userId]
+      );
+
+      res.json({ message: 'Password reset successfully. You can now log in.' });
+    } catch (err) {
+      console.error('[Reset Password]', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   }
 );
