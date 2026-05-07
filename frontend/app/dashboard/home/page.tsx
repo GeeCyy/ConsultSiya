@@ -243,6 +243,16 @@ export default function HomePage() {
   const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
   const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    return true;
+  });
+
+  useEffect(() => {
+    const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
+    window.addEventListener('consultsiya-theme-change', handler);
+    return () => window.removeEventListener('consultsiya-theme-change', handler);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -289,7 +299,7 @@ export default function HomePage() {
 
   return (
     <DashboardShell weekBadge={false}>
-      <div className="flex h-full overflow-hidden bg-[#0c0c0c]">
+      <div className={`flex h-full overflow-hidden ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f2f3f5]'}`}>
 
         {/* ── Sidebar ───────────────────────────────────────────────────────── */}
         <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5 h-full">
@@ -326,7 +336,7 @@ export default function HomePage() {
         </aside>
 
         {/* ── Main content ──────────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className={`flex-1 overflow-y-auto ${isDark ? '' : 'bg-[#f2f3f5]'}`}>
 
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
           {/* ── Hero: current week ────────────────────────────────────────── */}
