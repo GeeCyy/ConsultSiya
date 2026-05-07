@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import DashboardShell from '@/components/DashboardShell';
 
@@ -174,6 +174,7 @@ type StudentProfile = {
   year_level: string;
   email: string;
   phone: string;
+  avatar: string | null;
 };
 
 const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
@@ -281,6 +282,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 export default function StudentDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [view, setView] = useState<View>('book');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
@@ -307,12 +309,8 @@ export default function StudentDashboard() {
 
   // Profile
   const [profile, setProfile] = useState<StudentProfile>({
-    full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '',
+    full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '', avatar: null,
   });
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMsg, setProfileMsg] = useState('');
-  const [profileMode, setProfileMode] = useState<'view' | 'edit'>('view');
-  const [profileBeforeEdit, setProfileBeforeEdit] = useState<StudentProfile | null>(null);
 
   // Theme — synced with DashboardShell's global toggle
   const [isDark, setIsDark] = useState(() => {
@@ -328,6 +326,8 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
+    const vParam = searchParams.get('view');
+    if (vParam && (['book','my','history','profile'] as string[]).includes(vParam)) setView(vParam as View);
     fetchData();
   }, []);
 
@@ -340,6 +340,7 @@ export default function StudentDashboard() {
     setSchedules(Array.isArray(sched) ? sched : []);
     setConsultations(Array.isArray(consult) ? consult : []);
     if (!prof.error) {
+      const avatarVal = prof.avatar || null;
       setProfile({
         full_name: prof.full_name || '',
         student_number: prof.student_number || '',
@@ -347,7 +348,12 @@ export default function StudentDashboard() {
         year_level: prof.year_level?.toString() || '',
         email: prof.email || '',
         phone: prof.phone || '',
+        avatar: avatarVal,
       });
+      // Persist profile data so DashboardShell can read it without an API call
+      if (avatarVal) localStorage.setItem('consultsiya-avatar', `${API_URL}${avatarVal}`);
+      else localStorage.removeItem('consultsiya-avatar');
+      localStorage.setItem('consultsiya-name', prof.full_name || '');
     }
     setLoading(false);
   };
@@ -470,19 +476,6 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleSaveProfile = async () => {
-    setProfileSaving(true);
-    setProfileMsg('');
-    const data = await api.patch('/api/auth/profile', profile, token!);
-    setProfileSaving(false);
-    if (data.error) {
-      setProfileMsg(data.error);
-    } else {
-      setProfileMsg('Profile saved successfully.');
-      setProfileMode('view');
-    }
-  };
-
   const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
 
   const natureLabel = (c: Consultation) => {
@@ -492,8 +485,6 @@ export default function StudentDashboard() {
         ? `Others: ${c.nature_of_advising_specify}` : i
     ).join(', ') || '—';
   };
-
-  const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
     <DashboardShell weekBadge={false}>
@@ -692,16 +683,17 @@ export default function StudentDashboard() {
 
               {/* Avatar hero */}
               <div className="relative flex flex-col items-center pb-8 mb-8 border-b border-white/10">
-                {profileMode === 'view' && (
-                  <button
-                    onClick={() => { setProfileBeforeEdit({ ...profile }); setProfileMode('edit'); setProfileMsg(''); }}
-                    className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold border border-white/20 bg-[#2a2a2a] text-white hover:bg-[#353535] transition-colors">
-                    Edit Profile
-                  </button>
-                )}
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:opacity-90 transition-opacity">
+                  Edit Profile
+                </button>
 
-                <div className="w-24 h-24 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-3xl font-bold select-none ring-4 ring-[#CC0000]/15">
-                  {profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
+                <div className="w-24 h-24 rounded-full overflow-hidden bg-[#7a0000] flex items-center justify-center text-white text-3xl font-bold select-none ring-4 ring-[#CC0000]/15 flex-shrink-0">
+                  {profile.avatar
+                    ? <img src={`${API_URL}${profile.avatar}`} alt="avatar" className="w-full h-full object-cover" />
+                    : profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'
+                  }
                 </div>
 
                 <h2 className="text-white text-xl font-bold mt-4 text-center">{profile.full_name || '—'}</h2>
@@ -733,19 +725,11 @@ export default function StudentDashboard() {
                     <div className="divide-y divide-white/10">
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Full Name</span>
-                        {profileMode === 'view' ? (
-                          <span className="text-white text-sm font-medium">{profile.full_name || '—'}</span>
-                        ) : (
-                          <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
-                        )}
+                        <span className="text-white text-sm font-medium">{profile.full_name || '—'}</span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Student No.</span>
-                        {profileMode === 'view' ? (
-                          <span className="text-white text-sm font-medium font-mono">{profile.student_number || '—'}</span>
-                        ) : (
-                          <input className={inputCls} value={profile.student_number} onChange={e => setProfile(p => ({ ...p, student_number: e.target.value }))} placeholder="e.g. 2020-12345" />
-                        )}
+                        <span className="text-white text-sm font-medium font-mono">{profile.student_number || '—'}</span>
                       </div>
                     </div>
                   </div>
@@ -758,21 +742,13 @@ export default function StudentDashboard() {
                     <div className="divide-y divide-white/10">
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Program</span>
-                        {profileMode === 'view' ? (
-                          <span className="text-white text-sm font-medium">{profile.program || '—'}</span>
-                        ) : (
-                          <input className={inputCls} value={profile.program} onChange={e => setProfile(p => ({ ...p, program: e.target.value }))} placeholder="e.g. BS Computer Science" />
-                        )}
+                        <span className="text-white text-sm font-medium">{profile.program || '—'}</span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Year Level</span>
-                        {profileMode === 'view' ? (
-                          <span className="text-white text-sm font-medium">
-                            {profile.year_level ? `${profile.year_level}${['','st','nd','rd'][+profile.year_level] ?? 'th'} Year` : '—'}
-                          </span>
-                        ) : (
-                          <input className={inputCls} type="number" min="1" max="6" value={profile.year_level} onChange={e => setProfile(p => ({ ...p, year_level: e.target.value }))} placeholder="1–6" />
-                        )}
+                        <span className="text-white text-sm font-medium">
+                          {profile.year_level ? `${profile.year_level}${['','st','nd','rd'][+profile.year_level] ?? 'th'} Year` : '—'}
+                        </span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">School</span>
@@ -798,19 +774,11 @@ export default function StudentDashboard() {
                     <div className="divide-y divide-white/10">
                       <div className="px-5 py-3.5">
                         <p className="text-gray-400 text-xs font-medium mb-1.5">Email Address</p>
-                        {profileMode === 'view' ? (
-                          <p className="text-white text-sm font-medium break-all">{profile.email || '—'}</p>
-                        ) : (
-                          <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
-                        )}
+                        <p className="text-white text-sm font-medium break-all">{profile.email || '—'}</p>
                       </div>
                       <div className="px-5 py-3.5">
                         <p className="text-gray-400 text-xs font-medium mb-1.5">Phone Number</p>
-                        {profileMode === 'view' ? (
-                          <p className="text-white text-sm font-medium">{profile.phone || '—'}</p>
-                        ) : (
-                          <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
-                        )}
+                        <p className="text-white text-sm font-medium">{profile.phone || '—'}</p>
                       </div>
                     </div>
                   </div>
@@ -834,26 +802,6 @@ export default function StudentDashboard() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Edit mode actions */}
-                  {profileMode === 'edit' && (
-                    <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 space-y-4">
-                      {profileMsg && (
-                        <p className={`text-xs ${profileMsg.includes('success') ? 'text-emerald-400' : 'text-red-400'}`}>{profileMsg}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => { setProfile({ ...profileBeforeEdit! }); setProfileMode('view'); setProfileMsg(''); }}
-                          className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 border border-white/5 hover:bg-white/5 transition-colors">
-                          Cancel
-                        </button>
-                        <button onClick={handleSaveProfile} disabled={profileSaving}
-                          className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
-                          {profileSaving ? 'Saving…' : 'Save Changes'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
                 </div>
               </div>

@@ -41,10 +41,10 @@ const globalLimiter = rateLimit({
 });
 app.use('/api/', globalLimiter);
 
-// ── Static uploads (serve uploaded forms) ─────────────────────────────────────
-// Authenticated access is enforced at the route level (/api/forms/download/:id)
-// Exposing the raw /uploads path is intentionally disabled for security.
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ── Static uploads ─────────────────────────────────────────────────────────────
+// Avatars are public-facing (profile pictures in UI) so served as static assets.
+// Form uploads stay gated — authenticated access only via /api/forms/download/:id.
+app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
@@ -55,6 +55,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/announcements', require('./routes/announcements'));
+app.use('/api/settings', require('./routes/settings'));
 
 // ── Health checks ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -79,4 +80,27 @@ app.get('/api/protected', authenticate, (req, res) => {
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Idempotent startup migration — ensures the avatar column exists without
+  // requiring a manual migration step. ALTER TABLE ADD COLUMN IF NOT EXISTS
+  // is a no-op when the column already exists.
+  pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT`)
+    .then(() => console.log('[startup] users.avatar column ready'))
+    .catch(err => console.error('[startup] users.avatar migration failed:', err.message));
+
+  pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`)
+    .then(() => console.log('[startup] students.phone column ready'))
+    .catch(err => console.error('[startup] students.phone migration failed:', err.message));
+
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`)
+    .then(() => console.log('[startup] professors.phone column ready'))
+    .catch(err => console.error('[startup] professors.phone migration failed:', err.message));
+
+  pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS email VARCHAR(255)`)
+    .then(() => console.log('[startup] students.email column ready'))
+    .catch(err => console.error('[startup] students.email migration failed:', err.message));
+
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS email VARCHAR(255)`)
+    .then(() => console.log('[startup] professors.email column ready'))
+    .catch(err => console.error('[startup] professors.email migration failed:', err.message));
 });

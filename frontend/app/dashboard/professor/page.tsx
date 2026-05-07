@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Label } from '@/components/ui/label';
 import DashboardShell from '@/components/DashboardShell';
@@ -66,6 +66,7 @@ type ProfProfile = {
   department: string;
   email: string;
   phone: string;
+  avatar: string | null;
 };
 
 const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
@@ -305,6 +306,7 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
 
 export default function ProfessorDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>('consultations');
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -347,11 +349,7 @@ export default function ProfessorDashboard() {
   const [editLinkInput, setEditLinkInput] = useState('');
 
   // Profile
-  const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '' });
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMsg, setProfileMsg] = useState('');
-  const [profileMode, setProfileMode] = useState<'view' | 'edit'>('view');
-  const [profileBeforeEdit, setProfileBeforeEdit] = useState<ProfProfile | null>(null);
+  const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '', avatar: null });
 
   // Theme — synced with DashboardShell's global toggle
   const [isDark, setIsDark] = useState(() => {
@@ -367,6 +365,8 @@ export default function ProfessorDashboard() {
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
+    const vParam = searchParams.get('view');
+    if (vParam && (['consultations','calendar','schedules','export','history','profile'] as string[]).includes(vParam)) setTab(vParam as Tab);
     fetchAll();
   }, []);
 
@@ -379,12 +379,17 @@ export default function ProfessorDashboard() {
     setConsultations(Array.isArray(c) ? c : []);
     setSchedules(Array.isArray(s) ? s : []);
     if (!prof.error) {
+      const avatarVal = prof.avatar || null;
       setProfile({
         full_name: prof.full_name || '',
         department: prof.department || '',
         email: prof.email || '',
         phone: prof.phone || '',
+        avatar: avatarVal,
       });
+      if (avatarVal) localStorage.setItem('consultsiya-avatar', `${API_URL}${avatarVal}`);
+      else localStorage.removeItem('consultsiya-avatar');
+      localStorage.setItem('consultsiya-name', prof.full_name || '');
     }
     setLoading(false);
   };
@@ -550,19 +555,6 @@ export default function ProfessorDashboard() {
     } catch { alert('Export failed. Please try again.'); }
   };
 
-  const handleSaveProfile = async () => {
-    setProfileSaving(true);
-    setProfileMsg('');
-    const data = await api.patch('/api/auth/profile', profile, token!);
-    setProfileSaving(false);
-    if (data.error) {
-      setProfileMsg(data.error);
-    } else {
-      setProfileMsg('Profile updated successfully.');
-      setProfileMode('view');
-    }
-  };
-
   const visibleConsultations = consultations.filter(c => c.status !== 'cancelled');
   const stats = {
     total: visibleConsultations.length,
@@ -591,9 +583,6 @@ export default function ProfessorDashboard() {
     </span>
   );
 
-  const inputCls = isDark
-    ? 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600'
-    : 'w-full px-3 py-2 rounded-lg text-gray-900 text-sm bg-white border border-gray-300 focus:outline-none focus:border-[#CC0000]/60 placeholder-gray-400';
   const fieldCls = isDark
     ? 'px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50'
     : 'px-3 py-2 rounded-lg text-gray-900 text-sm bg-white border border-gray-300 focus:outline-none focus:border-[#CC0000]/60';
@@ -1151,16 +1140,17 @@ export default function ProfessorDashboard() {
 
               {/* Avatar hero */}
               <div className="relative flex flex-col items-center pb-8 mb-8 border-b border-white/10">
-                {profileMode === 'view' && (
-                  <button
-                    onClick={() => { setProfileBeforeEdit({ ...profile }); setProfileMode('edit'); setProfileMsg(''); }}
-                    className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold border border-white/20 bg-[#2a2a2a] text-white hover:bg-[#353535] transition-colors">
-                    Edit Profile
-                  </button>
-                )}
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:opacity-90 transition-opacity">
+                  Edit Profile
+                </button>
 
-                <div className="w-24 h-24 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-3xl font-bold select-none ring-4 ring-[#CC0000]/15">
-                  {profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
+                <div className="w-24 h-24 rounded-full overflow-hidden bg-[#7a0000] flex items-center justify-center text-white text-3xl font-bold select-none ring-4 ring-[#CC0000]/15 flex-shrink-0">
+                  {profile.avatar
+                    ? <img src={`${API_URL}${profile.avatar}`} alt="avatar" className="w-full h-full object-cover" />
+                    : profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'
+                  }
                 </div>
 
                 <h2 className="text-white text-xl font-bold mt-4 text-center">{profile.full_name || '—'}</h2>
@@ -1192,11 +1182,7 @@ export default function ProfessorDashboard() {
                     <div className="divide-y divide-white/10">
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Full Name</span>
-                        {profileMode === 'view' ? (
-                          <span className="text-white text-sm font-medium">{profile.full_name || '—'}</span>
-                        ) : (
-                          <input className={inputCls} value={profile.full_name} onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))} placeholder="Your full name" />
-                        )}
+                        <span className="text-white text-sm font-medium">{profile.full_name || '—'}</span>
                       </div>
                     </div>
                   </div>
@@ -1209,11 +1195,7 @@ export default function ProfessorDashboard() {
                     <div className="divide-y divide-white/10">
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Department</span>
-                        {profileMode === 'view' ? (
-                          <span className="text-white text-sm font-medium">{profile.department || '—'}</span>
-                        ) : (
-                          <input className={inputCls} value={profile.department} onChange={e => setProfile(p => ({ ...p, department: e.target.value }))} placeholder="e.g. Computer Science" />
-                        )}
+                        <span className="text-white text-sm font-medium">{profile.department || '—'}</span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
                         <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">School</span>
@@ -1243,19 +1225,11 @@ export default function ProfessorDashboard() {
                     <div className="divide-y divide-white/10">
                       <div className="px-5 py-3.5">
                         <p className="text-gray-400 text-xs font-medium mb-1.5">Email Address</p>
-                        {profileMode === 'view' ? (
-                          <p className="text-white text-sm font-medium break-all">{profile.email || '—'}</p>
-                        ) : (
-                          <input className={inputCls} type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} placeholder="your@email.com" />
-                        )}
+                        <p className="text-white text-sm font-medium break-all">{profile.email || '—'}</p>
                       </div>
                       <div className="px-5 py-3.5">
                         <p className="text-gray-400 text-xs font-medium mb-1.5">Phone Number</p>
-                        {profileMode === 'view' ? (
-                          <p className="text-white text-sm font-medium">{profile.phone || '—'}</p>
-                        ) : (
-                          <input className={inputCls} value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
-                        )}
+                        <p className="text-white text-sm font-medium">{profile.phone || '—'}</p>
                       </div>
                     </div>
                   </div>
@@ -1279,26 +1253,6 @@ export default function ProfessorDashboard() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Edit mode actions */}
-                  {profileMode === 'edit' && (
-                    <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 space-y-4">
-                      {profileMsg && (
-                        <p className={`text-xs ${profileMsg.includes('success') ? 'text-emerald-400' : 'text-red-400'}`}>{profileMsg}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => { setProfile({ ...profileBeforeEdit! }); setProfileMode('view'); setProfileMsg(''); }}
-                          className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 border border-white/5 hover:bg-white/5 transition-colors">
-                          Cancel
-                        </button>
-                        <button onClick={handleSaveProfile} disabled={profileSaving}
-                          className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
-                          {profileSaving ? 'Saving…' : 'Save Changes'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
                 </div>
               </div>
