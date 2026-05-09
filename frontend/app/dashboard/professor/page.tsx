@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Label } from '@/components/ui/label';
 import DashboardShell from '@/components/DashboardShell';
@@ -306,7 +306,6 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
 
 export default function ProfessorDashboard() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>('consultations');
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -365,7 +364,7 @@ export default function ProfessorDashboard() {
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
-    const vParam = searchParams.get('view');
+    const vParam = new URLSearchParams(window.location.search).get('view');
     if (vParam && (['consultations','calendar','schedules','export','history','profile'] as string[]).includes(vParam)) setTab(vParam as Tab);
     fetchAll();
   }, []);

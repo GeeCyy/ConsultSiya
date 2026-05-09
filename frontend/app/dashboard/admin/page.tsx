@@ -10,7 +10,6 @@ import {
   daysUntil,
   getTermDates,
   getTermProgress,
-  isHoliday,
   type CalendarOverride,
 } from '@/lib/academicCalendar';
 import { fetchPhHolidays, type PhHoliday } from '@/lib/phHolidays';
@@ -198,10 +197,8 @@ export default function AdminDashboard() {
   const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
   const [calSaving, setCalSaving] = useState<string | null>(null);
   const [calError, setCalError] = useState<string | null>(null);
-  const [addBlockedLabel, setAddBlockedLabel] = useState('');
   const [calViewYear, setCalViewYear] = useState(() => new Date().getFullYear());
   const [calViewMonth, setCalViewMonth] = useState(() => new Date().getMonth());
-  const [calModalDate, setCalModalDate] = useState<string | null>(null);
   const [calSelectedDates, setCalSelectedDates] = useState<Set<string>>(new Set());
   const [calShiftAnchor, setCalShiftAnchor] = useState<string | null>(null);
   const [calHiddenFilters, setCalHiddenFilters] = useState<Set<string>>(new Set());
@@ -211,6 +208,7 @@ export default function AdminDashboard() {
   const [calBulkLabel, setCalBulkLabel] = useState('');
   const [calPendingMode, setCalPendingMode] = useState<'In-Person' | 'Online' | null>(null);
   const [calPendingLabel, setCalPendingLabel] = useState('');
+  const [calPendingColor, setCalPendingColor] = useState('red');
   const [calPendingBlocked, setCalPendingBlocked] = useState<boolean | null>(null);
   const [calLabelEditing, setCalLabelEditing] = useState(false);
   const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
@@ -247,6 +245,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('tab') as Tab;
+    const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar'];
+    if (t && valid.includes(t)) setTab(t);
     fetchAll();
     const year = new Date().getFullYear();
     Promise.all([fetchPhHolidays(year), fetchPhHolidays(year + 1)]).then(([a, b]) => {
@@ -264,6 +266,7 @@ export default function AdminDashboard() {
       ? calOverrides.find((o: CalendarOverride) => o.type === 'date_label' && o.date === single)
       : undefined;
     setCalPendingLabel(found?.value ?? '');
+    setCalPendingColor(found?.color ?? 'red');
   }, [calSelectedDates]);
 
   const fetchAll = async () => {
@@ -402,6 +405,15 @@ export default function AdminDashboard() {
   const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const CAL_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
+  const EVENT_COLORS = [
+    { id: 'red',    dot: 'bg-red-500',     pill: 'bg-red-500',     pillText: 'text-white'     },
+    { id: 'blue',   dot: 'bg-blue-500',    pill: 'bg-blue-500',    pillText: 'text-white'     },
+    { id: 'green',  dot: 'bg-emerald-500', pill: 'bg-emerald-500', pillText: 'text-white'     },
+    { id: 'yellow', dot: 'bg-yellow-400',  pill: 'bg-yellow-400',  pillText: 'text-gray-900'  },
+    { id: 'orange', dot: 'bg-orange-500',  pill: 'bg-orange-500',  pillText: 'text-white'     },
+    { id: 'purple', dot: 'bg-purple-500',  pill: 'bg-purple-500',  pillText: 'text-white'     },
+  ] as const;
+
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
   const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2,'0')}-${String(todayDate.getDate()).padStart(2,'0')}`;
@@ -421,6 +433,7 @@ export default function AdminDashboard() {
   const blockedSet      = new Set(blockedDates.map(o => o.date!));
   const phSet           = new Set(phHolidays.map(h => h.date));
   const dateLabelMap    = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.value ?? '']));
+  const dateColorMap    = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.color ?? 'red']));
 
   const effectiveMode = (w: number): string => modeMap.get(w) ?? getWeekMode(CURRENT_TERM, w);
 
@@ -466,19 +479,21 @@ export default function AdminDashboard() {
         await applyModeChange(week, calPendingMode, date);
         auditEntries.push({ id: Date.now(), ts: new Date(), action: 'Mode changed', target: `Week ${week}`, from: prev, to: calPendingMode, deleteInfo: { type: 'mode_override', weekNumber: week } });
       }
-      // Event label
+      // Event label + color
       const existingLabel = calOverrides.find((o: CalendarOverride) => o.type === 'date_label' && o.date === date);
       const newLabel = calPendingLabel.trim();
-      if (newLabel && (!existingLabel || existingLabel.value !== newLabel)) {
+      const labelChanged = newLabel !== (existingLabel?.value ?? '');
+      const colorChanged = !!existingLabel && calPendingColor !== (existingLabel.color ?? 'red');
+      if (newLabel && (labelChanged || colorChanged)) {
         const r = existingLabel
-          ? await api.patch(`/api/admin/calendar-overrides/${existingLabel.id}`, { value: newLabel }, token!)
-          : await api.post('/api/admin/calendar-overrides', { type: 'date_label', date, value: newLabel }, token!);
+          ? await api.patch(`/api/admin/calendar-overrides/${existingLabel.id}`, { value: newLabel, color: calPendingColor }, token!)
+          : await api.post('/api/admin/calendar-overrides', { type: 'date_label', date, value: newLabel, color: calPendingColor }, token!);
         if (r?.error) throw new Error(r.error);
-        auditEntries.push({ id: Date.now() + 1, ts: new Date(), action: 'Note set', target: date, from: existingLabel?.value ?? '—', to: newLabel, deleteInfo: { type: 'date_label', date } });
+        auditEntries.push({ id: Date.now() + 1, ts: new Date(), action: 'Event set', target: date, from: existingLabel?.value ?? '—', to: newLabel, deleteInfo: { type: 'date_label', date } });
       } else if (!newLabel && existingLabel) {
         const r = await api.delete(`/api/admin/calendar-overrides/${existingLabel.id}`, token!);
         if (r?.error) throw new Error(r.error);
-        auditEntries.push({ id: Date.now() + 1, ts: new Date(), action: 'Note removed', target: date, from: existingLabel.value ?? '', to: '—' });
+        auditEntries.push({ id: Date.now() + 1, ts: new Date(), action: 'Event removed', target: date, from: existingLabel.value ?? '', to: '—' });
       }
       // Blocked status
       if (calPendingBlocked !== null) {
@@ -580,37 +595,37 @@ export default function AdminDashboard() {
     {
       key: 'consultations',
       label: 'Consultations',
-      count: stats.total,
+      count: loading ? undefined : (stats.total || undefined),
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" /></svg>,
     },
     {
       key: 'accounts',
       label: 'Accounts',
-      count: pendingUsers.length || undefined,
+      count: loading ? undefined : (pendingUsers.length || undefined),
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /></svg>,
     },
     {
       key: 'schedules',
       label: 'Schedules',
-      count: schedules.length,
+      count: loading ? undefined : (schedules.length || undefined),
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>,
     },
     {
       key: 'reports',
       label: 'Reports',
-      count: professors.length,
+      count: loading ? undefined : (professors.length || undefined),
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>,
     },
     {
       key: 'history',
       label: 'History',
-      count: consultations.filter(c => c.status === 'completed').length,
+      count: loading ? undefined : (consultations.filter(c => c.status === 'completed').length || undefined),
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>,
     },
     {
       key: 'calendar' as Tab,
       label: 'Calendar',
-      count: calOverrides.length || undefined,
+      count: loading ? undefined : (calOverrides.length || undefined),
       icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>,
     },
   ];
@@ -1306,7 +1321,7 @@ export default function AdminDashboard() {
 
                 {/* Calendar + Announcements */}
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                  {/* Compact interactive calendar */}
+                  {/* Compact read-only calendar */}
                   <div className="lg:col-span-3 rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
                     <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                       <p className="text-white font-semibold text-sm">Academic Calendar</p>
@@ -1339,20 +1354,22 @@ export default function AdminDashboard() {
                             const dStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
                             const dWeek = getAcademicWeek(CURRENT_TERM, date);
                             const isToday = dStr === todayStr;
-                            const isBlocked = blockedSet.has(dStr) || phSet.has(dStr) || isHoliday(date);
-                            const dMode = dWeek ? effectiveMode(dWeek) : null;
+                            const isBlocked = blockedSet.has(dStr);
+                            const adminMode = dWeek ? (modeMap.get(dWeek) ?? null) : null;
                             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                            const eventTitle = dateLabelMap.get(dStr);
+                            const eventColorId = dateColorMap.get(dStr) ?? 'red';
+                            const ec = EVENT_COLORS.find(x => x.id === eventColorId) ?? EVENT_COLORS[0];
                             let cellBg = '';
                             let numCls = 'text-gray-200';
-                            if (!dWeek) { numCls = 'text-gray-700'; }
+                            if (!dWeek) { numCls = 'text-gray-600'; }
                             else if (isBlocked) { cellBg = 'bg-red-500/25'; numCls = 'text-red-300'; }
-                            else if (dMode === 'Online') { cellBg = 'bg-blue-500/15'; numCls = 'text-blue-200'; }
-                            else if (!isWeekend) { cellBg = 'bg-emerald-500/10'; numCls = 'text-emerald-300'; }
+                            else if (adminMode === 'Online' && !isWeekend) { cellBg = 'bg-blue-500/15'; numCls = 'text-blue-200'; }
+                            else if (adminMode === 'In-Person' && !isWeekend) { cellBg = 'bg-emerald-500/10'; numCls = 'text-emerald-300'; }
                             return (
-                              <button
+                              <div
                                 key={date.toISOString()}
-                                onClick={() => { setCalModalDate(dStr); setAddBlockedLabel(''); }}
-                                className={`relative flex items-center justify-center h-9 rounded-lg text-xs transition-all ${cellBg} hover:brightness-125 cursor-pointer`}
+                                className={`relative flex flex-col items-center justify-center min-h-[38px] pb-0.5 rounded-lg text-xs ${cellBg}`}
                               >
                                 {isToday ? (
                                   <span className="w-6 h-6 rounded-full bg-[#CC0000] flex items-center justify-center text-[11px] font-bold text-white shadow shadow-red-900/50">
@@ -1361,7 +1378,12 @@ export default function AdminDashboard() {
                                 ) : (
                                   <span className={numCls}>{date.getDate()}</span>
                                 )}
-                              </button>
+                                {eventTitle && (
+                                  <span className={`text-[6px] font-bold px-1 py-px rounded-full ${ec.pill} ${ec.pillText} truncate max-w-[90%] leading-tight`}>
+                                    {eventTitle}
+                                  </span>
+                                )}
+                              </div>
                             );
                           });
                         })()}
@@ -1371,13 +1393,12 @@ export default function AdminDashboard() {
                           { cls: 'bg-emerald-500/25', label: 'In-Person' },
                           { cls: 'bg-blue-500/25', label: 'Online' },
                           { cls: 'bg-amber-500/25', label: 'Exam' },
-                          { cls: 'bg-red-500/30', label: 'Holiday/Blocked' },
+                          { cls: 'bg-red-500/30', label: 'Blocked' },
                         ] as { cls: string; label: string }[]).map(({ cls, label }) => (
                           <span key={label} className="flex items-center gap-1 text-[10px] text-gray-500">
                             <span className={`w-2.5 h-2.5 rounded-sm ${cls}`} />{label}
                           </span>
                         ))}
-                        <span className="text-[10px] text-gray-600">· Click any date to edit</span>
                       </div>
                     </div>
                   </div>
@@ -1513,6 +1534,59 @@ export default function AdminDashboard() {
                 { key: 'blocked',  cls: 'bg-red-500/30',     label: 'Blocked' },
               ];
 
+              // Semantic color tokens — swap on isDark so every element adapts
+              const c = {
+                panelBg:          isDark ? 'bg-[#161616]'     : 'bg-white',
+                panelBorder:      isDark ? 'border-white/5'   : 'border-gray-200',
+                navBg:            isDark ? 'bg-[#1a1a1a]'     : 'bg-white',
+                navBorder:        isDark ? 'border-white/5'   : 'border-gray-200',
+                innerBg:          isDark ? 'bg-white/5'       : 'bg-gray-100',
+                deepBg:           isDark ? 'bg-[#0f0f0f]'     : 'bg-gray-50',
+                deepBorder:       isDark ? 'border-white/10'  : 'border-gray-300',
+                divider:          isDark ? 'divide-white/5'   : 'divide-gray-100',
+                rowHover:         isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50',
+                heading:          isDark ? 'text-white'       : 'text-gray-900',
+                body:             isDark ? 'text-gray-300'    : 'text-gray-700',
+                label:            isDark ? 'text-gray-400'    : 'text-gray-600',
+                sub:              isDark ? 'text-gray-500'    : 'text-gray-500',
+                muted:            isDark ? 'text-gray-600'    : 'text-gray-400',
+                faint:            isDark ? 'text-gray-700'    : 'text-gray-400',
+                dayHeader:        isDark ? 'text-gray-600'    : 'text-gray-400',
+                cellBorder:       isDark ? 'border-white/5'   : 'border-gray-100',
+                cellNumDefault:   isDark ? 'text-gray-200'    : 'text-gray-700',
+                cellNumFaded:     isDark ? 'text-gray-700'    : 'text-gray-300',
+                cellNumSunday:    isDark ? 'text-red-900'     : 'text-red-400',
+                cellNumBlocked:   isDark ? 'text-red-300'     : 'text-red-700',
+                cellNumOnline:    isDark ? 'text-blue-200'    : 'text-blue-700',
+                cellNumInPerson:  isDark ? 'text-emerald-300' : 'text-emerald-700',
+                cellEventLabel:   isDark ? 'text-amber-400/80': 'text-amber-600',
+                weekNumBase:      isDark ? 'text-gray-600 hover:text-gray-400 hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-black/5',
+                weekNumActive:    isDark ? 'text-emerald-400 hover:bg-white/10' : 'text-emerald-600 hover:bg-black/5',
+                legendBtn:        isDark ? 'bg-white/[0.04] border-white/5 text-gray-400 hover:text-gray-200 hover:bg-white/8' : 'bg-gray-100 border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-200/60',
+                legendBtnHidden:  isDark ? 'opacity-30 bg-white/5 border-white/5 text-gray-600' : 'opacity-30 bg-gray-100 border-gray-200 text-gray-400',
+                modeInPersonActive: isDark ? 'bg-emerald-500/30 text-emerald-300 ring-1 ring-emerald-500/40' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-400/50',
+                modeOnlineActive:   isDark ? 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-500/40'     : 'bg-blue-100 text-blue-700 ring-1 ring-blue-400/50',
+                modeInPersonIdle:   isDark ? 'bg-white/5 text-gray-500 hover:bg-emerald-500/10 hover:text-emerald-400' : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700',
+                modeOnlineIdle:     isDark ? 'bg-white/5 text-gray-500 hover:bg-blue-500/10 hover:text-blue-400'   : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700',
+                modeDot:          isDark ? 'bg-gray-600'    : 'bg-gray-400',
+                input:            isDark ? 'text-white bg-[#0f0f0f] border-white/10 placeholder-gray-700' : 'text-gray-900 bg-white border-gray-300 placeholder-gray-400',
+                navArrow:         isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100',
+                clearBtn:         isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100',
+                countBadge:       isDark ? 'text-gray-600 bg-white/5'  : 'text-gray-500 bg-gray-100',
+                kbdBg:            isDark ? 'bg-white/10'   : 'bg-gray-200',
+                removeBtn:        isDark ? 'text-gray-600 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-400 hover:text-red-500 hover:bg-red-50',
+                bulkInPerson:     isDark ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200',
+                bulkOnline:       isDark ? 'bg-blue-500/15 text-blue-300 hover:bg-blue-500/25'     : 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+                bulkBlock:        isDark ? 'bg-red-500/15 text-red-300 hover:bg-red-500/25'       : 'bg-red-100 text-red-600 hover:bg-red-200',
+                bulkUnblock:      isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                historyAction:    isDark ? 'text-gray-200' : 'text-gray-800',
+                historyTrash:     isDark ? 'text-gray-700 hover:text-red-400' : 'text-gray-400 hover:text-red-500',
+                toggleOff:        isDark ? 'bg-white/10'   : 'bg-gray-200',
+                unsavedNote:      isDark ? 'text-amber-300/80' : 'text-amber-700',
+                blockWarning:     isDark ? 'text-red-400/60'   : 'text-red-500/80',
+                unsavedHint:      isDark ? 'text-amber-500/60' : 'text-amber-600/80',
+              };
+
               return (
                 <>
                   {/* Error banner */}
@@ -1527,8 +1601,8 @@ export default function AdminDashboard() {
                   {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                     <div>
-                      <h1 className="text-white text-2xl font-bold">Academic Calendar</h1>
-                      <p className="text-gray-500 text-sm mt-0.5">
+                      <h1 className={`${c.heading} text-2xl font-bold`}>Academic Calendar</h1>
+                      <p className={`${c.sub} text-sm mt-0.5`}>
                         {CURRENT_TERM.label} · {CURRENT_TERM.totalWeeks} weeks
                         {calSelectedArr.length > 0 && (
                           <span className="ml-2 text-[#CC0000] font-medium">· {calSelectedArr.length} date{calSelectedArr.length !== 1 ? 's' : ''} selected</span>
@@ -1536,12 +1610,12 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                      <div className="flex items-center gap-1 bg-[#1a1a1a] rounded-xl border border-white/5 px-3 py-2">
-                        <button onClick={prevCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                      <div className={`flex items-center gap-1 ${c.navBg} rounded-xl border ${c.navBorder} px-3 py-2`}>
+                        <button onClick={prevCalMonth} className={`w-7 h-7 flex items-center justify-center rounded-lg ${c.navArrow} transition-colors`}>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                         </button>
-                        <span className="text-white font-semibold text-sm min-w-[130px] text-center">{CAL_MONTHS[calViewMonth]} {calViewYear}</span>
-                        <button onClick={nextCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                        <span className={`${c.heading} font-semibold text-sm min-w-[130px] text-center`}>{CAL_MONTHS[calViewMonth]} {calViewYear}</span>
+                        <button onClick={nextCalMonth} className={`w-7 h-7 flex items-center justify-center rounded-lg ${c.navArrow} transition-colors`}>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                         </button>
                       </div>
@@ -1552,7 +1626,7 @@ export default function AdminDashboard() {
                             setCalUndoStack(s => s.slice(0, -1));
                             await last.fn();
                           }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/10 border border-white/5 transition-colors"
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs ${c.clearBtn} border ${c.panelBorder} transition-colors`}
                           title={calUndoStack[calUndoStack.length - 1]?.desc}
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
@@ -1560,7 +1634,7 @@ export default function AdminDashboard() {
                         </button>
                       )}
                       {calSelectedArr.length > 0 && (
-                        <button onClick={() => setCalSelectedDates(new Set())} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                        <button onClick={() => setCalSelectedDates(new Set())} className={`text-xs ${c.clearBtn} px-2 py-1.5 rounded-lg transition-colors`}>
                           Clear ×
                         </button>
                       )}
@@ -1583,27 +1657,25 @@ export default function AdminDashboard() {
                               return next;
                             })}
                             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-all ${
-                              calHiddenFilters.has(key)
-                                ? 'opacity-30 bg-white/5 border-white/5 text-gray-600'
-                                : 'bg-white/[0.04] border-white/5 text-gray-400 hover:text-gray-200 hover:bg-white/8'
+                              calHiddenFilters.has(key) ? c.legendBtnHidden : c.legendBtn
                             }`}>
                             <span className={`w-2.5 h-2.5 rounded-sm ${cls}`} />
                             {label}
                           </button>
                         ))}
-                        <span className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                        <span className={`flex items-center gap-1.5 text-[10px] ${c.muted}`}>
                           <span className="w-5 h-5 rounded-full bg-[#CC0000] flex items-center justify-center text-[9px] text-white font-bold leading-none">T</span>
                           Today
                         </span>
-                        <span className="ml-auto text-[10px] text-gray-700 hidden lg:block">Ctrl+click multi · Shift+click range · W# selects week</span>
+                        <span className={`ml-auto text-[10px] ${c.faint} hidden lg:block`}>Ctrl+click multi · Shift+click range · W# selects week</span>
                       </div>
 
                       {/* Calendar grid */}
-                      <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden mb-4">
-                        <div className="grid grid-cols-[44px_repeat(7,1fr)] border-b border-white/5">
-                          <div className="py-2.5 border-r border-white/5" />
+                      <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden mb-4`}>
+                        <div className={`grid grid-cols-[44px_repeat(7,1fr)] border-b ${c.cellBorder}`}>
+                          <div className={`py-2.5 border-r ${c.cellBorder}`} />
                           {CAL_DAYS_SHORT.map((d: string) => (
-                            <div key={d} className="py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wider">{d}</div>
+                            <div key={d} className={`py-2.5 text-center text-[11px] font-semibold ${c.dayHeader} uppercase tracking-wider`}>{d}</div>
                           ))}
                         </div>
                         {calWeeks.map((weekDays, rowIdx) => {
@@ -1611,8 +1683,8 @@ export default function AdminDashboard() {
                           const wNum = firstInMonth ? getAcademicWeek(CURRENT_TERM, firstInMonth) : null;
                           const isCurrentRow = wNum !== null && wNum === currentAcademicWeek;
                           return (
-                            <div key={rowIdx} className="grid grid-cols-[44px_repeat(7,1fr)] border-b border-white/5 last:border-0">
-                              <div className={`flex items-center justify-center border-r border-white/5 ${isCurrentRow ? 'bg-white/[0.02]' : ''}`}>
+                            <div key={rowIdx} className={`grid grid-cols-[44px_repeat(7,1fr)] border-b ${c.cellBorder} last:border-0`}>
+                              <div className={`flex items-center justify-center border-r ${c.cellBorder} ${isCurrentRow ? (isDark ? 'bg-white/[0.02]' : 'bg-gray-50') : ''}`}>
                                 {wNum ? (
                                   <button
                                     onClick={() => {
@@ -1622,12 +1694,12 @@ export default function AdminDashboard() {
                                       setCalSelectedDates(new Set(wkDates));
                                     }}
                                     title="Select whole week"
-                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors ${isCurrentRow ? 'text-emerald-400' : 'text-gray-600 hover:text-gray-400'}`}
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${isCurrentRow ? c.weekNumActive : c.weekNumBase}`}
                                   >W{wNum}</button>
-                                ) : <span className="text-[10px] text-gray-800">·</span>}
+                                ) : <span className={`text-[10px] ${c.cellNumFaded}`}>·</span>}
                               </div>
                               {weekDays.map((date, di) => {
-                                if (!date) return <div key={di} className="min-h-[52px] border-r border-white/5 last:border-0" />;
+                                if (!date) return <div key={di} className={`min-h-[52px] border-r ${c.cellBorder} last:border-0`} />;
                                 const dStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
                                 const dWeek = getAcademicWeek(CURRENT_TERM, date);
                                 const inMonth = date.getMonth() === calViewMonth;
@@ -1638,11 +1710,12 @@ export default function AdminDashboard() {
                                 const hasExplicitMode = dWeek ? modeMap.has(dWeek) : false;
                                 const isSunday = date.getDay() === 0;
                                 let cellBg = '';
-                                let numCls = 'text-gray-200';
-                                if (!dWeek || isSunday) { numCls = 'text-gray-700'; }
-                                else if (isBlocked && !calHiddenFilters.has('blocked')) { cellBg = 'bg-red-500/25'; numCls = 'text-red-300'; }
-                                else if (hasExplicitMode && dMode === 'Online' && !calHiddenFilters.has('online')) { cellBg = 'bg-blue-500/15'; numCls = 'text-blue-200'; }
-                                else if (hasExplicitMode && !calHiddenFilters.has('inPerson')) { cellBg = 'bg-emerald-500/10'; numCls = 'text-emerald-300'; }
+                                let numCls = c.cellNumDefault;
+                                if (isSunday) { numCls = c.cellNumSunday; }
+                                else if (!dWeek) { numCls = c.cellNumFaded; }
+                                else if (isBlocked && !calHiddenFilters.has('blocked')) { cellBg = 'bg-red-500/25'; numCls = c.cellNumBlocked; }
+                                else if (hasExplicitMode && dMode === 'Online' && !calHiddenFilters.has('online')) { cellBg = 'bg-blue-500/15'; numCls = c.cellNumOnline; }
+                                else if (hasExplicitMode && !calHiddenFilters.has('inPerson')) { cellBg = 'bg-emerald-500/10'; numCls = c.cellNumInPerson; }
                                 return (
                                   <button key={di}
                                     onClick={(e) => {
@@ -1669,9 +1742,9 @@ export default function AdminDashboard() {
                                         setCalShiftAnchor(dStr);
                                       }
                                     }}
-                                    className={`relative flex flex-col items-center justify-center min-h-[52px] border-r border-white/5 last:border-0 transition-all ${cellBg} ${
+                                    className={`relative flex flex-col items-center justify-center min-h-[52px] border-r ${c.cellBorder} last:border-0 transition-all ${cellBg} ${
                                       isSelected ? 'ring-2 ring-inset ring-[#CC0000]/60 brightness-125 z-10' : ''
-                                    } ${inMonth && !isSunday ? 'cursor-pointer hover:brightness-125 hover:z-10' : 'opacity-20 cursor-default'}`}
+                                    } ${!inMonth ? 'opacity-20 cursor-default' : isSunday ? 'cursor-default' : 'cursor-pointer hover:brightness-125 hover:z-10'}`}
                                     title={inMonth ? `${dStr}${dWeek ? ` · W${dWeek}` : ''}${dateLabelMap.get(dStr) ? ` · ${dateLabelMap.get(dStr)}` : ''}` : undefined}
                                   >
                                     {isToday ? (
@@ -1681,9 +1754,14 @@ export default function AdminDashboard() {
                                     ) : (
                                       <span className={`text-xs font-medium ${numCls}`}>{date.getDate()}</span>
                                     )}
-                                    {inMonth && dateLabelMap.get(dStr) && (
-                                      <span className="text-[8px] text-amber-400/80 leading-tight px-0.5 truncate max-w-full">{dateLabelMap.get(dStr)}</span>
-                                    )}
+                                    {inMonth && dateLabelMap.get(dStr) && (() => {
+                                      const ec = EVENT_COLORS.find(x => x.id === (dateColorMap.get(dStr) ?? 'red')) ?? EVENT_COLORS[0];
+                                      return (
+                                        <span className={`text-[7px] font-semibold px-1 py-px rounded-full ${ec.pill} ${ec.pillText} truncate max-w-full leading-tight shadow-sm`}>
+                                          {dateLabelMap.get(dStr)}
+                                        </span>
+                                      );
+                                    })()}
                                     {isSelected && !isToday && (
                                       <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#CC0000]" />
                                     )}
@@ -1697,18 +1775,18 @@ export default function AdminDashboard() {
 
                       {/* Blocked dates list */}
                       {blockedDates.length > 0 && (
-                        <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                          <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
+                        <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
+                          <div className={`px-5 py-3.5 border-b ${c.cellBorder} flex items-center justify-between`}>
                             <div>
-                              <p className="text-white font-semibold text-sm">Blocked / Special Dates</p>
-                              <p className="text-gray-600 text-xs mt-0.5">Click to jump to date</p>
+                              <p className={`${c.heading} font-semibold text-sm`}>Blocked / Special Dates</p>
+                              <p className={`${c.muted} text-xs mt-0.5`}>Click to jump to date</p>
                             </div>
-                            <span className="text-xs text-gray-600 bg-white/5 px-2 py-0.5 rounded">{blockedDates.length}</span>
+                            <span className={`text-xs ${c.countBadge} px-2 py-0.5 rounded`}>{blockedDates.length}</span>
                           </div>
-                          <div className="divide-y divide-white/5">
+                          <div className={`divide-y ${c.divider}`}>
                             {blockedDates.map((o: CalendarOverride) => (
                               <div key={o.id}
-                                className={`px-5 py-3 flex items-center justify-between gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors ${o.date && calSelectedDates.has(o.date) ? 'bg-[#CC0000]/5' : ''}`}
+                                className={`px-5 py-3 flex items-center justify-between gap-4 cursor-pointer ${c.rowHover} transition-colors ${o.date && calSelectedDates.has(o.date) ? 'bg-[#CC0000]/5' : ''}`}
                                 onClick={() => {
                                   if (o.date) {
                                     const d = new Date(o.date + 'T12:00:00');
@@ -1721,14 +1799,14 @@ export default function AdminDashboard() {
                               >
                                 <div className="flex items-center gap-3">
                                   <span className="w-2.5 h-2.5 rounded-sm bg-red-500/30 border border-red-500/30 flex-shrink-0" />
-                                  <span className="text-gray-200 text-sm font-medium">
+                                  <span className={`${c.body} text-sm font-medium`}>
                                     {o.date ? new Date(o.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : o.date}
                                   </span>
-                                  {o.label && <span className="text-gray-500 text-xs">— {o.label}</span>}
+                                  {o.label && <span className={`${c.sub} text-xs`}>— {o.label}</span>}
                                 </div>
                                 <button
                                   onClick={async (e) => { e.stopPropagation(); await handleDeleteOverride(o.id, o.type); }}
-                                  className="text-gray-600 hover:text-red-400 transition-colors text-xs px-2 py-1 rounded hover:bg-red-500/10"
+                                  className={`${c.removeBtn} transition-colors text-xs px-2 py-1 rounded`}
                                 >Remove</button>
                               </div>
                             ))}
@@ -1742,19 +1820,19 @@ export default function AdminDashboard() {
 
                       {/* Empty state */}
                       {calSelectedArr.length === 0 && (
-                        <div className="rounded-2xl border border-white/5 bg-[#161616] p-5">
-                          <p className="text-gray-300 text-sm font-semibold mb-1">Select a date</p>
-                          <p className="text-gray-600 text-xs leading-relaxed mb-4">
-                            Click any date to configure it. Use <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[10px]">Ctrl</kbd>+click for multi-select, <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[10px]">Shift</kbd>+click for ranges, or click a week number to select the full week.
+                        <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} p-5`}>
+                          <p className={`${c.body} text-sm font-semibold mb-1`}>Select a date</p>
+                          <p className={`${c.muted} text-xs leading-relaxed mb-4`}>
+                            Click any date to configure it. Use <kbd className={`px-1 py-0.5 rounded ${c.kbdBg} font-mono text-[10px]`}>Ctrl</kbd>+click for multi-select, <kbd className={`px-1 py-0.5 rounded ${c.kbdBg} font-mono text-[10px]`}>Shift</kbd>+click for ranges, or click a week number to select the full week.
                           </p>
-                          <div className="space-y-2 pt-3 border-t border-white/5">
+                          <div className={`space-y-2 pt-3 border-t ${c.cellBorder}`}>
                             {[
-                              { label: 'Blocked dates', value: blockedDates.length, color: 'text-red-400' },
-                              { label: 'Calendar overrides', value: calOverrides.length, color: 'text-amber-400' },
-                              { label: 'Current week', value: currentAcademicWeek ?? '–', color: 'text-emerald-400' },
+                              { label: 'Blocked dates', value: blockedDates.length, color: 'text-red-500' },
+                              { label: 'Calendar overrides', value: calOverrides.length, color: 'text-amber-500' },
+                              { label: 'Current week', value: currentAcademicWeek ?? '–', color: 'text-emerald-500' },
                             ].map(({ label, value, color }) => (
                               <div key={label} className="flex items-center justify-between text-xs">
-                                <span className="text-gray-500">{label}</span>
+                                <span className={c.sub}>{label}</span>
                                 <span className={`font-bold ${color}`}>{value}</span>
                               </div>
                             ))}
@@ -1769,74 +1847,106 @@ export default function AdminDashboard() {
                         const pendingMode = calPendingMode ?? detailMode;
                         const pendingBlocked = calPendingBlocked !== null ? calPendingBlocked : detailIsBlocked;
                         const savedLabel = dateLabelMap.get(calSingle) ?? '';
+                        const savedColor = dateColorMap.get(calSingle) ?? 'red';
                         const hasPendingChanges =
                           calPendingMode !== null ||
                           calPendingLabel.trim() !== savedLabel ||
+                          (!!savedLabel && calPendingColor !== savedColor) ||
                           calPendingBlocked !== null;
                         return (
-                          <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                            <div className="px-5 py-4 border-b border-white/5 bg-[#CC0000]/5">
-                              <p className="text-white font-bold text-sm leading-snug">{displayDate}</p>
+                          <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
+                            <div className={`px-5 py-4 border-b ${c.cellBorder} bg-[#CC0000]/5`}>
+                              <p className={`${c.heading} font-bold text-sm leading-snug`}>{displayDate}</p>
                               {detailWeek ? (
-                                <p className="text-gray-500 text-xs mt-0.5">Week {detailWeek} of {CURRENT_TERM.totalWeeks}</p>
+                                <p className={`${c.sub} text-xs mt-0.5`}>Week {detailWeek} of {CURRENT_TERM.totalWeeks}</p>
                               ) : (
-                                <p className="text-gray-600 text-xs mt-0.5">Outside current term</p>
+                                <p className={`${c.muted} text-xs mt-0.5`}>Outside current term</p>
                               )}
                             </div>
                             {detailWeek ? (
                               <div className="p-4 space-y-3">
-                                {/* Event / Note */}
-                                <div className="px-4 py-3 rounded-xl bg-white/5">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="text-gray-400 text-sm">Event / Note</p>
+                                {/* Event */}
+                                <div className={`px-4 py-3 rounded-xl ${c.innerBg}`}>
+                                  <div className="flex items-center justify-between mb-2.5">
+                                    <p className={`${c.label} text-sm`}>Event</p>
                                     {savedLabel && !calLabelEditing && (
                                       <button
-                                        onClick={() => { setCalLabelEditing(true); setCalPendingLabel(savedLabel); }}
+                                        onClick={() => { setCalLabelEditing(true); setCalPendingLabel(savedLabel); setCalPendingColor(savedColor); }}
                                         disabled={isSaving}
                                         className="text-[10px] text-[#CC0000]/70 hover:text-[#CC0000] transition-colors disabled:opacity-40"
                                       >Edit</button>
                                     )}
                                     {calLabelEditing && (
                                       <button
-                                        onClick={() => { setCalLabelEditing(false); setCalPendingLabel(savedLabel); }}
+                                        onClick={() => { setCalLabelEditing(false); setCalPendingLabel(savedLabel); setCalPendingColor(savedColor); }}
                                         disabled={isSaving}
-                                        className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-40"
+                                        className={`text-[10px] ${c.muted} transition-colors disabled:opacity-40`}
                                       >Cancel</button>
                                     )}
                                   </div>
                                   {savedLabel && !calLabelEditing ? (
-                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0f0f0f] border border-white/10">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 flex-shrink-0" />
-                                      <span className="text-amber-300/80 text-xs truncate">{savedLabel}</span>
+                                    /* Saved event pill preview */
+                                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${c.deepBg} border ${c.deepBorder}`}>
+                                      {(() => {
+                                        const ec = EVENT_COLORS.find(x => x.id === savedColor) ?? EVENT_COLORS[0];
+                                        return (
+                                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${ec.pill} ${ec.pillText} shadow-sm`}>
+                                            {savedLabel}
+                                          </span>
+                                        );
+                                      })()}
                                     </div>
                                   ) : (
-                                    <input
-                                      type="text"
-                                      placeholder="e.g. No Classes, Holiday, Lab Activity…"
-                                      value={calPendingLabel}
-                                      onChange={e => setCalPendingLabel(e.target.value)}
-                                      maxLength={40}
-                                      disabled={isSaving}
-                                      autoFocus={calLabelEditing}
-                                      className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700 disabled:opacity-40"
-                                    />
+                                    <div className="space-y-2.5">
+                                      {/* Event title input */}
+                                      <input
+                                        type="text"
+                                        placeholder="e.g. No Classes, Holiday, Lab Activity…"
+                                        value={calPendingLabel}
+                                        onChange={e => setCalPendingLabel(e.target.value)}
+                                        maxLength={40}
+                                        disabled={isSaving}
+                                        autoFocus={calLabelEditing || !savedLabel}
+                                        className={`w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-[#CC0000]/50 disabled:opacity-40 ${c.input}`}
+                                      />
+                                      {/* Color picker */}
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-[10px] ${c.label} flex-shrink-0`}>Color</span>
+                                        <div className="flex items-center gap-1.5">
+                                          {EVENT_COLORS.map(ec => (
+                                            <button
+                                              key={ec.id}
+                                              onClick={() => setCalPendingColor(ec.id)}
+                                              disabled={isSaving}
+                                              title={ec.id}
+                                              className={`w-5 h-5 rounded-full ${ec.dot} transition-all disabled:opacity-40 ${
+                                                calPendingColor === ec.id
+                                                  ? 'ring-2 ring-offset-2 ring-offset-transparent scale-110 ' + (isDark ? 'ring-white/60' : 'ring-gray-500/60')
+                                                  : 'opacity-60 hover:opacity-100 hover:scale-110'
+                                              }`}
+                                            />
+                                          ))}
+                                        </div>
+                                        {calPendingLabel && (
+                                          <span className={`ml-auto inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${EVENT_COLORS.find(x => x.id === calPendingColor)?.pill ?? 'bg-red-500'} ${EVENT_COLORS.find(x => x.id === calPendingColor)?.pillText ?? 'text-white'} opacity-80`}>
+                                            {calPendingLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
                                 {/* Mode */}
-                                <div className="px-4 py-3 rounded-xl bg-white/5">
+                                <div className={`px-4 py-3 rounded-xl ${c.innerBg}`}>
                                   <div className="flex items-center justify-between mb-2.5">
-                                    <p className="text-gray-400 text-sm">Mode</p>
-                                    <span className="text-[10px] text-gray-600">whole Week {detailWeek}</span>
+                                    <p className={`${c.label} text-sm`}>Mode</p>
+                                    <span className={`text-[10px] ${c.muted}`}>whole Week {detailWeek}</span>
                                   </div>
                                   <div className="grid grid-cols-2 gap-2">
                                     {(['In-Person', 'Online'] as const).map(mode => {
                                       const isActive = pendingMode === mode;
-                                      const activecls = mode === 'In-Person'
-                                        ? 'bg-emerald-500/30 text-emerald-300 ring-1 ring-emerald-500/40'
-                                        : 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-500/40';
-                                      const idlecls = mode === 'In-Person'
-                                        ? 'bg-white/5 text-gray-500 hover:bg-emerald-500/10 hover:text-emerald-400'
-                                        : 'bg-white/5 text-gray-500 hover:bg-blue-500/10 hover:text-blue-400';
+                                      const activecls = mode === 'In-Person' ? c.modeInPersonActive : c.modeOnlineActive;
+                                      const idlecls   = mode === 'In-Person' ? c.modeInPersonIdle   : c.modeOnlineIdle;
                                       return (
                                         <button
                                           key={mode}
@@ -1848,7 +1958,7 @@ export default function AdminDashboard() {
                                           disabled={isSaving}
                                           className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${isActive ? activecls : idlecls}`}
                                         >
-                                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? (mode === 'In-Person' ? 'bg-emerald-400' : 'bg-blue-400') : 'bg-gray-600'}`} />
+                                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? (mode === 'In-Person' ? 'bg-emerald-400' : 'bg-blue-400') : c.modeDot}`} />
                                           {mode}
                                           {isActive && calPendingMode !== null && <span className="text-[9px] opacity-50 ml-0.5">✦</span>}
                                         </button>
@@ -1856,13 +1966,13 @@ export default function AdminDashboard() {
                                     })}
                                   </div>
                                   {calPendingMode !== null && (
-                                    <p className="text-[10px] text-amber-500/60 mt-1.5">Unsaved · applies to all days in Week {detailWeek}</p>
+                                    <p className={`text-[10px] ${c.unsavedHint} mt-1.5`}>Unsaved · applies to all days in Week {detailWeek}</p>
                                   )}
                                 </div>
                                 {/* Blocked */}
-                                <div className="px-4 py-3 rounded-xl bg-white/5">
+                                <div className={`px-4 py-3 rounded-xl ${c.innerBg}`}>
                                   <div className="flex items-center justify-between">
-                                    <p className="text-gray-400 text-sm">Blocked Day</p>
+                                    <p className={`${c.label} text-sm`}>Blocked Day</p>
                                     <button
                                       onClick={() => {
                                         const desired = !pendingBlocked;
@@ -1871,16 +1981,16 @@ export default function AdminDashboard() {
                                       }}
                                       disabled={isSaving}
                                       aria-label="Toggle blocked"
-                                      className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-40 ${pendingBlocked ? 'bg-red-500/60' : 'bg-white/10'}`}
+                                      className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-40 ${pendingBlocked ? 'bg-red-500/60' : c.toggleOff}`}
                                     >
                                       <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-transform bg-white shadow-sm ${pendingBlocked ? 'translate-x-5' : 'translate-x-0.5'}`} />
                                     </button>
                                   </div>
                                   {pendingBlocked && (
-                                    <p className="text-red-400/60 text-[10px] mt-1.5">No consultations on this day</p>
+                                    <p className={`${c.blockWarning} text-[10px] mt-1.5`}>No consultations on this day</p>
                                   )}
                                   {calPendingBlocked !== null && (
-                                    <p className="text-[10px] text-amber-500/60 mt-0.5">Unsaved change</p>
+                                    <p className={`text-[10px] ${c.unsavedHint} mt-0.5`}>Unsaved change</p>
                                   )}
                                 </div>
                                 {/* Save */}
@@ -1895,7 +2005,7 @@ export default function AdminDashboard() {
                               </div>
                             ) : (
                               <div className="p-4">
-                                <p className="text-gray-600 text-sm">Outside the current academic term. No edits available.</p>
+                                <p className={`${c.muted} text-sm`}>Outside the current academic term. No edits available.</p>
                               </div>
                             )}
                           </div>
@@ -1911,15 +2021,15 @@ export default function AdminDashboard() {
                         )];
                         const isSaving = calSaving !== null;
                         return (
-                          <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                            <div className="px-5 py-4 border-b border-white/5 bg-[#CC0000]/5">
-                              <p className="text-white font-bold text-sm">{calSelectedArr.length} dates selected</p>
-                              <p className="text-gray-500 text-xs mt-0.5">{selectedWeeks.length} week{selectedWeeks.length !== 1 ? 's' : ''} affected</p>
+                          <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
+                            <div className={`px-5 py-4 border-b ${c.cellBorder} bg-[#CC0000]/5`}>
+                              <p className={`${c.heading} font-bold text-sm`}>{calSelectedArr.length} dates selected</p>
+                              <p className={`${c.sub} text-xs mt-0.5`}>{selectedWeeks.length} week{selectedWeeks.length !== 1 ? 's' : ''} affected</p>
                             </div>
                             <div className="p-4 space-y-4">
                               {/* Bulk mode */}
                               <div>
-                                <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-2">Set Mode (all affected weeks)</p>
+                                <p className={`${c.sub} text-[10px] font-semibold uppercase tracking-wider mb-2`}>Set Mode (all affected weeks)</p>
                                 <div className="grid grid-cols-2 gap-2">
                                   <button
                                     onClick={async () => {
@@ -1927,7 +2037,7 @@ export default function AdminDashboard() {
                                       setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk In-Person', target: `W${selectedWeeks.join(',')}`, from: 'Mixed', to: 'In-Person' }, ...log.slice(0, 19)]);
                                     }}
                                     disabled={isSaving}
-                                    className="py-2 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-colors disabled:opacity-40"
+                                    className={`py-2 rounded-lg text-xs font-semibold ${c.bulkInPerson} transition-colors disabled:opacity-40`}
                                   >In-Person</button>
                                   <button
                                     onClick={async () => {
@@ -1935,19 +2045,19 @@ export default function AdminDashboard() {
                                       setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Online', target: `W${selectedWeeks.join(',')}`, from: 'Mixed', to: 'Online' }, ...log.slice(0, 19)]);
                                     }}
                                     disabled={isSaving}
-                                    className="py-2 rounded-lg text-xs font-semibold bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-40"
+                                    className={`py-2 rounded-lg text-xs font-semibold ${c.bulkOnline} transition-colors disabled:opacity-40`}
                                   >Online</button>
                                 </div>
                               </div>
                               {/* Bulk block */}
                               <div>
-                                <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-2">Block / Unblock</p>
+                                <p className={`${c.sub} text-[10px] font-semibold uppercase tracking-wider mb-2`}>Block / Unblock</p>
                                 <input
                                   type="text"
                                   placeholder="Label (optional)"
                                   value={calBulkLabel}
                                   onChange={e => setCalBulkLabel(e.target.value)}
-                                  className="w-full px-3 py-2 mb-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
+                                  className={`w-full px-3 py-2 mb-2 rounded-lg text-xs border focus:outline-none focus:border-[#CC0000]/50 ${c.input}`}
                                 />
                                 <div className="grid grid-cols-2 gap-2">
                                   <button
@@ -1962,7 +2072,7 @@ export default function AdminDashboard() {
                                       setCalBulkLabel(''); setCalSaving(null);
                                     }}
                                     disabled={isSaving}
-                                    className="py-2 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors disabled:opacity-40"
+                                    className={`py-2 rounded-lg text-xs font-semibold ${c.bulkBlock} transition-colors disabled:opacity-40`}
                                   >Block All</button>
                                   <button
                                     onClick={async () => {
@@ -1973,47 +2083,47 @@ export default function AdminDashboard() {
                                       setCalAuditLog(log => [{ id: Date.now(), ts: new Date(), action: 'Bulk Unblocked', target: `${calSelectedArr.length} dates`, from: 'Blocked', to: 'Normal' }, ...log.slice(0, 19)]);
                                     }}
                                     disabled={isSaving}
-                                    className="py-2 rounded-lg text-xs font-semibold bg-white/5 text-gray-400 hover:bg-white/10 transition-colors disabled:opacity-40"
+                                    className={`py-2 rounded-lg text-xs font-semibold ${c.bulkUnblock} transition-colors disabled:opacity-40`}
                                   >Unblock All</button>
                                 </div>
                               </div>
-                              {isSaving && <p className="text-center text-xs text-gray-600 animate-pulse">Applying…</p>}
+                              {isSaving && <p className={`text-center text-xs ${c.muted} animate-pulse`}>Applying…</p>}
                             </div>
                           </div>
                         );
                       })()}
 
                       {/* Change history / audit trail */}
-                      <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                        <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
-                          <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">Change History</p>
+                      <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
+                        <div className={`px-5 py-3.5 border-b ${c.cellBorder} flex items-center justify-between`}>
+                          <p className={`${c.sub} text-[10px] font-semibold uppercase tracking-widest`}>Change History</p>
                           {calAuditLog.length > 0 && (
-                            <button onClick={() => setCalAuditLog([])} className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Clear</button>
+                            <button onClick={() => setCalAuditLog([])} className={`text-[10px] ${c.muted} hover:${isDark ? 'text-gray-400' : 'text-gray-600'} transition-colors`}>Clear</button>
                           )}
                         </div>
                         {calAuditLog.length === 0 ? (
                           <div className="px-5 py-6 text-center">
-                            <p className="text-gray-700 text-xs">No changes this session</p>
+                            <p className={`${c.faint} text-xs`}>No changes this session</p>
                           </div>
                         ) : (
-                          <div className="divide-y divide-white/5 max-h-60 overflow-y-auto">
+                          <div className={`divide-y ${c.divider} max-h-60 overflow-y-auto`}>
                             {calAuditLog.map(entry => (
                               <div key={entry.id} className="px-5 py-2.5">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-gray-200 text-xs font-medium">{entry.action}</p>
-                                    <p className="text-gray-500 text-[11px] truncate">{entry.target}</p>
-                                    <p className="text-gray-700 text-[10px]">{entry.from} → {entry.to}</p>
+                                    <p className={`${c.historyAction} text-xs font-medium`}>{entry.action}</p>
+                                    <p className={`${c.sub} text-[11px] truncate`}>{entry.target}</p>
+                                    <p className={`${c.faint} text-[10px]`}>{entry.from} → {entry.to}</p>
                                   </div>
                                   <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
-                                    <p className="text-[10px] text-gray-700">
+                                    <p className={`text-[10px] ${c.faint}`}>
                                       {entry.ts.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
                                     </p>
                                     {entry.deleteInfo && (
                                       <button
                                         onClick={() => handleDeleteFromHistory(entry.id, entry.deleteInfo!)}
                                         title="Delete this override"
-                                        className="text-gray-700 hover:text-red-400 transition-colors"
+                                        className={`${c.historyTrash} transition-colors`}
                                       >
                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2034,106 +2144,6 @@ export default function AdminDashboard() {
               );
             })()}
 
-            {/* Date edit modal — position:fixed, works from Home and Calendar tabs */}
-            {calModalDate && (() => {
-              const md = new Date(calModalDate + 'T12:00:00');
-              const mWeek = getAcademicWeek(CURRENT_TERM, md);
-              const mMode = mWeek ? effectiveMode(mWeek) : null;
-              const mIsBlocked = blockedSet.has(calModalDate);
-              const mBlockedEntry = blockedDates.find((o: CalendarOverride) => o.date === calModalDate);
-              const mSaving = calSaving === `mode-${mWeek}` || calSaving === 'blocked';
-              const displayDate = md.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-
-              return (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-                  onClick={() => setCalModalDate(null)}
-                >
-                  <div
-                    className="bg-[#1e1f22] rounded-2xl border border-white/10 p-6 w-full max-w-sm mx-4 shadow-2xl"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <div className="flex items-start justify-between mb-5">
-                      <div>
-                        <p className="text-white font-bold text-base leading-snug">{displayDate}</p>
-                        {mWeek ? (
-                          <p className="text-gray-500 text-sm mt-0.5">Week {mWeek} of {CURRENT_TERM.totalWeeks}</p>
-                        ) : (
-                          <p className="text-gray-600 text-sm mt-0.5">Outside current term</p>
-                        )}
-                      </div>
-                      <button onClick={() => setCalModalDate(null)} className="text-gray-600 hover:text-white transition-colors ml-4 flex-shrink-0 mt-0.5">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </div>
-
-                    {mWeek ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/5">
-                          <span className="text-gray-400 text-sm">Mode</span>
-                          <button
-                            onClick={() => handleModeToggle(mWeek)}
-                            disabled={mSaving}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-                              mMode === 'Online' ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30' : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${mMode === 'Online' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
-                            {mMode ?? '—'}
-                            <span className="text-[10px] opacity-40 ml-1">tap to toggle</span>
-                          </button>
-                        </div>
-
-                        <div className="px-4 py-3 rounded-xl bg-white/5 border border-white/5">
-                          <p className="text-gray-400 text-sm mb-2.5">Blocked / Special Date</p>
-                          {mIsBlocked ? (
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <span className="text-red-400 text-xs font-semibold uppercase tracking-wide">Blocked</span>
-                                {mBlockedEntry?.label && <span className="text-gray-500 text-xs ml-2 truncate">— {mBlockedEntry.label}</span>}
-                              </div>
-                              <button
-                                onClick={async () => { if (mBlockedEntry) await handleDeleteOverride(mBlockedEntry.id, 'blocked_date'); }}
-                                disabled={mSaving}
-                                className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                              >Remove</button>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <input
-                                type="text"
-                                placeholder="Label (e.g. No Classes)"
-                                value={addBlockedLabel}
-                                onChange={e => setAddBlockedLabel(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
-                              />
-                              <button
-                                onClick={async () => {
-                                  setCalSaving('blocked');
-                                  setCalError(null);
-                                  const result = await api.post('/api/admin/blocked-dates', { date: calModalDate, label: addBlockedLabel.trim() || null }, token!);
-                                  if (result?.error) { setCalError(`Failed to save: ${result.error}`); }
-                                  else { setAddBlockedLabel(''); await refreshCalOverrides(); }
-                                  setCalSaving(null);
-                                }}
-                                disabled={mSaving}
-                                className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-40"
-                              >
-                                {calSaving === 'blocked' ? 'Saving…' : 'Mark as Blocked'}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {mSaving && <p className="text-center text-xs text-gray-600 animate-pulse">Saving…</p>}
-                      </div>
-                    ) : (
-                      <p className="text-gray-600 text-sm">This date is outside the current academic term and cannot be configured.</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
 
           </div>
         )}

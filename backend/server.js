@@ -39,7 +39,7 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
 });
-app.use('/api/', globalLimiter);
+//app.use('/api/', globalLimiter);
 
 // ── Static uploads ─────────────────────────────────────────────────────────────
 // Avatars are public-facing (profile pictures in UI) so served as static assets.
@@ -103,4 +103,26 @@ app.listen(PORT, '0.0.0.0', () => {
   pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS email VARCHAR(255)`)
     .then(() => console.log('[startup] professors.email column ready'))
     .catch(err => console.error('[startup] professors.email migration failed:', err.message));
+
+  pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false`)
+    .then(() => console.log('[startup] announcements.pinned column ready'))
+    .catch(err => console.error('[startup] announcements.pinned migration failed:', err.message));
+
+  pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`)
+    .then(() => console.log('[startup] announcements.updated_at column ready'))
+    .catch(err => console.error('[startup] announcements.updated_at migration failed:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS user_calendar_notes (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date       DATE NOT NULL,
+      note       TEXT NOT NULL,
+      color      VARCHAR(20) NOT NULL DEFAULT 'indigo',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, date)
+    )
+  `)
+    .then(() => console.log('[startup] user_calendar_notes table ready'))
+    .catch(err => console.error('[startup] user_calendar_notes migration failed:', err.message));
 });

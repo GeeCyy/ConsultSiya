@@ -8,6 +8,7 @@ export type CalendarOverride = {
   week_number: number | null;
   value: string | null;
   label: string | null;
+  color?: string | null;
   created_at: string;
 };
 
