@@ -68,6 +68,9 @@ ALTER TABLE calendar_overrides DROP CONSTRAINT IF EXISTS calendar_overrides_type
 ALTER TABLE calendar_overrides ADD CONSTRAINT calendar_overrides_type_check
   CHECK (type IN ('exam_week', 'mode_override', 'blocked_date', 'date_label'));
 
+-- Add color to calendar_overrides (for date_label event color)
+ALTER TABLE calendar_overrides ADD COLUMN IF NOT EXISTS color VARCHAR(20);
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

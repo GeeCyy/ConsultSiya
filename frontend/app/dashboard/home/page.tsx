@@ -10,9 +10,6 @@ import {
   daysUntil,
   getTermDates,
   getTermProgress,
-  isSchoolDay,
-  isHoliday,
-  isExamWeek,
   type CalendarOverride,
 } from '@/lib/academicCalendar';
 import { fetchPhHolidays, type PhHoliday } from '@/lib/phHolidays';
@@ -22,6 +19,29 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ];
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+const EVENT_COLORS = [
+  { id: 'red',    pill: 'bg-red-500',     pillText: 'text-white'    },
+  { id: 'blue',   pill: 'bg-blue-500',    pillText: 'text-white'    },
+  { id: 'green',  pill: 'bg-emerald-500', pillText: 'text-white'    },
+  { id: 'yellow', pill: 'bg-yellow-400',  pillText: 'text-gray-900' },
+  { id: 'orange', pill: 'bg-orange-500',  pillText: 'text-white'    },
+  { id: 'purple', pill: 'bg-purple-500',  pillText: 'text-white'    },
+] as const;
+
+// Distinct palette for personal notes (dot indicator on cell + color picker)
+const NOTE_COLORS = [
+  { id: 'indigo', dot: 'bg-indigo-400',  ring: 'ring-indigo-400' },
+  { id: 'sky',    dot: 'bg-sky-400',     ring: 'ring-sky-400'    },
+  { id: 'teal',   dot: 'bg-teal-400',    ring: 'ring-teal-400'   },
+  { id: 'rose',   dot: 'bg-rose-400',    ring: 'ring-rose-400'   },
+  { id: 'amber',  dot: 'bg-amber-400',   ring: 'ring-amber-400'  },
+  { id: 'violet', dot: 'bg-violet-400',  ring: 'ring-violet-400' },
+] as const;
+
+type UserNote = { id: number; date: string; note: string; color: string };
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 type Announcement = {
   id: number;
@@ -49,27 +69,51 @@ function AnnouncementIcon({ type }: { type: string }) {
 function CalendarView({
   overrides = [],
   phHolidays = [],
+  token,
 }: {
   overrides?: CalendarOverride[];
   phHolidays?: PhHoliday[];
+  token?: string | null;
 }) {
   const [today, setToday] = useState<Date | null>(null);
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  const [selected, setSelected] = useState<Date | null>(null);
+
+  const [userNotes, setUserNotes] = useState<UserNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteDraftColor, setNoteDraftColor] = useState('indigo');
+  const [noteSaving, setNoteSaving] = useState(false);
 
   useEffect(() => {
     const t = new Date();
     t.setHours(0, 0, 0, 0);
     setToday(t);
   }, []);
-  const [selected, setSelected] = useState<Date | null>(null);
 
-  const examWeekSet     = new Set(overrides.filter(o => o.type === 'exam_week'     && o.value === 'exam'    && o.week_number).map(o => o.week_number!));
-  const suppressExamSet = new Set(overrides.filter(o => o.type === 'exam_week'     && o.value === 'normal'  && o.week_number).map(o => o.week_number!));
-  const modeMap         = new Map(overrides.filter(o => o.type === 'mode_override' && o.week_number && o.value).map(o => [o.week_number!, o.value as 'Online' | 'In-Person']));
-  const blockedSet      = new Set(overrides.filter(o => o.type === 'blocked_date'  && o.date).map(o => o.date!));
-  const phSet           = new Set(phHolidays.map(h => h.date));
-  const phNames         = new Map(phHolidays.map(h => [h.date, h.name]));
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/api/calendar/notes`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setUserNotes(data); })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!selected) { setNoteDraft(''); setNoteDraftColor('indigo'); return; }
+    const selStr = `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}-${String(selected.getDate()).padStart(2, '0')}`;
+    const existing = userNotes.find(n => n.date === selStr);
+    setNoteDraft(existing?.note ?? '');
+    setNoteDraftColor(existing?.color ?? 'indigo');
+  }, [selected, userNotes]);
+
+  const examWeekSet  = new Set(overrides.filter(o => o.type === 'exam_week' && o.value === 'exam' && o.week_number).map(o => o.week_number!));
+  const modeMap      = new Map(overrides.filter(o => o.type === 'mode_override' && o.week_number && o.value).map(o => [o.week_number!, o.value as 'Online' | 'In-Person']));
+  const blockedSet   = new Set(overrides.filter(o => o.type === 'blocked_date' && o.date).map(o => o.date!));
+  const dateLabelMap = new Map(overrides.filter(o => o.type === 'date_label' && o.date && o.value).map(o => [o.date!, o.value!]));
+  const dateColorMap = new Map(overrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.color ?? 'red']));
+  const phNames      = new Map(phHolidays.map(h => [h.date, h.name]));
+  const noteMap      = new Map(userNotes.map(n => [n.date, n]));
 
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -81,6 +125,35 @@ function CalendarView({
   const nextMonth = () => {
     if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
     else setViewMonth(m => m + 1);
+  };
+
+  const handleSaveNote = async (dateStr: string) => {
+    if (!token || !noteDraft.trim()) return;
+    setNoteSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/calendar/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date: dateStr, note: noteDraft.trim(), color: noteDraftColor }),
+      });
+      if (res.ok) {
+        const saved: UserNote = await res.json();
+        setUserNotes(prev => [...prev.filter(n => n.date !== dateStr), saved]);
+      }
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: number, dateStr: string) => {
+    if (!token) return;
+    const res = await fetch(`${API_BASE}/api/calendar/notes/${noteId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setUserNotes(prev => prev.filter(n => n.id !== noteId));
+    }
   };
 
   const cells: (Date | null)[] = [
@@ -117,37 +190,44 @@ function CalendarView({
           const isSelected = selected?.getTime() === date.getTime();
           const week = getAcademicWeek(CURRENT_TERM, date);
           const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-          const holiday = isHoliday(date) || phSet.has(dateStr) || blockedSet.has(dateStr);
-          const staticExam = week ? isExamWeek(CURRENT_TERM, date) : false;
-          const exam = week
-            ? (examWeekSet.has(week) || (staticExam && !suppressExamSet.has(week)))
-            : false;
+          const blocked = blockedSet.has(dateStr);
+          const exam = !!week && examWeekSet.has(week);
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const mode = week ? (modeMap.get(week) ?? getWeekMode(CURRENT_TERM, week)) : null;
+          const adminMode = week ? (modeMap.get(week) ?? null) : null;
+          const eventTitle = dateLabelMap.get(dateStr);
+          const eventColorId = dateColorMap.get(dateStr) ?? 'red';
+          const ec = EVENT_COLORS.find(x => x.id === eventColorId) ?? EVENT_COLORS[0];
+          const userNote = noteMap.get(dateStr);
+          const nc = userNote ? (NOTE_COLORS.find(c => c.id === userNote.color) ?? NOTE_COLORS[0]) : null;
 
           const cellBg = isSelected && !isToday
             ? 'bg-white/10'
-            : holiday
-              ? 'bg-red-500/20'
-              : exam
-                ? 'bg-amber-400/20'
-                : '';
+            : blocked ? 'bg-red-500/20'
+            : exam ? 'bg-amber-400/20'
+            : adminMode && !isWeekend && adminMode === 'Online' ? 'bg-blue-500/15'
+            : adminMode && !isWeekend && adminMode === 'In-Person' ? 'bg-emerald-500/10'
+            : '';
 
           return (
             <button
               key={date.toISOString()}
               onClick={() => setSelected(isSelected ? null : date)}
               className={`
-                relative flex flex-col items-center justify-center rounded-lg h-9 text-xs transition-colors
+                relative flex flex-col items-center justify-center rounded-lg min-h-[38px] pb-0.5 text-xs transition-colors
                 ${isToday ? 'ring-1 ring-[#CC0000] font-bold' : ''}
                 ${cellBg}
-                ${holiday ? 'text-red-400' : isWeekend ? 'text-gray-600' : week ? 'text-gray-200' : 'text-gray-700'}
+                ${blocked ? 'text-red-400' : week ? 'text-gray-200' : 'text-gray-600'}
                 ${!isToday && !isSelected ? 'hover:bg-white/5' : ''}
               `}
             >
               <span>{date.getDate()}</span>
-              {mode === 'Online' && week && !isWeekend && !exam && (
-                <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-blue-400" />
+              {eventTitle && (
+                <span className={`text-[6px] font-bold px-1 py-px rounded-full ${ec.pill} ${ec.pillText} truncate max-w-[90%] leading-tight`}>
+                  {eventTitle}
+                </span>
+              )}
+              {nc && (
+                <span className={`absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full ${nc.dot}`} />
               )}
             </button>
           );
@@ -163,39 +243,106 @@ function CalendarView({
           <span className="w-3 h-3 rounded-sm bg-amber-400/20" />Exam week
         </span>
         <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />Online
+          <span className="w-3 h-3 rounded-sm bg-blue-500/20" />Online
         </span>
         <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-          <span className="w-3 h-3 rounded-sm bg-red-500/20" />Holiday
+          <span className="w-3 h-3 rounded-sm bg-emerald-500/15" />In-Person
         </span>
+        <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+          <span className="w-3 h-3 rounded-sm bg-red-500/20" />Blocked
+        </span>
+        {token && (
+          <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />My Note
+          </span>
+        )}
       </div>
 
-      {/* Tooltip for selected date */}
+      {/* Selected date panel */}
       {selected && (() => {
         const selStr = `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}-${String(selected.getDate()).padStart(2, '0')}`;
         const w = getAcademicWeek(CURRENT_TERM, selected);
-        const isHol = isHoliday(selected) || phSet.has(selStr) || blockedSet.has(selStr);
-        const school = isSchoolDay(selected) && !phSet.has(selStr) && !blockedSet.has(selStr);
-        const staticExam = w ? isExamWeek(CURRENT_TERM, selected) : false;
-        const effectiveExam = w ? (examWeekSet.has(w) || (staticExam && !suppressExamSet.has(w))) : false;
-        const effectiveMode = w ? (modeMap.get(w) ?? getWeekMode(CURRENT_TERM, w)) : null;
-        const holName = phNames.get(selStr)
-          ?? overrides.find(o => o.type === 'blocked_date' && o.date === selStr)?.label
-          ?? (isHoliday(selected) ? 'Public Holiday' : null)
-          ?? (blockedSet.has(selStr) ? 'Blocked' : null);
+        const isBlockedByAdmin = blockedSet.has(selStr);
+        const isWeekendDay = selected.getDay() === 0 || selected.getDay() === 6;
+        const effectiveExam = !!w && examWeekSet.has(w);
+        const effectiveMode = w ? (modeMap.get(w) ?? null) : null;
+        const blockedLabel = overrides.find(o => o.type === 'blocked_date' && o.date === selStr)?.label;
+        const phName = phNames.get(selStr);
+        const selEventTitle = dateLabelMap.get(selStr);
+        const selEventColorId = dateColorMap.get(selStr) ?? 'red';
+        const selEc = EVENT_COLORS.find(x => x.id === selEventColorId) ?? EVENT_COLORS[0];
+        const existingNote = noteMap.get(selStr);
+        const noteChanged = noteDraft.trim() !== (existingNote?.note ?? '') ||
+          noteDraftColor !== (existingNote?.color ?? 'indigo');
+
         return (
-          <div className="mt-3 p-3 rounded-xl bg-[#383a40] border border-white/10 text-sm">
-            <p className="font-semibold text-white">
-              {MONTH_NAMES[selected.getMonth()]} {selected.getDate()}, {selected.getFullYear()}
-            </p>
-            {isHol && <p className="text-red-400 text-xs mt-1">Holiday{holName ? ` — ${holName}` : ''}</p>}
-            {!isHol && !school && <p className="text-gray-400 text-xs mt-1">Weekend / No class</p>}
-            {school && w && (
-              <p className="text-gray-300 text-xs mt-1">
-                Week {w} of {CURRENT_TERM.totalWeeks} — {effectiveMode}{effectiveExam ? ' · Exam Week' : ''}
+          <div className="mt-3 rounded-xl border border-white/10 overflow-hidden text-sm">
+            {/* Date info */}
+            <div className="p-3 bg-[#383a40]">
+              <p className="font-semibold text-white">
+                {MONTH_NAMES[selected.getMonth()]} {selected.getDate()}, {selected.getFullYear()}
               </p>
+              {selEventTitle && (
+                <div className="mt-1.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${selEc.pill} ${selEc.pillText}`}>
+                    {selEventTitle}
+                  </span>
+                </div>
+              )}
+              {isBlockedByAdmin && <p className="text-red-400 text-xs mt-1">Blocked{blockedLabel ? ` — ${blockedLabel}` : ''}</p>}
+              {!isBlockedByAdmin && phName && <p className="text-amber-400/80 text-xs mt-1">PH Holiday — {phName}</p>}
+              {!isBlockedByAdmin && isWeekendDay && <p className="text-gray-400 text-xs mt-1">Weekend / No class</p>}
+              {!isBlockedByAdmin && !isWeekendDay && w && (
+                <p className="text-gray-300 text-xs mt-1">
+                  Week {w} of {CURRENT_TERM.totalWeeks}{effectiveMode ? ` — ${effectiveMode}` : ''}{effectiveExam ? ' · Exam Week' : ''}
+                </p>
+              )}
+              {!isBlockedByAdmin && !isWeekendDay && !w && <p className="text-gray-500 text-xs mt-1">Outside current term</p>}
+            </div>
+
+            {/* Personal note editor */}
+            {token && (
+              <div className="p-3 bg-[#2b2d31] border-t border-white/10">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">My Note</p>
+                <textarea
+                  rows={2}
+                  value={noteDraft}
+                  onChange={e => setNoteDraft(e.target.value)}
+                  placeholder="Add a personal note for this date…"
+                  className="w-full rounded-lg px-2.5 py-2 text-xs text-white bg-[#1e1f22] border border-white/10 focus:outline-none focus:border-indigo-500/50 placeholder-gray-600 resize-none"
+                />
+                <div className="flex items-center gap-1.5 mt-2">
+                  {NOTE_COLORS.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      title={c.id}
+                      onClick={() => setNoteDraftColor(c.id)}
+                      className={`w-4 h-4 rounded-full ${c.dot} transition-transform ${
+                        noteDraftColor === c.id ? `scale-125 ring-2 ${c.ring} ring-offset-1 ring-offset-[#2b2d31]` : 'hover:scale-110'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2.5">
+                  {existingNote && (
+                    <button
+                      onClick={() => handleDeleteNote(existingNote.id, selStr)}
+                      className="flex-1 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleSaveNote(selStr)}
+                    disabled={noteSaving || !noteDraft.trim() || !noteChanged}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {noteSaving ? 'Saving…' : existingNote ? 'Update Note' : 'Save Note'}
+                  </button>
+                </div>
+              </div>
             )}
-            {school && !w && <p className="text-gray-500 text-xs mt-1">Outside current term</p>}
           </div>
         );
       })()}
@@ -217,9 +364,12 @@ const NAV_ITEMS: Record<string, { label: string; icon: React.ReactNode; path: st
     { label: 'Profile', path: '/dashboard/professor?view=profile', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" /></svg> },
   ],
   admin: [
-    { label: 'Manage Users', path: '/dashboard/admin?view=users', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 1 1 0 5.292M15 21H3v-1a6 6 0 0 1 12 0v1zm0 0h6v-1a6 6 0 0 0-9-5.197M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg> },
-    { label: 'Reports', path: '/dashboard/admin?view=reports', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" /></svg> },
-    { label: 'Profile', path: '/dashboard/admin?view=profile', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" /></svg> },
+    { label: 'Consultations', path: '/dashboard/admin?tab=consultations', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" /></svg> },
+    { label: 'Accounts', path: '/dashboard/admin?tab=accounts', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /></svg> },
+    { label: 'Schedules', path: '/dashboard/admin?tab=schedules', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg> },
+    { label: 'Reports', path: '/dashboard/admin?tab=reports', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg> },
+    { label: 'History', path: '/dashboard/admin?tab=history', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg> },
+    { label: 'Calendar', path: '/dashboard/admin?tab=calendar', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg> },
   ],
 };
 
@@ -240,6 +390,7 @@ export default function HomePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
   const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -258,13 +409,14 @@ export default function HomePage() {
     const token = localStorage.getItem('token');
     const r = localStorage.getItem('role');
     if (!token) { router.push('/login'); return; }
+    setToken(token);
     setRole(r);
     setMounted(true);
 
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-    // Fetch calendar overrides — public endpoint, no auth required
-    fetch(`${base}/api/calendar`)
+    // Fetch calendar overrides (includes date_label events with colors)
+    fetch(`${base}/api/calendar`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.ok ? res.json() : [])
       .then(data => { if (Array.isArray(data)) setCalOverrides(data); })
       .catch(() => {});
@@ -286,13 +438,14 @@ export default function HomePage() {
 
   const now = new Date();
   const currentWeek = getAcademicWeek(CURRENT_TERM, now);
-  const mode = currentWeek ? getWeekMode(CURRENT_TERM, currentWeek) : null;
+  const calModeMap = new Map(calOverrides.filter(o => o.type === 'mode_override' && o.week_number && o.value).map(o => [o.week_number!, o.value!]));
+  const mode = currentWeek ? (calModeMap.get(currentWeek) ?? getWeekMode(CURRENT_TERM, currentWeek)) : null;
   const { finalsDate, endDate } = getTermDates(CURRENT_TERM);
   const daysToFinals = daysUntil(finalsDate, now);
   const daysToEnd = daysUntil(endDate, now);
   const progress = getTermProgress(CURRENT_TERM, now);
   const nextWeek = currentWeek ? currentWeek + 1 : null;
-  const nextMode = nextWeek && nextWeek <= CURRENT_TERM.totalWeeks ? getWeekMode(CURRENT_TERM, nextWeek) : null;
+  const nextMode = nextWeek && nextWeek <= CURRENT_TERM.totalWeeks ? (calModeMap.get(nextWeek) ?? getWeekMode(CURRENT_TERM, nextWeek)) : null;
 
   const navItems = NAV_ITEMS[role ?? ''] ?? [];
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
@@ -450,7 +603,7 @@ export default function HomePage() {
             {/* Calendar */}
             <div className="lg:col-span-3 rounded-2xl p-6 border border-white/10 bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Academic Calendar</p>
-              <CalendarView overrides={calOverrides} phHolidays={phHolidays} />
+              <CalendarView overrides={calOverrides} phHolidays={phHolidays} token={token} />
             </div>
 
             {/* Announcements */}

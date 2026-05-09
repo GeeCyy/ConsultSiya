@@ -9,7 +9,7 @@ const { authenticate } = require('../middleware/auth.middleware');
 router.get('/', authenticate, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, type, date::text AS date, week_number, value, label, created_at
+      `SELECT id, type, date::text AS date, week_number, value, label, color, created_at
        FROM calendar_overrides
        ORDER BY created_at DESC`
     );
@@ -120,6 +120,58 @@ router.get('/consultations', authenticate, async (req, res) => {
     }
 
     res.json(grouped);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/calendar/notes — current user's personal notes
+router.get('/notes', authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, date::text AS date, note, color, created_at
+       FROM user_calendar_notes
+       WHERE user_id = $1
+       ORDER BY date ASC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/calendar/notes — upsert a note for a date (one note per user per date)
+router.post('/notes', authenticate, async (req, res) => {
+  const { date, note, color } = req.body;
+  if (!date || !note?.trim()) return res.status(400).json({ error: 'date and note are required.' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO user_calendar_notes (user_id, date, note, color)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, date) DO UPDATE SET note = EXCLUDED.note, color = EXCLUDED.color
+       RETURNING id, date::text AS date, note, color, created_at`,
+      [req.user.id, date, note.trim(), color || 'indigo']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/calendar/notes/:id — delete a personal note (user may only delete their own)
+router.delete('/notes/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `DELETE FROM user_calendar_notes WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Note not found.' });
+    res.json({ message: 'Note deleted.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

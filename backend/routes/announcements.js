@@ -49,9 +49,10 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
        SET title = COALESCE($2, title),
            body = COALESCE($3, body),
            version = COALESCE($4, version),
-           pinned = COALESCE($5, pinned)
+           pinned = COALESCE($5, pinned),
+           updated_at = NOW()
        WHERE id = $1
-       RETURNING id, title, body, version, pinned, created_at`,
+       RETURNING id, title, body, version, pinned, created_at, updated_at`,
       [id, title || null, body || null, version || null, pinned ?? null]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Announcement not found.' });
