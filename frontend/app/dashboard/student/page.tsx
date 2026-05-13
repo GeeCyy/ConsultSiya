@@ -551,7 +551,7 @@ export default function StudentDashboard() {
           </div>
 
         ) : view === 'book' ? (
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">Book a Consultation</h1>
               <p className="text-gray-500 text-sm mt-1">{schedules.length} slot{schedules.length !== 1 ? 's' : ''} available</p>
@@ -608,7 +608,7 @@ export default function StudentDashboard() {
           </div>
 
         ) : view === 'history' ? (
-          <div className="max-w-4xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">History</h1>
               <p className="text-gray-500 text-sm mt-1">Past consultations grouped by term</p>
@@ -687,7 +687,7 @@ export default function StudentDashboard() {
 
         ) : view === 'profile' ? (
           <div className="px-8 py-10">
-            <div className="max-w-5xl mx-auto">
+            <div>
 
               {/* Avatar hero */}
               <div className="relative flex flex-col items-center pb-8 mb-8 border-b border-white/10">
@@ -862,7 +862,7 @@ export default function StudentDashboard() {
 
         ) : (
           /* My Consultations */
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">My Consultations</h1>
               <p className="text-gray-500 text-sm mt-1">{upcomingConsultations.length} upcoming · {activeConsults} active</p>

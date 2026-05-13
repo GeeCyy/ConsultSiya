@@ -575,7 +575,7 @@ export default function HomePage() {
         {/* ── Main content ──────────────────────────────────────────────────── */}
         <main className={`flex-1 overflow-y-auto ${isDark ? '' : 'bg-[#f2f3f5]'}`}>
 
-        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+        <div className="px-8 py-8 space-y-8">
           {/* ── Greeting card ────────────────────────────────────────────── */}
           <style>{`
             @keyframes greetFadeInUp {
@@ -748,15 +748,15 @@ export default function HomePage() {
           </div>
 
           {/* ── Calendar + Announcements ───────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Calendar */}
-            <div className="lg:col-span-3 rounded-2xl p-6 border border-white/10 bg-[#2b2d31]">
+            <div className="lg:col-span-2 rounded-2xl p-6 border border-white/10 bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Academic Calendar</p>
               <CalendarView overrides={calOverrides} phHolidays={phHolidays} token={token} term={term} />
             </div>
 
             {/* Announcements */}
-            <div className="lg:col-span-2 rounded-2xl p-6 border border-white/10 flex flex-col bg-[#2b2d31]">
+            <div className="lg:col-span-1 rounded-2xl p-6 border border-white/10 flex flex-col bg-[#2b2d31]">
               <p className="text-sm font-semibold text-white mb-4">Announcements</p>
               <div className="space-y-3 flex-1">
                 {announcements.length === 0 ? (

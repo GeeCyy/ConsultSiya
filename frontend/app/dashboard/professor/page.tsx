@@ -750,7 +750,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'consultations' ? (
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">My Consultations</h1>
               <p className="text-gray-500 text-sm mt-1">Review and manage student consultation requests</p>
@@ -888,7 +888,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'calendar' ? (
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">Booking Calendar</h1>
               <p className="text-gray-500 text-sm mt-1">Overview of student bookings by date</p>
@@ -978,168 +978,173 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'schedules' ? (
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">Manage Schedules</h1>
               <p className="text-gray-500 text-sm mt-1">Add or edit your available consultation time slots</p>
             </div>
 
-            {/* Add new slot form */}
-            <div className="rounded-2xl border border-white/5 bg-[#161616] p-5 mb-6">
-              <p className="text-white text-sm font-semibold mb-4">Add New Slot</p>
-              <div className="mb-3">
-                <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
-                <ScheduleDatePicker
-                  selected={newSchedDate}
-                  onSelect={(dateStr, dayName) => { setNewSchedDate(dateStr); setNewSched(s => ({ ...s, day: dayName })); }}
-                  disabledDates={schedules.map(s => s.date).filter((d): d is string => !!d)}
-                />
-              </div>
-              <div className="mb-3">
-                <Label className="text-gray-500 text-xs mb-1.5 block">Location (F2F, optional)</Label>
-                <input
-                  type="text"
-                  value={newSched.location}
-                  onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
-                  placeholder="e.g. Room 201"
-                  className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-gray-500 text-xs">Time Ranges</Label>
-                  <button type="button"
-                    onClick={() => setNewSched(s => ({ ...s, time_ranges: [...s.time_ranges, { time_start: '', time_end: '' }] }))}
-                    className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
-                    + Add Time Range
-                  </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* ── Left: Add new slot form ── */}
+              <div className="rounded-2xl border border-white/5 bg-[#161616] p-5">
+                <p className="text-white text-sm font-semibold mb-4">Add New Slot</p>
+                <div className="mb-3">
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
+                  <ScheduleDatePicker
+                    selected={newSchedDate}
+                    onSelect={(dateStr, dayName) => { setNewSchedDate(dateStr); setNewSched(s => ({ ...s, day: dayName })); }}
+                    disabledDates={schedules.map(s => s.date).filter((d): d is string => !!d)}
+                  />
                 </div>
-                <div className="space-y-2">
-                  {newSched.time_ranges.map((r, i) => (
-                    <div key={i} className="flex items-end gap-2">
-                      <div className="flex-1 grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-gray-600 text-[10px] mb-1 block">Start</Label>
-                          <TimePicker
-                            value={r.time_start}
-                            onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_start: v } : x) }))}
-                            dark={isDark}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-gray-600 text-[10px] mb-1 block">End</Label>
-                          <TimePicker
-                            value={r.time_end}
-                            onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_end: v } : x) }))}
-                            dark={isDark}
-                          />
-                        </div>
-                      </div>
-                      {newSched.time_ranges.length > 1 && (
-                        <button type="button"
-                          onClick={() => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.filter((_, j) => j !== i) }))}
-                          className="pb-1.5 text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div className="mb-3">
+                  <Label className="text-gray-500 text-xs mb-1.5 block">Location (F2F, optional)</Label>
+                  <input
+                    type="text"
+                    value={newSched.location}
+                    onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
+                    placeholder="e.g. Room 201"
+                    className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                  />
                 </div>
-              </div>
-              {schedError && <p className="text-red-400 text-xs mt-2">{schedError}</p>}
-              <button onClick={handleRequestAddSchedule}
-                className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20">
-                Add Slot
-              </button>
-            </div>
-
-            {(() => {
-              const todayStr = new Date().toISOString().slice(0, 10);
-              const activeSlots = schedules.filter(s => s.date && s.date >= todayStr);
-              const pastSlots   = schedules.filter(s => s.date && s.date < todayStr)
-                .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
-
-              const renderSlot = (s: Schedule, dimmed = false) => {
-                const hasBookings = Number(s.upcoming_count) > 0;
-                return (
-                  <div key={s.id} className={`rounded-xl border border-white/5 bg-[#161616] overflow-hidden transition-colors ${dimmed ? 'opacity-50' : 'hover:border-white/10'}`}>
-                    <div className="flex items-center justify-between px-4 py-3.5">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dimmed ? 'bg-gray-600' : hasBookings ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                        <div>
-                          <span className={`text-sm font-medium ${dimmed ? 'text-gray-500' : 'text-white'}`}>
-                            {s.date
-                              ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-                              : s.day}
-                          </span>
-                        </div>
-                        <span className="text-gray-400 text-sm font-mono">
-                          {(s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
-                            .map(r => `${r.time_start?.slice(0, 5)}–${r.time_end?.slice(0, 5)}`).join(', ')}
-                        </span>
-                        {s.location && <span className="text-gray-600 text-xs">{s.location}</span>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!dimmed && (
-                          <span className={`text-xs ${hasBookings ? 'text-amber-500' : 'text-emerald-500'}`}>
-                            {hasBookings ? `${s.upcoming_count} upcoming` : 'Available'}
-                          </span>
-                        )}
-                        <button onClick={() => openEditModal(s)}
-                          className="px-2.5 py-1 rounded-lg text-xs text-blue-400 hover:bg-blue-500/10 transition-colors">
-                          Edit
-                        </button>
-                        <button onClick={() => handleDeleteSchedule(s.id)}
-                          className="px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
-                          Remove
-                        </button>
-                      </div>
-                    </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-gray-500 text-xs">Time Ranges</Label>
+                    <button type="button"
+                      onClick={() => setNewSched(s => ({ ...s, time_ranges: [...s.time_ranges, { time_start: '', time_end: '' }] }))}
+                      className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
+                      + Add Time Range
+                    </button>
                   </div>
-                );
-              };
+                  <div className="space-y-2">
+                    {newSched.time_ranges.map((r, i) => (
+                      <div key={i} className="flex items-end gap-2">
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-gray-600 text-[10px] mb-1 block">Start</Label>
+                            <TimePicker
+                              value={r.time_start}
+                              onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_start: v } : x) }))}
+                              dark={isDark}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-gray-600 text-[10px] mb-1 block">End</Label>
+                            <TimePicker
+                              value={r.time_end}
+                              onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_end: v } : x) }))}
+                              dark={isDark}
+                            />
+                          </div>
+                        </div>
+                        {newSched.time_ranges.length > 1 && (
+                          <button type="button"
+                            onClick={() => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.filter((_, j) => j !== i) }))}
+                            className="pb-1.5 text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {schedError && <p className="text-red-400 text-xs mt-2">{schedError}</p>}
+                <button onClick={handleRequestAddSchedule}
+                  className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20">
+                  Add Slot
+                </button>
+              </div>
 
-              return (
-                <>
-                  {/* ── Active slots ── */}
-                  <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
-                    Your Slots ({activeSlots.length})
-                  </p>
-                  {activeSlots.length === 0 ? (
-                    <div className="text-center py-12 rounded-2xl border border-white/5 bg-[#161616]">
-                      <p className="text-gray-500 text-sm">No slots created yet.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">{activeSlots.map(s => renderSlot(s))}</div>
-                  )}
+              {/* ── Right: Slots list ── */}
+              <div>
+                {(() => {
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const activeSlots = schedules.filter(s => s.date && s.date >= todayStr);
+                  const pastSlots   = schedules.filter(s => s.date && s.date < todayStr)
+                    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
-                  {/* ── Past slots (collapsible) ── */}
-                  {pastSlots.length > 0 && (
-                    <div className="mt-4">
-                      <button
-                        onClick={() => setPastSlotsOpen(o => !o)}
-                        className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-gray-700 hover:text-gray-500 transition-colors mb-2"
-                      >
-                        <svg
-                          className={`w-3 h-3 transition-transform duration-200 ${pastSlotsOpen ? 'rotate-90' : ''}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                        Past Slots ({pastSlots.length})
-                      </button>
-                      {pastSlotsOpen && (
-                        <div className="space-y-2">{pastSlots.map(s => renderSlot(s, true))}</div>
+                  const renderSlot = (s: Schedule, dimmed = false) => {
+                    const hasBookings = Number(s.upcoming_count) > 0;
+                    return (
+                      <div key={s.id} className={`rounded-xl border border-white/5 bg-[#161616] overflow-hidden transition-colors ${dimmed ? 'opacity-50' : 'hover:border-white/10'}`}>
+                        <div className="flex items-center justify-between px-4 py-3.5">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dimmed ? 'bg-gray-600' : hasBookings ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                            <div>
+                              <span className={`text-sm font-medium ${dimmed ? 'text-gray-500' : 'text-white'}`}>
+                                {s.date
+                                  ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+                                  : s.day}
+                              </span>
+                            </div>
+                            <span className="text-gray-400 text-sm font-mono">
+                              {(s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
+                                .map(r => `${r.time_start?.slice(0, 5)}–${r.time_end?.slice(0, 5)}`).join(', ')}
+                            </span>
+                            {s.location && <span className="text-gray-600 text-xs">{s.location}</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!dimmed && (
+                              <span className={`text-xs ${hasBookings ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                {hasBookings ? `${s.upcoming_count} upcoming` : 'Available'}
+                              </span>
+                            )}
+                            <button onClick={() => openEditModal(s)}
+                              className="px-2.5 py-1 rounded-lg text-xs text-blue-400 hover:bg-blue-500/10 transition-colors">
+                              Edit
+                            </button>
+                            <button onClick={() => handleDeleteSchedule(s.id)}
+                              className="px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <>
+                      {/* ── Active slots ── */}
+                      <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
+                        Your Slots ({activeSlots.length})
+                      </p>
+                      {activeSlots.length === 0 ? (
+                        <div className="text-center py-12 rounded-2xl border border-white/5 bg-[#161616]">
+                          <p className="text-gray-500 text-sm">No slots created yet.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">{activeSlots.map(s => renderSlot(s))}</div>
                       )}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+
+                      {/* ── Past slots (collapsible) ── */}
+                      {pastSlots.length > 0 && (
+                        <div className="mt-4">
+                          <button
+                            onClick={() => setPastSlotsOpen(o => !o)}
+                            className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-gray-700 hover:text-gray-500 transition-colors mb-2"
+                          >
+                            <svg
+                              className={`w-3 h-3 transition-transform duration-200 ${pastSlotsOpen ? 'rotate-90' : ''}`}
+                              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                            Past Slots ({pastSlots.length})
+                          </button>
+                          {pastSlotsOpen && (
+                            <div className="space-y-2">{pastSlots.map(s => renderSlot(s, true))}</div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
 
         ) : tab === 'history' ? (
-          <div className="max-w-4xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">History</h1>
               <p className="text-gray-500 text-sm mt-1">Past advising records grouped by term</p>
@@ -1204,7 +1209,7 @@ export default function ProfessorDashboard() {
 
         ) : tab === 'profile' ? (
           <div className="px-8 py-10">
-            <div className="max-w-5xl mx-auto">
+            <div>
 
               {/* Avatar hero */}
               <div className="relative flex flex-col items-center pb-8 mb-8 border-b border-white/10">
@@ -1329,7 +1334,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : (
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
             <div className="mb-7">
               <h1 className="text-white text-2xl font-bold">Export Report</h1>
               <p className="text-gray-500 text-sm mt-1">Download your faculty academic advising report</p>
