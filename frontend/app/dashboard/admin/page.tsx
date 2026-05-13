@@ -723,7 +723,7 @@ export default function AdminDashboard() {
             <p className="text-gray-600 text-sm">Loading...</p>
           </div>
         ) : (
-          <div className="max-w-5xl mx-auto px-8 py-8">
+          <div className="px-8 py-8">
 
             {/* ── Consultations ── */}
             {tab === 'consultations' && (
