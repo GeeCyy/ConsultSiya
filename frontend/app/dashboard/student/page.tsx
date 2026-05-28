@@ -327,7 +327,7 @@ export default function StudentDashboard() {
   }, []);
 
   useEffect(() => {
-    // if (!token) { router.push('/login'); return; }
+    if (!token) { router.push('/login'); return; }
     fetchData();
   }, []);
 
