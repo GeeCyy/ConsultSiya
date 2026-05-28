@@ -1221,7 +1221,7 @@ export default function AdminDashboard() {
                                   <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[130px]">Adviser</th>
                                   <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3">Purpose</th>
                                   <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[145px]">Action Taken</th>
-                                  <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[100px]">Status</th>
+                                  <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[130px]">Status</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-white/5">
@@ -1567,7 +1567,7 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+                    <div className="overflow-y-auto max-h-[270px] divide-y divide-white/5">
                       {announcements.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12">
                           <p className="text-gray-600 text-sm">No announcements yet</p>

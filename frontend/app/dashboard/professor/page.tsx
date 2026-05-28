@@ -1175,7 +1175,7 @@ export default function ProfessorDashboard() {
                               <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[160px]">Student</th>
                               <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3">Purpose</th>
                               <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[170px]">Action Taken</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[110px]">Status</th>
+                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[130px]">Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
