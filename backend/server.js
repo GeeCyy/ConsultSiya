@@ -59,7 +59,7 @@ app.use('/api/settings', require('./routes/settings'));
 
 // ── Health checks ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'ConsultSiya API is running!' });
+  res.json({ status: 'ok', message: 'Consulta API is running!' });
 });
 
 app.get('/db-health', async (req, res) => {
@@ -87,6 +87,14 @@ app.listen(PORT, '0.0.0.0', () => {
   pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT`)
     .then(() => console.log('[startup] users.avatar column ready'))
     .catch(err => console.error('[startup] users.avatar migration failed:', err.message));
+
+  pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0`)
+    .then(() => console.log('[startup] users.failed_attempts column ready'))
+    .catch(err => console.error('[startup] users.failed_attempts migration failed:', err.message));
+
+  pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ`)
+    .then(() => console.log('[startup] users.locked_until column ready'))
+    .catch(err => console.error('[startup] users.locked_until migration failed:', err.message));
 
   pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255)`)
     .then(() => console.log('[startup] users.password_reset_token column ready'))
