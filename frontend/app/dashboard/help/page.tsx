@@ -145,13 +145,13 @@ export default function HelpPage() {
     const r = localStorage.getItem('role');
     if (!token) { router.push('/login'); return; }
     setRole(r);
-    const saved = localStorage.getItem('consultsiya-theme');
+    const saved = localStorage.getItem('consulta-theme');
     setIsDark(saved !== 'light');
     setMounted(true);
 
     const onThemeChange = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
-    window.addEventListener('consultsiya-theme-change', onThemeChange);
-    return () => window.removeEventListener('consultsiya-theme-change', onThemeChange);
+    window.addEventListener('consulta-theme-change', onThemeChange);
+    return () => window.removeEventListener('consulta-theme-change', onThemeChange);
   }, []);
 
   if (!mounted) return null;
@@ -193,7 +193,7 @@ export default function HelpPage() {
             <span className={isDark ? 'text-gray-700' : 'text-gray-300'}>/</span>
             <span className={`${headingCls} font-semibold text-sm`}>Help Center</span>
           </div>
-          <p className={`text-xs ${mutedCls}`}>ConsultSiya Documentation</p>
+          <p className={`text-xs ${mutedCls}`}>Consulta Documentation</p>
         </div>
 
         <div className="max-w-6xl mx-auto px-6 py-8">
@@ -233,12 +233,12 @@ export default function HelpPage() {
                   </div>
                   <div>
                     <h2 className={`text-lg font-bold ${headingCls}`}>About the System</h2>
-                    <p className={`text-xs ${mutedCls}`}>ConsultSiya — SOIT Academic Consultation System</p>
+                    <p className={`text-xs ${mutedCls}`}>Consulta — SOIT Academic Consultation System</p>
                   </div>
                 </div>
                 <div className={`rounded-2xl p-6 border ${borderCls} space-y-4`} style={{ backgroundColor: cardBg }}>
                   <p className={`text-sm ${bodyCls} leading-relaxed`}>
-                    <span className="font-semibold text-[#CC0000]">ConsultSiya</span> is the official academic consultation management system of the School of Industrial Engineering and Information Technology (SOIT) at Mapúa University. It streamlines the process of scheduling, managing, and documenting student-professor consultations.
+                    <span className="font-semibold text-[#CC0000]">Consulta</span> is the official academic consultation management system of the School of Industrial Engineering and Information Technology (SOIT) at Mapúa University. It streamlines the process of scheduling, managing, and documenting student-professor consultations.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                     {[
@@ -384,7 +384,7 @@ export default function HelpPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <p className={`text-xs ${subCls}`}>
-                    You can also use the <span className={`font-semibold ${headingCls}`}>ConsultSiya Assistant</span> chatbot (bottom-right corner) to get quick answers about professors and how to book.
+                    You can also use the <span className={`font-semibold ${headingCls}`}>Consulta Assistant</span> chatbot (bottom-right corner) to get quick answers about professors and how to book.
                   </p>
                 </div>
               </section>

@@ -316,14 +316,14 @@ export default function StudentDashboard() {
 
   // Theme
   const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    if (typeof window !== 'undefined') return localStorage.getItem('consulta-theme') !== 'light';
     return true;
   });
 
   useEffect(() => {
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
-    window.addEventListener('consultsiya-theme-change', handler);
-    return () => window.removeEventListener('consultsiya-theme-change', handler);
+    window.addEventListener('consulta-theme-change', handler);
+    return () => window.removeEventListener('consulta-theme-change', handler);
   }, []);
 
   useEffect(() => {
@@ -513,7 +513,7 @@ export default function StudentDashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-white font-bold text-sm leading-none">ConsultSiya</p>
+              <p className="text-white font-bold text-sm leading-none">Consulta</p>
               <p className="text-gray-600 text-xs mt-0.5">Mapúa SOIT</p>
             </div>
           </div>

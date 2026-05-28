@@ -320,20 +320,20 @@ export default function DashboardShell({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('consultsiya-theme');
+    const saved = localStorage.getItem('consulta-theme');
     const dark = saved !== 'light';
     setIsDark(dark);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
 
-    setNavAvatar(localStorage.getItem('consultsiya-avatar') || null);
-    setNavName(localStorage.getItem('consultsiya-name') || '');
+    setNavAvatar(localStorage.getItem('consulta-avatar') || null);
+    setNavName(localStorage.getItem('consulta-name') || '');
     setNavRole(localStorage.getItem('role') || '');
 
     const onAvatarChange = (e: Event) => {
       const url = (e as CustomEvent<{ url: string }>).detail?.url ?? null;
       setNavAvatar(url);
     };
-    window.addEventListener('consultsiya-avatar-change', onAvatarChange);
+    window.addEventListener('consulta-avatar-change', onAvatarChange);
 
     const onMouseDown = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -346,7 +346,7 @@ export default function DashboardShell({
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      window.removeEventListener('consultsiya-avatar-change', onAvatarChange);
+      window.removeEventListener('consulta-avatar-change', onAvatarChange);
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('keydown', onKeyDown);
     };
@@ -355,9 +355,9 @@ export default function DashboardShell({
   const toggleTheme = () => {
     setIsDark(d => {
       const next = !d;
-      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
       document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
-      window.dispatchEvent(new CustomEvent('consultsiya-theme-change', { detail: { dark: next } }));
+      window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
       return next;
     });
   };

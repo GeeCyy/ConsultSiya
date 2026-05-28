@@ -240,14 +240,14 @@ export default function AdminDashboard() {
   const [termSuccess, setTermSuccess] = useState(false);
 
   const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    if (typeof window !== 'undefined') return localStorage.getItem('consulta-theme') !== 'light';
     return true;
   });
 
   const toggleTheme = () => {
     setIsDark(d => {
       const next = !d;
-      localStorage.setItem('consultsiya-theme', next ? 'dark' : 'light');
+      localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
       return next;
     });
   };
@@ -667,7 +667,7 @@ export default function AdminDashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-white font-bold text-sm leading-none">ConsultSiya</p>
+              <p className="text-white font-bold text-sm leading-none">Consulta</p>
               <p className="text-gray-600 text-xs mt-0.5">Mapúa SOIT</p>
             </div>
           </div>

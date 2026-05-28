@@ -1,4 +1,4 @@
-// Decision-tree FAQ data for ConsultSiya.
+// Decision-tree FAQ data for Consulta.
 // Each node is either a BRANCH (has children) or a LEAF (has answer).
 // Add new entries here — no code changes needed in the component.
 
@@ -97,7 +97,7 @@ export const FAQ_ROOT: FaqNode[] = [
         id: 'concern-placement',
         label: 'Job placement / Employment',
         answer:
-          'For job placement and employment concerns, visit the Center for Career Services or consult an adviser through ConsultSiya.',
+          'For job placement and employment concerns, visit the Center for Career Services or consult an adviser through Consulta.',
         actions: [{ label: 'Book a Consultation', route: '/dashboard/student' }],
       },
       {
