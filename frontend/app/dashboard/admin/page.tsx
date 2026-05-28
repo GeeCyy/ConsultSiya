@@ -260,7 +260,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    // if (!token) { router.push('/login'); return; }
+    if (!token) { router.push('/login'); return; }
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab') as Tab;
     const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar'];

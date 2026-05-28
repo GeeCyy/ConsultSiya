@@ -368,8 +368,8 @@ export default function ProfessorDashboard() {
   useEffect(() => {
     const t = localStorage.getItem('token');
     const r = localStorage.getItem('role');
-    // if (!t) { router.push('/login'); return; }
-    // if (r !== 'professor') { router.push('/dashboard/home'); return; }
+    if (!t) { router.push('/login'); return; }
+    if (r !== 'professor') { router.push('/dashboard/home'); return; }
     setAuthReady(true);
   }, [router]);
 
