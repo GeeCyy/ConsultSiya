@@ -120,6 +120,20 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] professors.email column ready'))
     .catch(err => console.error('[startup] professors.email migration failed:', err.message));
 
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS announcements (
+      id         SERIAL PRIMARY KEY,
+      title      VARCHAR(255) NOT NULL,
+      body       TEXT NOT NULL,
+      type       VARCHAR(20) DEFAULT 'info' CHECK (type IN ('info', 'warning')),
+      pinned     BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `)
+    .then(() => console.log('[startup] announcements table ready'))
+    .catch(err => console.error('[startup] announcements migration failed:', err.message));
+
   pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false`)
     .then(() => console.log('[startup] announcements.pinned column ready'))
     .catch(err => console.error('[startup] announcements.pinned migration failed:', err.message));
@@ -127,6 +141,14 @@ app.listen(PORT, '0.0.0.0', () => {
   pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`)
     .then(() => console.log('[startup] announcements.updated_at column ready'))
     .catch(err => console.error('[startup] announcements.updated_at migration failed:', err.message));
+
+  pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS version VARCHAR(20)`)
+    .then(() => console.log('[startup] announcements.version column ready'))
+    .catch(err => console.error('[startup] announcements.version migration failed:', err.message));
+
+  pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL`)
+    .then(() => console.log('[startup] announcements.created_by column ready'))
+    .catch(err => console.error('[startup] announcements.created_by migration failed:', err.message));
 
   pool.query(`
     CREATE TABLE IF NOT EXISTS user_calendar_notes (
