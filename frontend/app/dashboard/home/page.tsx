@@ -416,8 +416,8 @@ export default function HomePage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const r = localStorage.getItem('role');
-    if (!token) { router.push('/login'); return; }
-    if (r === 'admin') { router.push('/dashboard/admin'); return; }
+    // if (!token) { router.push('/login'); return; }
+    // if (r === 'admin') { router.push('/dashboard/admin'); return; }
     setToken(token);
     setRole(r);
     setMounted(true);

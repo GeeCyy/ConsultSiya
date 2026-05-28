@@ -396,10 +396,10 @@ export default function SettingsPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const storedRole = localStorage.getItem('role') || '';
-    if (!token) {
-      router.push('/login');
-      return;
-    }
+    // if (!token) {
+    //   router.push('/login');
+    //   return;
+    // }
     setRole(storedRole);
 
     const headers = { Authorization: `Bearer ${token}` };
@@ -412,10 +412,10 @@ export default function SettingsPage() {
           fetch(`${API_URL}/api/settings/notifications`, { headers }),
         ]);
         // Only redirect on auth errors — not on 500/network issues
-        if (profRes.status === 401 || profRes.status === 403) {
-          router.push('/login');
-          return;
-        }
+        // if (profRes.status === 401 || profRes.status === 403) {
+        //   router.push('/login');
+        //   return;
+        // }
         if (profRes.ok) {
           const profData = await profRes.json();
           setProfile({
