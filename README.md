@@ -1,4 +1,4 @@
-# ConsultSiya
+# Consulta
 
 Academic consultation booking system for Mapúa University SOIT.  
 Students book consultation slots with professors. Professors manage schedules and log outcomes. Admins monitor all activity.
@@ -21,7 +21,7 @@ Students book consultation slots with professors. Professors manage schedules an
 ## Project Structure
 
 ```
-ConsultSiya/
+Consulta/
 ├── backend/
 │   ├── db/
 │   │   ├── schema.sql          # Initial DDL

@@ -340,14 +340,14 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [loading, setLoading] = useState(true);
   const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('consultsiya-theme') !== 'light';
+    if (typeof window !== 'undefined') return localStorage.getItem('consulta-theme') !== 'light';
     return true;
   });
 
   useEffect(() => {
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
-    window.addEventListener('consultsiya-theme-change', handler);
-    return () => window.removeEventListener('consultsiya-theme-change', handler);
+    window.addEventListener('consulta-theme-change', handler);
+    return () => window.removeEventListener('consulta-theme-change', handler);
   }, []);
 
   // Profile state
@@ -468,8 +468,8 @@ export default function SettingsPage() {
       } else {
         const fullUrl = `${API_URL}${data.avatar_url}`;
         setProfile((p) => ({ ...p, profile_picture_url: data.avatar_url }));
-        localStorage.setItem('consultsiya-avatar', fullUrl);
-        window.dispatchEvent(new CustomEvent('consultsiya-avatar-change', { detail: { url: fullUrl } }));
+        localStorage.setItem('consulta-avatar', fullUrl);
+        window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullUrl } }));
         setProfileMsg({ text: 'Profile picture updated.', type: 'success' });
       }
     } catch {

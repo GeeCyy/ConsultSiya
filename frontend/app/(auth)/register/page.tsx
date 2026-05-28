@@ -144,7 +144,7 @@ export default function RegisterPage() {
 
         {/* Header */}
         <div className="text-center mb-7">
-          <h1 className="text-3xl font-bold text-[#CC0000]">ConsultSiya</h1>
+          <h1 className="text-3xl font-bold text-[#CC0000]">Consulta</h1>
           <p className="text-gray-400 text-sm mt-1">Create your account</p>
           <p className="text-gray-600 text-xs mt-0.5">Mapúa University SOIT</p>
         </div>

@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
         style={{ backgroundColor: '#2b2d31' }}
       >
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>ConsultSiya</h1>
+          <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>Consulta</h1>
           <p className="text-gray-400 text-sm mt-1">Reset your password</p>
           <p className="text-gray-500 text-xs mt-1">Mapúa University SOIT</p>
         </div>

@@ -50,7 +50,7 @@ router.post(
       // ── Greeting ──────────────────────────────────────────────────────────
       if (/^(hi|hello|hey|good\s*(morning|afternoon|evening))\b/.test(lower)) {
         return res.json({
-          reply: "Hello! I'm the ConsultSiya assistant. You can ask me things like:\n• \"Who handles thesis concerns?\"\n• \"Who is responsible for OJT matters?\"\n• \"Show me all professors\"\n• \"How do I book a consultation?\"",
+          reply: "Hello! I'm the Consulta assistant. You can ask me things like:\n• \"Who handles thesis concerns?\"\n• \"Who is responsible for OJT matters?\"\n• \"Show me all professors\"\n• \"How do I book a consultation?\"",
         });
       }
 
