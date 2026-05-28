@@ -143,7 +143,7 @@ export default function HelpPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const r = localStorage.getItem('role');
-    if (!token) { router.push('/login'); return; }
+    // if (!token) { router.push('/login'); return; }
     setRole(r);
     const saved = localStorage.getItem('consultsiya-theme');
     setIsDark(saved !== 'light');
