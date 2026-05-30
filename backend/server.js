@@ -11,6 +11,9 @@ const { authenticate } = require('./middleware/auth.middleware');
 
 const app = express();
 
+// ── Trust Railway/Vercel proxy so rate-limiter sees real client IPs ───────────
+app.set('trust proxy', 1);
+
 // ── CORS — allow all origins ──────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -163,6 +166,14 @@ app.listen(PORT, '0.0.0.0', () => {
   `)
     .then(() => console.log('[startup] user_calendar_notes table ready'))
     .catch(err => console.error('[startup] user_calendar_notes migration failed:', err.message));
+
+  pool.query(`
+    ALTER TABLE consultations DROP CONSTRAINT IF EXISTS consultations_status_check;
+    ALTER TABLE consultations ADD CONSTRAINT consultations_status_check
+      CHECK (status IN ('pending','confirmed','completed','cancelled','rescheduled','missed'))
+  `)
+    .then(() => console.log('[startup] consultations.status constraint updated (added missed)'))
+    .catch(err => console.error('[startup] consultations status constraint migration failed:', err.message));
 
   pool.query(`
     CREATE TABLE IF NOT EXISTS system_settings (

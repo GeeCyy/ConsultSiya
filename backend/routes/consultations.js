@@ -66,6 +66,27 @@ router.get('/booked-dates', authenticate, async (req, res) => {
   }
 });
 
+// Professor triggers auto-mark of past pending/confirmed consultations as missed
+router.post('/mark-missed', authenticate, authorize('professor'), async (req, res) => {
+  try {
+    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+    if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
+
+    const result = await pool.query(
+      `UPDATE consultations SET status = 'missed'
+       WHERE professor_id = $1
+         AND status IN ('pending', 'confirmed')
+         AND date < CURRENT_DATE
+       RETURNING id`,
+      [prof.rows[0].id]
+    );
+    res.json({ marked: result.rows.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
   const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode } = req.body;
