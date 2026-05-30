@@ -174,6 +174,7 @@ type StudentProfile = {
   year_level: string;
   email: string;
   phone: string;
+  avatar: string | null;
 };
 
 const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
@@ -307,7 +308,7 @@ export default function StudentDashboard() {
 
   // Profile
   const [profile, setProfile] = useState<StudentProfile>({
-    full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '',
+    full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '', avatar: null,
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
@@ -341,6 +342,7 @@ export default function StudentDashboard() {
     setSchedules((Array.isArray(sched) ? sched : []).filter(s => !s.date || s.date >= today));
     setConsultations(Array.isArray(consult) ? consult : []);
     if (!prof.error) {
+      const avatarVal = prof.avatar || null;
       setProfile({
         full_name: prof.full_name || '',
         student_number: prof.student_number || '',
@@ -348,7 +350,13 @@ export default function StudentDashboard() {
         year_level: prof.year_level?.toString() || '',
         email: prof.email || '',
         phone: prof.phone || '',
+        avatar: avatarVal,
       });
+      if (avatarVal) localStorage.setItem('consulta-avatar', `${API_URL}${avatarVal}`);
+      else localStorage.removeItem('consulta-avatar');
+      const name = prof.full_name || '';
+      localStorage.setItem('consulta-name', name);
+      window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name } }));
     }
     setLoading(false);
   };
