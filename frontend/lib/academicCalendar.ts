@@ -61,8 +61,20 @@ export function buildTermFromConfig(raw: RawTermConfig): TermConfig {
 }
 
 export function getAcademicWeek(term: TermConfig, date: Date = new Date()): number | null {
-  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-  const diff = date.getTime() - term.start.getTime();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const msPerWeek = 7 * msPerDay;
+
+  // Normalize to local midnight so time-of-day doesn't affect day arithmetic
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+
+  // Snap back to the Sunday of the week containing d
+  const sundayOfWeek = new Date(d.getTime() - d.getDay() * msPerDay);
+
+  // For the partial first week (term starts mid-week), treat term start as the anchor
+  const anchor = sundayOfWeek < term.start ? term.start : sundayOfWeek;
+
+  const diff = anchor.getTime() - term.start.getTime();
   if (diff < 0) return null; // before term
   const week = Math.floor(diff / msPerWeek) + 1;
   if (week > term.totalWeeks) return null; // after term

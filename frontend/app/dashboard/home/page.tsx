@@ -436,11 +436,15 @@ export default function HomePage() {
       .then(data => { if (Array.isArray(data)) setAnnouncements(data); })
       .catch(() => {});
 
-    // Fetch profile to get first name for greeting
+    // Fetch profile to get first name for greeting and update the header name
     fetch(`${base}/api/settings/profile`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data?.full_name) setFirstName(data.full_name.trim().split(/\s+/)[0]);
+        if (data?.full_name) {
+          setFirstName(data.full_name.trim().split(/\s+/)[0]);
+          localStorage.setItem('consulta-name', data.full_name);
+          window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name: data.full_name } }));
+        }
       })
       .catch(() => {});
 

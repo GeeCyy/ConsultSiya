@@ -333,7 +333,11 @@ export default function DashboardShell({
       const url = (e as CustomEvent<{ url: string }>).detail?.url ?? null;
       setNavAvatar(url);
     };
+    const onNameChange = (e: Event) => {
+      setNavName((e as CustomEvent<{ name: string }>).detail?.name ?? '');
+    };
     window.addEventListener('consulta-avatar-change', onAvatarChange);
+    window.addEventListener('consulta-name-change', onNameChange);
 
     const onMouseDown = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -347,19 +351,18 @@ export default function DashboardShell({
     document.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('consulta-avatar-change', onAvatarChange);
+      window.removeEventListener('consulta-name-change', onNameChange);
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, []);
 
   const toggleTheme = () => {
-    setIsDark(d => {
-      const next = !d;
-      localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
-      document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
-      window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
-      return next;
-    });
+    const next = !isDark;
+    localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
+    setIsDark(next);
   };
 
   const handleLogout = () => {
