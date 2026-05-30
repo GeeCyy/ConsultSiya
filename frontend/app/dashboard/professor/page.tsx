@@ -75,6 +75,7 @@ const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; l
   completed:   { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
   cancelled:   { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
   rescheduled: { ring: 'ring-orange-500/30',  text: 'text-orange-400',  dot: 'bg-orange-400',  label: 'Rescheduled' },
+  missed:      { ring: 'ring-purple-500/30',  text: 'text-purple-400',  dot: 'bg-purple-400',  label: 'Missed' },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -135,7 +136,6 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
   return action_taken;
 }
 
-const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 type Tab = 'consultations' | 'calendar' | 'schedules' | 'export' | 'history' | 'profile';
 
@@ -381,7 +381,26 @@ export default function ProfessorDashboard() {
     fetchAll();
   }, [authReady]);
 
+  // Auto-mark past pending/confirmed as missed, then refresh consultation list
+  const markMissed = async () => {
+    try {
+      const data = await api.post('/api/consultations/mark-missed', {}, token!);
+      if (data.marked > 0) {
+        const c = await api.get('/api/consultations', token!);
+        setConsultations(Array.isArray(c) ? c : []);
+      }
+    } catch {}
+  };
+
+  // Trigger mark-missed whenever professor opens Calendar or My Consultations
+  useEffect(() => {
+    if (!authReady || !token) return;
+    if (tab === 'calendar' || tab === 'consultations') markMissed();
+  }, [tab, authReady]);
+
   const fetchAll = async () => {
+    // Mark overdue consultations before loading so the list is already accurate
+    await api.post('/api/consultations/mark-missed', {}, token!);
     const [c, s, prof] = await Promise.all([
       api.get('/api/consultations', token!),
       api.get('/api/schedules/mine', token!),
@@ -566,11 +585,14 @@ export default function ProfessorDashboard() {
     } catch { alert('Export failed. Please try again.'); }
   };
 
-  const visibleConsultations = consultations.filter(c => c.status !== 'cancelled');
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const visibleConsultations = consultations.filter(
+    c => (c.status === 'pending' || c.status === 'confirmed') && c.date >= todayStr
+  );
   const stats = {
     total: visibleConsultations.length,
     pending: visibleConsultations.filter(c => c.status === 'pending').length,
-    completed: visibleConsultations.filter(c => c.status === 'completed').length,
+    confirmed: visibleConsultations.filter(c => c.status === 'confirmed').length,
   };
 
   const natureLabel = (c: Consultation) => {
@@ -760,7 +782,7 @@ export default function ProfessorDashboard() {
               {[
                 { label: 'Total', value: stats.total, color: 'text-white' },
                 { label: 'Pending', value: stats.pending, color: 'text-amber-400' },
-                { label: 'Completed', value: stats.completed, color: 'text-emerald-400' },
+                { label: 'Confirmed', value: stats.confirmed, color: 'text-blue-400' },
               ].map(s => (
                 <div key={s.label} className="rounded-xl border border-white/5 bg-[#161616] px-4 py-3">
                   <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -1150,7 +1172,7 @@ export default function ProfessorDashboard() {
               <p className="text-gray-500 text-sm mt-1">Past advising records grouped by term</p>
             </div>
             {(() => {
-              const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'rescheduled');
+              const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'rescheduled' || c.status === 'missed');
               if (historyItems.length === 0) {
                 return (
                   <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
