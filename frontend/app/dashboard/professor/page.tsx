@@ -106,10 +106,11 @@ function StatusBadge({ status }: { status: string }) {
 function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: string | null; size?: 'sm' | 'md' }) {
   const initials = (name || '').split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
   const sizeClass = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
+  const fullSrc = avatarUrl && !avatarUrl.startsWith('/uploads/') ? avatarUrl : null;
   return (
     <div className={`rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 font-semibold flex-shrink-0 overflow-hidden ${sizeClass}`}>
-      {avatarUrl
-        ? <img src={`${API_URL}${avatarUrl}`} alt={name} className="w-full h-full object-cover" />
+      {fullSrc
+        ? <img src={fullSrc} alt={name} className="w-full h-full object-cover" />
         : initials
       }
     </div>
@@ -438,7 +439,7 @@ export default function ProfessorDashboard() {
         phone: prof.phone || '',
         avatar: avatarVal,
       });
-      const fullAvatarUrl = avatarVal ? `${API_URL}${avatarVal}` : null;
+      const fullAvatarUrl = avatarVal && !avatarVal.startsWith('/uploads/') ? avatarVal : null;
       if (fullAvatarUrl) localStorage.setItem('consulta-avatar', fullAvatarUrl);
       else localStorage.removeItem('consulta-avatar');
       window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullAvatarUrl } }));
@@ -1278,8 +1279,8 @@ export default function ProfessorDashboard() {
                 </button>
 
                 <div className="w-24 h-24 rounded-full overflow-hidden bg-[#7a0000] flex items-center justify-center text-white text-3xl font-bold select-none ring-4 ring-[#CC0000]/15 flex-shrink-0">
-                  {profile.avatar
-                    ? <img src={`${API_URL}${profile.avatar}`} alt="avatar" className="w-full h-full object-cover" />
+                  {profile.avatar && !profile.avatar.startsWith('/uploads/')
+                    ? <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover" />
                     : profile.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'
                   }
                 </div>
