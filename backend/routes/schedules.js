@@ -49,9 +49,11 @@ router.get('/', authenticate, async (req, res) => {
     const result = await pool.query(
       `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
               s.time_ranges,
-              p.id AS professor_id, p.full_name AS professor_name, p.department
+              p.id AS professor_id, p.full_name AS professor_name, p.department,
+              u.avatar AS professor_avatar
        FROM schedules s
        JOIN professors p ON s.professor_id = p.id
+       JOIN users u ON p.user_id = u.id
        WHERE s.date IS NULL OR s.date >= CURRENT_DATE
        ORDER BY s.date NULLS LAST, s.day, s.time_start`
     );

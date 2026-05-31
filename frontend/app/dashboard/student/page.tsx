@@ -146,6 +146,7 @@ type Schedule = {
   is_available: boolean;
   location?: string;
   date?: string;
+  professor_avatar?: string | null;
 };
 
 type Consultation = {
@@ -199,11 +200,15 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
   const initials = name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const validUrl = avatarUrl?.startsWith('https://') ? avatarUrl : null;
   return (
-    <div className="w-10 h-10 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-sm font-semibold flex-shrink-0">
-      {initials}
+    <div className="w-10 h-10 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-sm font-semibold flex-shrink-0 overflow-hidden">
+      {validUrl
+        ? <img src={validUrl} alt={name} className="w-full h-full object-cover" />
+        : initials
+      }
     </div>
   );
 }
@@ -286,6 +291,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 export default function StudentDashboard() {
   const router = useRouter();
   const [view, setView] = useState<View>('book');
+  const [consultTab, setConsultTab] = useState<'active' | 'past'>('active');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -502,6 +508,12 @@ export default function StudentDashboard() {
   const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
   const todayStr = new Date().toISOString().slice(0, 10);
   const upcomingConsultations = consultations.filter(c => c.date >= todayStr);
+  const activeTabConsultations = consultations.filter(c =>
+    c.status === 'pending' || c.status === 'confirmed' || c.status === 'rescheduled'
+  );
+  const pastTabConsultations = consultations.filter(c =>
+    c.status === 'completed' || c.status === 'cancelled'
+  );
 
   const natureLabel = (c: Consultation) => {
     const items = parseNature(c.nature_of_advising);
@@ -589,7 +601,7 @@ export default function StudentDashboard() {
                           className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none"
                           title="View profile"
                         >
-                          <Avatar name={s.professor_name} />
+                          <Avatar name={s.professor_name} avatarUrl={s.professor_avatar} />
                         </button>
                         <div className="flex-1">
                           <button
@@ -891,19 +903,53 @@ export default function StudentDashboard() {
         ) : (
           /* My Consultations */
           <div className="px-8 py-8">
-            <div className="mb-7">
+            <div className="mb-6">
               <h1 className="text-white text-2xl font-bold">My Consultations</h1>
               <p className="text-gray-500 text-sm mt-1">{upcomingConsultations.length} upcoming · {activeConsults} active</p>
             </div>
 
-            {upcomingConsultations.length === 0 ? (
+            {/* Tab switcher */}
+            <div className="flex gap-1 p-1 rounded-xl bg-[#161616] border border-white/5 mb-6 w-fit">
+              {([
+                { key: 'active', label: 'Active & Upcoming', count: activeTabConsultations.length },
+                { key: 'past',   label: 'Past',              count: pastTabConsultations.length  },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setConsultTab(tab.key)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${
+                    consultTab === tab.key
+                      ? 'bg-[#CC0000] text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                    consultTab === tab.key ? 'bg-white/20 text-white' : 'bg-white/8 text-gray-500'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {(consultTab === 'active' ? activeTabConsultations : pastTabConsultations).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
-                <p className="text-gray-400 font-medium text-sm">No upcoming consultations</p>
-                <p className="text-gray-600 text-xs mt-1">Book a slot to get started</p>
+                {consultTab === 'active' ? (
+                  <>
+                    <p className="text-gray-400 font-medium text-sm">No active consultations</p>
+                    <p className="text-gray-600 text-xs mt-1">Book a slot to get started</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-400 font-medium text-sm">No past consultations yet</p>
+                    <p className="text-gray-600 text-xs mt-1">Completed and cancelled consultations will appear here</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingConsultations.map(c => (
+                {(consultTab === 'active' ? activeTabConsultations : pastTabConsultations).map(c => (
                   <div key={c.id} className="rounded-2xl border border-white/5 bg-[#161616] p-5 hover:border-white/10 transition-colors">
                     <div className="flex items-start gap-4">
                       <button

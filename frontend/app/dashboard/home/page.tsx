@@ -588,72 +588,45 @@ export default function HomePage() {
         {/* ── Main content ──────────────────────────────────────────────────── */}
         <main className={`flex-1 overflow-y-auto ${isDark ? '' : 'bg-[#f2f3f5]'}`}>
 
-        <div className="px-8 py-8 space-y-8">
-          {/* ── Greeting card ────────────────────────────────────────────── */}
-          <style>{`
-            @keyframes greetFadeInUp {
-              from { opacity: 0; transform: translateY(-10px); }
-              to   { opacity: 1; transform: translateY(0);     }
-            }
-            .greet-card { animation: greetFadeInUp 0.45s cubic-bezier(0.22,1,0.36,1) both; }
-          `}</style>
-
-          <div className={`greet-card relative rounded-2xl overflow-hidden border transition-all duration-500 ${
-            isDark
-              ? 'border-white/[0.07] bg-gradient-to-br from-[#1c1c1c] to-[#111] hover:border-white/[0.13] hover:shadow-[0_0_48px_rgba(204,0,0,0.08)]'
-              : 'border-gray-200 bg-gradient-to-br from-white to-gray-50 shadow-sm hover:border-gray-300 hover:shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
-          }`}>
-            {/* Red left accent */}
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-[#CC0000]/50 via-[#CC0000] to-[#CC0000]/40" />
-
-            <div className="flex items-center justify-between pl-9 pr-6 py-6">
-              {/* Left: greeting text */}
-              <div className="flex-1 min-w-0">
-                <h2 className={`text-[28px] font-bold leading-tight tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
-                </h2>
-                <div className="mt-2 flex flex-col gap-1">
-                  {greetingLines.length === 0 ? (
-                    <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Have a great day!</span>
-                  ) : greetingLines.map((line, i) =>
-                    line.type === 'cta' ? (
-                      <button
-                        key={i}
-                        onClick={() => router.push('/dashboard/student?view=book')}
-                        className="text-sm text-[#CC0000] hover:text-[#ff3333] text-left font-medium w-fit transition-colors"
-                      >
-                        {line.text} →
-                      </button>
-                    ) : (
-                      <span key={i} className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{line.text}</span>
-                    )
-                  )}
-                </div>
+          {/* ── University portal banner ─────────────────────────────────── */}
+          <div
+            className="relative h-[200px]"
+            style={{ backgroundImage: "url('/mapua-banner.jpg')", backgroundSize: '100% auto', backgroundPosition: 'center 30%', backgroundRepeat: 'no-repeat' }}
+          >
+            {/* Bottom gradient only — just enough to keep text readable */}
+            <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
+            <div className="relative h-full flex flex-col justify-end px-8 pb-6">
+              <p className="text-white/60 text-xs uppercase tracking-[0.18em] font-semibold mb-2">
+                Mapúa University · SOIT Advising Portal
+              </p>
+              <h2 className="text-white text-4xl font-bold leading-tight drop-shadow-lg">
+                {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
+              </h2>
+              <div className="mt-2 flex flex-col gap-1">
+                {greetingLines.length === 0 ? (
+                  <span className="text-white/60 text-base">Have a great day!</span>
+                ) : greetingLines.map((line, i) =>
+                  line.type === 'cta' ? (
+                    <button
+                      key={i}
+                      onClick={() => router.push('/dashboard/student?view=book')}
+                      className="text-base text-red-300 hover:text-white text-left font-medium w-fit transition-colors"
+                    >
+                      {line.text} →
+                    </button>
+                  ) : (
+                    <span key={i} className="text-base text-white/70">{line.text}</span>
+                  )
+                )}
               </div>
-
-              {/* Right: decorative illustration */}
-              <div className="flex-shrink-0 w-28 h-20 relative ml-4 select-none pointer-events-none" aria-hidden>
-                {/* Soft red glow behind icons */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-[#CC0000]/10 blur-2xl" />
-                {/* Calendar — main icon */}
-                <svg className={`absolute right-2 top-0 w-12 h-12 opacity-20 ${isDark ? 'text-white' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 9v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
-                </svg>
-                {/* Book — lower-left, rotated */}
-                <svg className={`absolute left-0 bottom-0 w-9 h-9 opacity-15 -rotate-6 ${isDark ? 'text-white' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
-                </svg>
-                {/* Star sparkles */}
-                <svg className={`absolute right-0 bottom-1 w-5 h-5 opacity-20 ${isDark ? 'text-white' : 'text-gray-500'}`} fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.563.563 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
-                </svg>
-                <svg className={`absolute left-5 top-0 w-3 h-3 opacity-15 ${isDark ? 'text-white' : 'text-gray-500'}`} fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.563.563 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
-                </svg>
+              <div className="flex items-center gap-2 mt-2.5">
+                <span className="w-2 h-2 rounded-full bg-[#CC0000]" />
+                <span className="text-white/60 text-sm font-medium tracking-wide">{roleLabel}</span>
               </div>
             </div>
           </div>
 
+        <div className="px-8 py-8 space-y-8">
           {/* ── Hero: current week ────────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Current week card */}

@@ -17,7 +17,7 @@ const bcrypt = require('bcrypt');
 const pool = require('../db/db');
 
 async function main() {
-  const [, , rawEmail, password] = process.argv;
+  const [, , rawEmail, password] = process. argv;
 
   if (!rawEmail || !password) {
     console.error('Usage: node reset-admin.js <email> <newPassword>');
