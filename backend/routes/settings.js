@@ -265,6 +265,17 @@ router.post(
   }
 );
 
+// ── DELETE /api/settings/avatar ──────────────────────────────────────────────
+router.delete('/avatar', authenticate, async (req, res) => {
+  try {
+    await pool.query(`UPDATE users SET avatar = NULL WHERE id = $1`, [req.user.id]);
+    res.json({ message: 'Avatar removed.' });
+  } catch (err) {
+    console.error('[Settings DELETE /avatar]', err.message);
+    res.status(500).json({ error: 'Failed to remove avatar.' });
+  }
+});
+
 // ── GET /api/settings/notifications ──────────────────────────────────────────
 const NOTIF_DEFAULTS = {
   email_booking_confirmed: true,

@@ -479,6 +479,32 @@ export default function SettingsPage() {
     }
   };
 
+  // ── Avatar remove ───────────────────────────────────────────────────────────
+  const handleRemoveAvatar = async () => {
+    const token = localStorage.getItem('token') || '';
+    setAvatarUploading(true);
+    setProfileMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/api/settings/avatar`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setProfileMsg({ text: data.error || 'Failed to remove photo.', type: 'error' });
+      } else {
+        setProfile((p) => ({ ...p, profile_picture_url: null }));
+        localStorage.removeItem('consulta-avatar');
+        window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: null } }));
+        setProfileMsg({ text: 'Profile picture removed.', type: 'success' });
+      }
+    } catch {
+      setProfileMsg({ text: 'Network error. Please try again.', type: 'error' });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   // ── Save profile ────────────────────────────────────────────────────────────
   const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -762,14 +788,26 @@ export default function SettingsPage() {
                           className="hidden"
                           onChange={handleAvatarChange}
                         />
-                        <button
-                          type="button"
-                          disabled={avatarUploading}
-                          onClick={() => avatarInputRef.current?.click()}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {avatarUploading ? 'Uploading…' : 'Change Photo'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={avatarUploading}
+                            onClick={() => avatarInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {avatarUploading ? 'Uploading…' : 'Change Photo'}
+                          </button>
+                          {avatarSrc && (
+                            <button
+                              type="button"
+                              disabled={avatarUploading}
+                              onClick={handleRemoveAvatar}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-gray-400 hover:text-white hover:border-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Remove Photo
+                            </button>
+                          )}
+                        </div>
                         <p className="text-[11px] text-gray-600">JPG, PNG, WEBP or GIF · Max 5 MB</p>
                       </div>
                     </div>
