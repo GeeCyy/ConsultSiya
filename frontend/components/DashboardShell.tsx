@@ -325,13 +325,14 @@ export default function DashboardShell({
     setIsDark(dark);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
 
-    setNavAvatar(localStorage.getItem('consulta-avatar') || null);
+    const storedAvatar = localStorage.getItem('consulta-avatar') || null;
+    setNavAvatar(storedAvatar && !storedAvatar.startsWith('/uploads/') ? storedAvatar : null);
     setNavName(localStorage.getItem('consulta-name') || '');
     setNavRole(localStorage.getItem('role') || '');
 
     const onAvatarChange = (e: Event) => {
       const url = (e as CustomEvent<{ url: string }>).detail?.url ?? null;
-      setNavAvatar(url);
+      setNavAvatar(url && !url.startsWith('/uploads/') ? url : null);
     };
     const onNameChange = (e: Event) => {
       setNavName((e as CustomEvent<{ name: string }>).detail?.name ?? '');
