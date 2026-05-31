@@ -506,7 +506,7 @@ export default function SettingsPage() {
   };
 
   // ── Save profile ────────────────────────────────────────────────────────────
-  const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProfile = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setProfileSaving(true);
     setProfileMsg(null);
@@ -561,7 +561,7 @@ export default function SettingsPage() {
   };
 
   // ── Change password ─────────────────────────────────────────────────────────
-  const handleChangePassword = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleChangePassword = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (pwForm.next !== pwForm.confirm) {
       setPwMsg({ text: 'New passwords do not match.', type: 'error' });
@@ -595,7 +595,7 @@ export default function SettingsPage() {
   };
 
   // ── Save system settings ────────────────────────────────────────────────────
-  const handleSaveSystem = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSystem = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSysSaving(true);
     setSysMsg(null);
@@ -809,6 +809,7 @@ export default function SettingsPage() {
                           )}
                         </div>
                         <p className="text-[11px] text-gray-600">JPG, PNG, WEBP or GIF · Max 5 MB</p>
+                        <p className="text-[11px] text-gray-600 italic">Photo saves automatically when selected.</p>
                       </div>
                     </div>
 
