@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import DashboardShell from '@/components/DashboardShell';
+import UserProfileCard from '@/components/UserProfileCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -149,6 +150,7 @@ type Schedule = {
 
 type Consultation = {
   id: number;
+  professor_id: number;
   professor_name: string;
   date: string;
   day: string;
@@ -306,6 +308,8 @@ export default function StudentDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadForId = useRef<number | null>(null);
 
+  const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
+
   // Profile
   const [profile, setProfile] = useState<StudentProfile>({
     full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '', avatar: null,
@@ -352,8 +356,10 @@ export default function StudentDashboard() {
         phone: prof.phone || '',
         avatar: avatarVal,
       });
-      if (avatarVal) localStorage.setItem('consulta-avatar', `${API_URL}${avatarVal}`);
+      const fullAvatarUrl = avatarVal ? `${API_URL}${avatarVal}` : null;
+      if (fullAvatarUrl) localStorage.setItem('consulta-avatar', fullAvatarUrl);
       else localStorage.removeItem('consulta-avatar');
+      window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullAvatarUrl } }));
       const name = prof.full_name || '';
       localStorage.setItem('consulta-name', name);
       window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name } }));
@@ -576,9 +582,22 @@ export default function StudentDashboard() {
                   <div key={s.id} className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden hover:border-white/10 transition-colors">
                     <div className="p-5">
                       <div className="flex items-start gap-4">
-                        <Avatar name={s.professor_name} />
+                        <button
+                          type="button"
+                          onClick={() => setProfileCard({ id: s.professor_id, role: 'professor' })}
+                          className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none"
+                          title="View profile"
+                        >
+                          <Avatar name={s.professor_name} />
+                        </button>
                         <div className="flex-1">
-                          <h3 className="text-white font-semibold text-sm">{s.professor_name}</h3>
+                          <button
+                            type="button"
+                            onClick={() => setProfileCard({ id: s.professor_id, role: 'professor' })}
+                            className="text-white font-semibold text-sm hover:text-gray-300 transition-colors text-left"
+                          >
+                            {s.professor_name}
+                          </button>
                           <p className="text-gray-500 text-xs mt-0.5">{s.department}</p>
                           {s.location && (
                             <p className="text-gray-600 text-xs mt-0.5">
@@ -886,10 +905,23 @@ export default function StudentDashboard() {
                 {upcomingConsultations.map(c => (
                   <div key={c.id} className="rounded-2xl border border-white/5 bg-[#161616] p-5 hover:border-white/10 transition-colors">
                     <div className="flex items-start gap-4">
-                      <Avatar name={c.professor_name} />
+                      <button
+                        type="button"
+                        onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
+                        className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none"
+                        title="View profile"
+                      >
+                        <Avatar name={c.professor_name} />
+                      </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <h3 className="text-white font-semibold text-sm">{c.professor_name}</h3>
+                          <button
+                            type="button"
+                            onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
+                            className="text-white font-semibold text-sm hover:text-gray-300 transition-colors text-left"
+                          >
+                            {c.professor_name}
+                          </button>
                           <StatusBadge status={c.status} />
                         </div>
                         <p className="text-gray-500 text-xs mt-0.5 line-clamp-1">{natureLabel(c)}</p>
@@ -1004,6 +1036,15 @@ export default function StudentDashboard() {
       </main>
 
       {/* Booking modal */}
+      {profileCard && token && (
+        <UserProfileCard
+          profileId={profileCard.id}
+          profileRole={profileCard.role}
+          token={token}
+          onClose={() => setProfileCard(null)}
+        />
+      )}
+
       {bookingSlot && (
         <Modal title={`Book Slot — ${bookingSlot.professor_name}`} onClose={() => setBookingSlot(null)}>
           <div className="px-5 py-5 space-y-4">

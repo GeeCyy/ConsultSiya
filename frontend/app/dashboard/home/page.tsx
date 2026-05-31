@@ -294,7 +294,7 @@ function CalendarView({
                   </span>
                 </div>
               )}
-              {isBlockedByAdmin && <p className="text-red-400 text-xs mt-1">Blocked{blockedLabel ? ` — ${blockedLabel}` : ''}</p>}
+              {isBlockedByAdmin && <p className="text-red-400 text-xs mt-1">No Classes{blockedLabel ? ` — ${blockedLabel}` : ''}</p>}
               {!isBlockedByAdmin && phName && <p className="text-amber-400/80 text-xs mt-1">PH Holiday — {phName}</p>}
               {!isBlockedByAdmin && isWeekendDay && <p className="text-gray-400 text-xs mt-1">Weekend / No class</p>}
               {!isBlockedByAdmin && !isWeekendDay && w && (
@@ -436,14 +436,24 @@ export default function HomePage() {
       .then(data => { if (Array.isArray(data)) setAnnouncements(data); })
       .catch(() => {});
 
-    // Fetch profile to get first name for greeting and update the header name
+    // Fetch profile to get first name for greeting, update header name, and sync avatar
     fetch(`${base}/api/settings/profile`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data?.full_name) {
+        if (!data) return;
+        if (data.full_name) {
           setFirstName(data.full_name.trim().split(/\s+/)[0]);
           localStorage.setItem('consulta-name', data.full_name);
           window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name: data.full_name } }));
+        }
+        const avatarPath = data.profile_picture_url ?? null;
+        if (avatarPath) {
+          const fullUrl = `${base}${avatarPath}`;
+          localStorage.setItem('consulta-avatar', fullUrl);
+          window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullUrl } }));
+        } else {
+          localStorage.removeItem('consulta-avatar');
+          window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: null } }));
         }
       })
       .catch(() => {});

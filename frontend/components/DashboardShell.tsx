@@ -367,6 +367,9 @@ export default function DashboardShell({
 
   const handleLogout = () => {
     localStorage.clear();
+    setNavAvatar(null);
+    setNavName('');
+    setNavRole('');
     router.push('/login');
   };
 

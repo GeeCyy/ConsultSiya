@@ -183,9 +183,11 @@ router.get('/', authenticate, async (req, res) => {
       result = await pool.query(
         `SELECT c.*, s.full_name AS student_name, s.student_number,
                 s.program, sch.day, sch.time_start, sch.time_end, sch.location,
-                cd.action_taken, cd.referral, cd.referral_specify, cd.remarks
+                cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
+                u.avatar AS student_avatar
          FROM consultations c
          JOIN students s ON c.student_id = s.id
+         JOIN users u ON s.user_id = u.id
          JOIN schedules sch ON c.schedule_id = sch.id
          LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
          WHERE c.professor_id = $1 AND c.status != 'cancelled'
