@@ -180,6 +180,9 @@ router.get('/', authenticate, async (req, res) => {
       const prof = await pool.query(
         `SELECT id FROM professors WHERE user_id = $1`, [req.user.id]
       );
+      if (!prof.rows[0]) {
+        return res.status(404).json({ error: 'Professor profile not found' });
+      }
       result = await pool.query(
         `SELECT c.*, s.full_name AS student_name, s.student_number,
                 s.program, sch.day, sch.time_start, sch.time_end, sch.location,
