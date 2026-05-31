@@ -144,6 +144,14 @@ router.post(
         });
       }
 
+      // ── Deactivation check ────────────────────────────────────────────────
+      if (user.is_active === false) {
+        return res.status(403).json({
+          error: 'Your account has been deactivated. Please contact an administrator.',
+          deactivated: true,
+        });
+      }
+
       // ── Success: reset lockout counters ───────────────────────────────────
       await pool.query(
         `UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = $1`,

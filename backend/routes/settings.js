@@ -106,7 +106,7 @@ router.get('/profile/public', authenticate, async (req, res) => {
     let data;
     if (role === 'professor') {
       const result = await pool.query(
-        `SELECT p.full_name, p.department, u.avatar
+        `SELECT p.full_name, p.department, p.phone, u.avatar
          FROM professors p
          JOIN users u ON u.id = p.user_id
          WHERE p.id = $1`,
@@ -116,7 +116,7 @@ router.get('/profile/public', authenticate, async (req, res) => {
       data = { role: 'professor', ...result.rows[0] };
     } else {
       const result = await pool.query(
-        `SELECT s.full_name, s.student_number, s.program, s.year_level, u.avatar
+        `SELECT s.full_name, s.student_number, s.program, s.year_level, s.phone, u.avatar
          FROM students s
          JOIN users u ON u.id = s.user_id
          WHERE s.id = $1`,
