@@ -371,6 +371,11 @@ export default function ProfessorDashboard() {
   const [editLinkConsult, setEditLinkConsult] = useState<Consultation | null>(null);
   const [editLinkInput, setEditLinkInput] = useState('');
 
+  // Cancel modal
+  const [cancellingConsult, setCancellingConsult] = useState<Consultation | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState('');
+
   // Profile
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '', avatar: null });
 
@@ -468,6 +473,22 @@ export default function ProfessorDashboard() {
     if (data.error) { alert(data.error); return; }
     setEditLinkConsult(null);
     setEditLinkInput('');
+    fetchAll();
+  };
+
+  const openCancelModal = (c: Consultation) => {
+    setCancellingConsult(c);
+    setCancelReason('');
+    setCancelError('');
+  };
+
+  const handleCancel = async () => {
+    if (!cancellingConsult) return;
+    if (!cancelReason.trim()) { setCancelError('Please provide a reason for cancellation.'); return; }
+    setCancelError('');
+    const data = await api.patch(`/api/consultations/${cancellingConsult.id}/cancel`, { cancel_reason: cancelReason.trim() }, token!);
+    if (data.error) { setCancelError(data.error); return; }
+    setCancellingConsult(null);
     fetchAll();
   };
 
@@ -928,6 +949,10 @@ export default function ProfessorDashboard() {
                                 Confirm
                               </button>
                             )}
+                            <button onClick={() => openCancelModal(c)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-red-500/10 text-red-400 hover:bg-red-500/20">
+                              Cancel
+                            </button>
                             <button onClick={() => openRescheduleModal(c)}
                               className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-orange-500/10 text-orange-400 hover:bg-orange-500/20">
                               Reschedule
@@ -1602,6 +1627,41 @@ export default function ProfessorDashboard() {
               </button>
               <button onClick={handleRequestEditSchedule} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Cancel modal */}
+      {cancellingConsult && (
+        <Modal title="Cancel Consultation" onClose={() => setCancellingConsult(null)}>
+          <div className="px-5 py-5 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+              <Avatar name={cancellingConsult.student_name} avatarUrl={cancellingConsult.student_avatar} size="sm" />
+              <div>
+                <p className="text-white text-sm font-semibold">{cancellingConsult.student_name}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{cancellingConsult.student_number} · {new Date(cancellingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+              </div>
+            </div>
+            <div>
+              <Label className="text-gray-500 text-xs mb-1.5 block">Reason for Cancellation <span className="text-red-400">*</span></Label>
+              <textarea
+                value={cancelReason}
+                onChange={e => { setCancelReason(e.target.value); setCancelError(''); }}
+                rows={3}
+                className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-red-500/50 resize-none placeholder-gray-600"
+                placeholder="e.g. Schedule conflict, unavailable, etc."
+                autoFocus
+              />
+            </div>
+            {cancelError && <p className="text-red-400 text-xs">{cancelError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setCancellingConsult(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+                Back
+              </button>
+              <button onClick={handleCancel} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+                Confirm Cancellation
               </button>
             </div>
           </div>

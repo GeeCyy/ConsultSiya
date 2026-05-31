@@ -75,6 +75,12 @@ ALTER TABLE calendar_overrides ADD CONSTRAINT calendar_overrides_type_check
 -- Add color to calendar_overrides (for date_label event color)
 ALTER TABLE calendar_overrides ADD COLUMN IF NOT EXISTS color VARCHAR(20);
 
+-- Account deactivation (soft-disable without deleting)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Professor cancel reason (why the professor cancelled the consultation)
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

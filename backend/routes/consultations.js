@@ -302,6 +302,7 @@ router.patch('/:id/meeting-link', authenticate, authorize('professor'), async (r
 // Professor or student cancels a consultation
 router.patch('/:id/cancel', authenticate, async (req, res) => {
   const { id } = req.params;
+  const { cancel_reason } = req.body;
   try {
     const consultation = await pool.query(
       `SELECT c.professor_id, c.student_id, c.status FROM consultations c WHERE c.id = $1`, [id]
@@ -327,7 +328,10 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
       return res.status(400).json({ error: `Cannot cancel a ${c.status} consultation.` });
     }
 
-    await pool.query(`UPDATE consultations SET status = 'cancelled' WHERE id = $1`, [id]);
+    await pool.query(
+      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1 WHERE id = $2`,
+      [cancel_reason?.trim() || null, id]
+    );
     res.json({ message: 'Consultation cancelled.' });
   } catch (err) {
     console.error(err);

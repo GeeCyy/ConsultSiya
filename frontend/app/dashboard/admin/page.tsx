@@ -15,7 +15,7 @@ import {
   type TermConfig,
   type RawTermConfig,
 } from '@/lib/academicCalendar';
-import { fetchPhHolidays, type PhHoliday } from '@/lib/phHolidays';
+import UserProfileCard from '@/components/UserProfileCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -59,15 +59,18 @@ type Professor = {
 
 type UserAccount = {
   id: number;
+  profile_id: number;
   email: string;
   role: 'student' | 'professor';
   is_approved: boolean;
+  is_active: boolean;
   created_at: string;
   full_name: string;
   student_number?: string;
   program?: string;
   year_level?: number;
   department?: string;
+  avatar?: string | null;
 };
 
 type AdminUser = {
@@ -91,6 +94,7 @@ const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; l
   confirmed:   { ring: 'ring-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    label: 'Confirmed' },
   completed:   { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
   cancelled:   { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
+  missed:      { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Missed' },
   rescheduled: { ring: 'ring-orange-500/30',  text: 'text-orange-400',  dot: 'bg-orange-400',  label: 'Rescheduled' },
 };
 
@@ -104,11 +108,12 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
   const initials = name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const validUrl = avatarUrl?.startsWith('https://') ? avatarUrl : null;
   return (
-    <div className="w-9 h-9 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-xs font-semibold flex-shrink-0">
-      {initials}
+    <div className="w-9 h-9 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-xs font-semibold flex-shrink-0 overflow-hidden">
+      {validUrl ? <img src={validUrl} alt={name} className="w-full h-full object-cover" /> : initials}
     </div>
   );
 }
@@ -160,6 +165,14 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
   return action_taken;
 }
 
+function formatTime(t?: string | null): string {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
 type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar';
 type ReportPeriod = '' | 'week' | 'year' | 'semester';
 
@@ -184,6 +197,7 @@ export default function AdminDashboard() {
   // Account management
   const [accountRoleFilter, setAccountRoleFilter] = useState<string>('all');
   const [showAddUser, setShowAddUser] = useState(false);
+  const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
   const [addForm, setAddForm] = useState({
     email: '', password: '', role: 'student', full_name: '',
     student_number: '', program: '', year_level: '', department: '',
@@ -215,7 +229,6 @@ export default function AdminDashboard() {
   const [calPendingBlocked, setCalPendingBlocked] = useState<boolean | null>(null);
   const [calLabelEditing, setCalLabelEditing] = useState(false);
   const [calPendingBlockReason, setCalPendingBlockReason] = useState('');
-  const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
 
   // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -267,10 +280,6 @@ export default function AdminDashboard() {
     const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar'];
     if (t && valid.includes(t)) setTab(t);
     fetchAll();
-    const year = new Date().getFullYear();
-    Promise.all([fetchPhHolidays(year), fetchPhHolidays(year + 1)]).then(([a, b]) => {
-      setPhHolidays([...a, ...b]);
-    });
   }, []);
 
   useEffect(() => {
@@ -363,6 +372,19 @@ export default function AdminDashboard() {
     fetchAll();
   };
 
+  const handleDeactivate = async (id: number, name: string) => {
+    if (!confirm(`Deactivate account for "${name}"? They will not be able to log in until reactivated.`)) return;
+    const data = await api.patch(`/api/admin/users/${id}/deactivate`, {}, token!);
+    if (data.error) { alert(data.error); return; }
+    fetchAll();
+  };
+
+  const handleActivate = async (id: number) => {
+    const data = await api.patch(`/api/admin/users/${id}/activate`, {}, token!);
+    if (data.error) { alert(data.error); return; }
+    fetchAll();
+  };
+
   const handleAddUser = async () => {
     setAddError('');
     if (!addForm.email || !addForm.full_name) { setAddError('Email and full name are required.'); return; }
@@ -389,9 +411,23 @@ export default function AdminDashboard() {
     fetchAll();
   };
 
+  // Tab counts for consultations
+  const consultTabCounts = {
+    all: consultations.length,
+    pending: consultations.filter(c => ['pending', 'confirmed', 'rescheduled'].includes(c.status)).length,
+    missed: consultations.filter(c => ['cancelled', 'missed'].includes(c.status)).length,
+    completed: consultations.filter(c => c.status === 'completed').length,
+  };
+
   // Filtered consultations
   const filteredConsultations = consultations.filter(c => {
-    if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+    const tabMatch =
+      statusFilter === 'all' ? true :
+      statusFilter === 'pending' ? ['pending', 'confirmed', 'rescheduled'].includes(c.status) :
+      statusFilter === 'missed' ? ['cancelled', 'missed'].includes(c.status) :
+      statusFilter === 'completed' ? c.status === 'completed' :
+      true;
+    if (!tabMatch) return false;
     if (search) {
       const q = search.toLowerCase();
       if (
@@ -420,13 +456,6 @@ export default function AdminDashboard() {
     },
     {}
   );
-
-  const statCards = [
-    { key: 'all',       label: 'Total',     value: stats.total,     color: 'text-white',       accent: 'border-white/10',      activeBg: 'bg-white/10' },
-    { key: 'pending',   label: 'Pending',   value: stats.pending,   color: 'text-amber-400',   accent: 'border-amber-500/20',  activeBg: 'bg-amber-500/10' },
-    { key: 'confirmed', label: 'Confirmed', value: stats.confirmed, color: 'text-blue-400',    accent: 'border-blue-500/20',   activeBg: 'bg-blue-500/10' },
-    { key: 'completed', label: 'Completed', value: stats.completed, color: 'text-emerald-400', accent: 'border-emerald-500/20', activeBg: 'bg-emerald-500/10' },
-  ];
 
   // ── Calendar computed state (shared between Home and Calendar tabs) ──────────
   const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -742,40 +771,45 @@ export default function AdminDashboard() {
             {/* ── Consultations ── */}
             {tab === 'consultations' && (
               <>
-                <div className="mb-7">
-                  <h1 className="text-white text-2xl font-bold">Overview</h1>
+                <div className="mb-6">
+                  <h1 className="text-white text-2xl font-bold">Consultations</h1>
                   <p className="text-gray-500 text-sm mt-1">All consultation records across the system</p>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mb-6">
-                  {statCards.map(s => (
-                    <button key={s.key} onClick={() => setStatusFilter(s.key)}
-                      className={`rounded-2xl border p-4 text-left transition-all ${
-                        statusFilter === s.key ? `${s.activeBg} ${s.accent}` : 'bg-[#161616] border-white/5 hover:border-white/10'
+                {/* Tabs */}
+                <div className="flex items-center gap-1 mb-5 bg-[#161616] border border-white/5 rounded-xl p-1 w-fit">
+                  {([
+                    { key: 'all',       label: 'All',       color: 'text-white'       },
+                    { key: 'pending',   label: 'Pending',   color: 'text-amber-400'   },
+                    { key: 'missed',    label: 'Missed',    color: 'text-red-400'     },
+                    { key: 'completed', label: 'Completed', color: 'text-emerald-400' },
+                  ] as const).map(t => (
+                    <button key={t.key} onClick={() => setStatusFilter(t.key)}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        statusFilter === t.key
+                          ? 'bg-[#CC0000] text-white shadow-sm'
+                          : `text-gray-500 hover:text-gray-200 hover:bg-white/5`
                       }`}>
-                      <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
-                      <p className="text-gray-600 text-xs mt-1">{s.label}</p>
+                      {t.label}
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                        statusFilter === t.key ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-600'
+                      }`}>
+                        {consultTabCounts[t.key]}
+                      </span>
                     </button>
                   ))}
                 </div>
 
                 {/* Search */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="relative flex-1">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" /></svg>
-                    <input
-                      type="text"
-                      placeholder="Search by name, date, or ID…"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 rounded-lg text-white text-sm bg-[#161616] border border-white/5 focus:outline-none focus:border-[#CC0000]/30 placeholder-gray-600"
-                    />
-                  </div>
-                  {statusFilter !== 'all' && (
-                    <button onClick={() => setStatusFilter('all')} className="text-xs text-gray-500 hover:text-gray-300 whitespace-nowrap">
-                      Clear filter ×
-                    </button>
-                  )}
+                <div className="relative mb-4">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" /></svg>
+                  <input
+                    type="text"
+                    placeholder="Search by name, date, or ID…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-lg text-white text-sm bg-[#161616] border border-white/5 focus:outline-none focus:border-[#CC0000]/30 placeholder-gray-600"
+                  />
                 </div>
 
                 <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
@@ -814,7 +848,7 @@ export default function AdminDashboard() {
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>
                                 {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                                 <span className="text-gray-700">·</span>
-                                {c.day} {c.time_start?.slice(0, 5)}–{c.time_end?.slice(0, 5)}
+                                {c.day} {formatTime(c.time_start)}–{formatTime(c.time_end)}
                               </div>
                               <span className={`inline-flex items-center gap-1 text-xs ${c.mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
@@ -883,7 +917,9 @@ export default function AdminDashboard() {
                       {pendingUsers.map(u => (
                         <div key={u.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                           <div className="flex items-center gap-3">
-                            <Avatar name={u.full_name || u.email} />
+                            <button type="button" onClick={() => setProfileCard({ id: u.profile_id, role: u.role })} className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
+                              <Avatar name={u.full_name || u.email} avatarUrl={u.avatar} />
+                            </button>
                             <div>
                               <p className="text-white text-sm font-medium">{u.full_name}</p>
                               <p className="text-gray-500 text-xs">{u.email} · {u.role}</p>
@@ -934,17 +970,28 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="space-y-2">
                     {filteredUsers.map(u => (
-                      <div key={u.id} className="rounded-xl border border-white/5 bg-[#161616] px-4 py-3 flex items-center justify-between gap-3 flex-wrap hover:border-white/10 transition-colors">
+                      <div key={u.id} className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 flex-wrap transition-colors ${
+                        !u.is_active
+                          ? 'border-white/5 bg-[#111] opacity-60'
+                          : 'border-white/5 bg-[#161616] hover:border-white/10'
+                      }`}>
                         <div className="flex items-center gap-3">
-                          <Avatar name={u.full_name || u.email} />
+                          <button type="button" onClick={() => setProfileCard({ id: u.profile_id, role: u.role })} className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
+                            <Avatar name={u.full_name || u.email} avatarUrl={u.avatar} />
+                          </button>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-white text-sm font-medium">{u.full_name}</p>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 u.role === 'professor' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'
                               }`}>
                                 {u.role}
                               </span>
+                              {!u.is_active && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-500">
+                                  deactivated
+                                </span>
+                              )}
                             </div>
                             <p className="text-gray-500 text-xs">{u.email}</p>
                             {u.role === 'student' && u.student_number && (
@@ -956,7 +1003,11 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {u.is_approved ? (
+                          {!u.is_active ? (
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />Deactivated
+                            </span>
+                          ) : u.is_approved ? (
                             <span className="text-xs text-emerald-500 flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Approved
                             </span>
@@ -965,10 +1016,21 @@ export default function AdminDashboard() {
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Pending
                             </span>
                           )}
-                          {!u.is_approved && (
+                          {!u.is_approved && u.is_active && (
                             <button onClick={() => handleApprove(u.id)}
                               className="px-2.5 py-1 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors">
                               Approve
+                            </button>
+                          )}
+                          {u.is_active ? (
+                            <button onClick={() => handleDeactivate(u.id, u.full_name)}
+                              className="px-2.5 py-1 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors">
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button onClick={() => handleActivate(u.id)}
+                              className="px-2.5 py-1 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                              Activate
                             </button>
                           )}
                           <button onClick={() => handleDeleteUser(u.id, u.full_name)}
@@ -2281,6 +2343,15 @@ export default function AdminDashboard() {
           </div>
         )}
       </main>
+
+      {profileCard && token && (
+        <UserProfileCard
+          profileId={profileCard.id}
+          profileRole={profileCard.role}
+          token={token}
+          onClose={() => setProfileCard(null)}
+        />
+      )}
     </div>
   );
 }

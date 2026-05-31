@@ -9,10 +9,11 @@ router.get('/users', authenticate, authorize('admin'), async (req, res) => {
   const { role } = req.query;
   try {
     let query = `
-      SELECT u.id, u.email, u.role, u.is_approved, u.created_at,
+      SELECT u.id, u.email, u.role, u.is_approved, u.is_active, u.created_at, u.avatar,
         COALESCE(s.full_name, p.full_name) AS full_name,
         s.student_number, s.program, s.year_level,
-        p.department
+        p.department,
+        COALESCE(s.id, p.id) AS profile_id
       FROM users u
       LEFT JOIN students s ON s.user_id = u.id
       LEFT JOIN professors p ON p.user_id = u.id
@@ -106,6 +107,41 @@ router.patch('/users/:id/approve', authenticate, authorize('admin'), async (req,
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
     res.json({ message: 'Account approved.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Deactivate an account (soft-disable — prevents login without deleting)
+router.patch('/users/:id/deactivate', authenticate, authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+    if (user.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    if (user.rows[0].role === 'admin') return res.status(403).json({ error: 'Cannot deactivate admin accounts.' });
+    const result = await pool.query(
+      `UPDATE users SET is_active = false WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    res.json({ message: 'Account deactivated.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reactivate a deactivated account
+router.patch('/users/:id/activate', authenticate, authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `UPDATE users SET is_active = true WHERE id = $1 AND role != 'admin' RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    res.json({ message: 'Account activated.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
