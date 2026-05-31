@@ -447,14 +447,13 @@ export default function HomePage() {
           window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name: data.full_name } }));
         }
         const avatarPath = data.profile_picture_url ?? null;
-        if (avatarPath) {
-          const fullUrl = `${base}${avatarPath}`;
-          localStorage.setItem('consulta-avatar', fullUrl);
-          window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullUrl } }));
+        const resolvedAvatar = avatarPath && !avatarPath.startsWith('/uploads/') ? avatarPath : null;
+        if (resolvedAvatar) {
+          localStorage.setItem('consulta-avatar', resolvedAvatar);
         } else {
           localStorage.removeItem('consulta-avatar');
-          window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: null } }));
         }
+        window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: resolvedAvatar } }));
       })
       .catch(() => {});
 
