@@ -326,7 +326,12 @@ export default function DashboardShell({
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
 
     const storedAvatar = localStorage.getItem('consulta-avatar') || null;
-    setNavAvatar(storedAvatar && !storedAvatar.startsWith('/uploads/') ? storedAvatar : null);
+    if (storedAvatar?.startsWith('/uploads/')) {
+      localStorage.removeItem('consulta-avatar');
+      setNavAvatar(null);
+    } else {
+      setNavAvatar(storedAvatar);
+    }
     setNavName(localStorage.getItem('consulta-name') || '');
     setNavRole(localStorage.getItem('role') || '');
 
