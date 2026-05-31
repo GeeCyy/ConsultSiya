@@ -165,6 +165,7 @@ type Consultation = {
   referral: string | null;
   referral_specify: string | null;
   remarks: string | null;
+  time?: string | null;
   location?: string;
   meeting_link?: string | null;
 };
@@ -356,7 +357,7 @@ export default function StudentDashboard() {
         phone: prof.phone || '',
         avatar: avatarVal,
       });
-      const fullAvatarUrl = avatarVal ? `${API_URL}${avatarVal}` : null;
+      const fullAvatarUrl = avatarVal && !avatarVal.startsWith('/uploads/') ? avatarVal : null;
       if (fullAvatarUrl) localStorage.setItem('consulta-avatar', fullAvatarUrl);
       else localStorage.removeItem('consulta-avatar');
       window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullAvatarUrl } }));
@@ -934,7 +935,15 @@ export default function StudentDashboard() {
                         <p className="text-gray-200 text-sm font-medium">
                           {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
-                        <p className="text-gray-500 text-xs mt-0.5">{c.day} · {c.time_start?.slice(0, 5)}–{c.time_end?.slice(0, 5)}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">{c.day} · {(() => {
+                          if (c.time) {
+                            const [h, m] = c.time.slice(0, 5).split(':').map(Number);
+                            const endMins = h * 60 + m + 30;
+                            const endStr = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+                            return `${formatTime12(c.time.slice(0, 5))}–${formatTime12(endStr)}`;
+                          }
+                          return `${c.time_start?.slice(0, 5)}–${c.time_end?.slice(0, 5)}`;
+                        })()}</p>
                       </div>
                       <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
                         <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Meeting</p>
@@ -1129,19 +1138,26 @@ export default function StudentDashboard() {
             </div>
 
             <div>
-              <p className="text-gray-500 text-xs mb-1.5">Preferred Start Time</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-gray-500 text-xs">Preferred Start Time</p>
+                {!bookForm.date && (
+                  <p className="text-gray-600 text-xs italic">Select a date first</p>
+                )}
+              </div>
               {(() => {
                 const ranges = bookingSlot.time_ranges?.length
                   ? bookingSlot.time_ranges
                   : [{ time_start: bookingSlot.time_start, time_end: bookingSlot.time_end }];
                 const taken = bookedTimes[`${bookingSlot.id}-${bookForm.date}`] || [];
+                const noDate = !bookForm.date;
                 return (
-                  <div className="relative">
+                  <div className={`relative transition-opacity ${noDate ? 'opacity-40' : ''}`}>
                     <select
                       value={bookForm.time}
+                      disabled={noDate}
                       onChange={e => setBookForm(f => ({ ...f, time: e.target.value }))}
-                      className={`w-full px-3 py-2.5 pr-9 rounded-lg text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 appearance-none cursor-pointer transition-colors ${
-                        bookForm.time ? 'text-white' : 'text-gray-500'
+                      className={`w-full px-3 py-2.5 pr-9 rounded-lg text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 appearance-none transition-colors ${
+                        noDate ? 'cursor-not-allowed text-gray-600' : bookForm.time ? 'cursor-pointer text-white' : 'cursor-pointer text-gray-500'
                       }`}>
                       <option value="" disabled>— Select a time —</option>
                       {ranges.map((range, i) => {

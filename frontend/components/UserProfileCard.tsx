@@ -87,8 +87,8 @@ export default function UserProfileCard({
               <div className="flex flex-col items-center text-center">
                 {/* Avatar */}
                 <div className="w-16 h-16 rounded-full overflow-hidden bg-[#7a0000] flex items-center justify-center ring-2 ring-[#CC0000]/30 mb-3 flex-shrink-0">
-                  {profile.avatar
-                    ? <img src={`${API_BASE}${profile.avatar}`} alt={profile.full_name} className="w-full h-full object-cover" />
+                  {profile.avatar && !profile.avatar.startsWith('/uploads/')
+                    ? <img src={profile.avatar} alt={profile.full_name} className="w-full h-full object-cover" />
                     : <span className="text-xl font-bold text-white">{initials}</span>
                   }
                 </div>

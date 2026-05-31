@@ -3,25 +3,15 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { body, validationResult } = require('express-validator');
+const cloudinary = require('../lib/cloudinary');
 const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 
 // ── Avatar upload setup ───────────────────────────────────────────────────────
-const avatarDir = path.join(__dirname, '../uploads/avatars');
-if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
-
-const avatarStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, avatarDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `avatar-${req.user.id}-${Date.now()}${ext}`);
-  },
-});
-
+// Files are kept in memory (buffer) and streamed to Cloudinary — nothing hits disk.
 const uploadAvatar = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
   fileFilter: (req, file, cb) => {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
@@ -248,17 +238,24 @@ router.post(
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
 
     const { id } = req.user;
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
 
     try {
-      // Remove the old avatar file if one exists on disk
-      const old = await pool.query(`SELECT avatar FROM users WHERE id = $1`, [id]);
-      const oldUrl = old.rows[0]?.avatar;
-      if (oldUrl) {
-        const oldPath = path.join(__dirname, '..', oldUrl);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
+      // Upload buffer to Cloudinary. Using a stable public_id per user means
+      // each new upload automatically overwrites the previous one — no deletion needed.
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'consultsiya-avatars',
+            public_id: `user-${id}`,
+            overwrite: true,
+            resource_type: 'image',
+          },
+          (error, result) => (error ? reject(error) : resolve(result))
+        );
+        stream.end(req.file.buffer);
+      });
 
+      const avatarUrl = result.secure_url;
       await pool.query(`UPDATE users SET avatar = $1 WHERE id = $2`, [avatarUrl, id]);
       res.json({ message: 'Avatar updated.', avatar_url: avatarUrl });
     } catch (err) {

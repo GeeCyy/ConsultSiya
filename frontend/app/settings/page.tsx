@@ -466,10 +466,9 @@ export default function SettingsPage() {
       if (!res.ok) {
         setProfileMsg({ text: data.error || 'Avatar upload failed.', type: 'error' });
       } else {
-        const fullUrl = `${API_URL}${data.avatar_url}`;
         setProfile((p) => ({ ...p, profile_picture_url: data.avatar_url }));
-        localStorage.setItem('consulta-avatar', fullUrl);
-        window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullUrl } }));
+        localStorage.setItem('consulta-avatar', data.avatar_url);
+        window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: data.avatar_url } }));
         setProfileMsg({ text: 'Profile picture updated.', type: 'success' });
       }
     } catch {
@@ -637,9 +636,10 @@ export default function SettingsPage() {
   const visibleTabs = tabs.filter((t) => !t.adminOnly || role === 'admin');
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  const avatarSrc = profile.profile_picture_url
-    ? `${API_URL}${profile.profile_picture_url}`
-    : null;
+  const avatarSrc =
+    profile.profile_picture_url && !profile.profile_picture_url.startsWith('/uploads/')
+      ? profile.profile_picture_url
+      : null;
 
   const initials = profile.full_name
     ? profile.full_name
