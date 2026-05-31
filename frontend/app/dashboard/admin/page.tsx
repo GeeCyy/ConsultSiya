@@ -214,6 +214,7 @@ export default function AdminDashboard() {
   const [calPendingColor, setCalPendingColor] = useState('red');
   const [calPendingBlocked, setCalPendingBlocked] = useState<boolean | null>(null);
   const [calLabelEditing, setCalLabelEditing] = useState(false);
+  const [calPendingBlockReason, setCalPendingBlockReason] = useState('');
   const [phHolidays, setPhHolidays] = useState<PhHoliday[]>([]);
 
   // Announcements
@@ -283,6 +284,10 @@ export default function AdminDashboard() {
       : undefined;
     setCalPendingLabel(found?.value ?? '');
     setCalPendingColor(found?.color ?? 'red');
+    const blockedEntry = single
+      ? calOverrides.find((o: CalendarOverride) => o.type === 'blocked_date' && o.date === single)
+      : undefined;
+    setCalPendingBlockReason(blockedEntry?.label ?? '');
   }, [calSelectedDates]);
 
   const fetchAll = async () => {
@@ -453,7 +458,6 @@ export default function AdminDashboard() {
   const modeMap         = new Map(calOverrides.filter(o => o.type === 'mode_override' && o.week_number && o.value).map(o => [o.week_number!, o.value!]));
   const blockedDates    = calOverrides.filter(o => o.type === 'blocked_date' && o.date);
   const blockedSet      = new Set(blockedDates.map(o => o.date!));
-  const phSet           = new Set(phHolidays.map(h => h.date));
   const dateLabelMap    = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.value ?? '']));
   const dateColorMap    = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.color ?? 'red']));
 
@@ -517,14 +521,18 @@ export default function AdminDashboard() {
         if (r?.error) throw new Error(r.error);
         auditEntries.push({ id: Date.now() + 1, ts: new Date(), action: 'Event removed', target: date, from: existingLabel.value ?? '', to: '—' });
       }
-      // Blocked status
-      if (calPendingBlocked !== null) {
-        const isCurrentlyBlocked = blockedSet.has(date);
-        if (calPendingBlocked && !isCurrentlyBlocked) {
-          const r = await api.post('/api/admin/blocked-dates', { date, label: null }, token!);
+      // Blocked status (and reason)
+      const isCurrentlyBlocked = blockedSet.has(date);
+      const savedBlockReason = blockedDates.find((o: CalendarOverride) => o.date === date)?.label ?? '';
+      const blockReasonChanged = isCurrentlyBlocked && calPendingBlockReason.trim() !== savedBlockReason;
+      if (calPendingBlocked !== null || blockReasonChanged) {
+        const shouldBlock = calPendingBlocked !== null ? calPendingBlocked : isCurrentlyBlocked;
+        if (shouldBlock && (!isCurrentlyBlocked || blockReasonChanged)) {
+          const r = await api.post('/api/admin/blocked-dates', { date, label: calPendingBlockReason.trim() || null }, token!);
           if (r?.error) throw new Error(r.error);
-          auditEntries.push({ id: Date.now() + 2, ts: new Date(), action: 'Blocked', target: date, from: 'Normal', to: 'Blocked', deleteInfo: { type: 'blocked_date', date } });
-        } else if (!calPendingBlocked && isCurrentlyBlocked) {
+          const isNew = !isCurrentlyBlocked;
+          auditEntries.push({ id: Date.now() + 2, ts: new Date(), action: isNew ? 'Blocked' : 'Block reason updated', target: date, from: isNew ? 'Normal' : (savedBlockReason || '(none)'), to: isNew ? (calPendingBlockReason.trim() || 'Blocked') : (calPendingBlockReason.trim() || '(none)'), deleteInfo: isNew ? { type: 'blocked_date', date } : undefined });
+        } else if (!shouldBlock && isCurrentlyBlocked) {
           const entry = blockedDates.find((o: CalendarOverride) => o.date === date);
           if (entry) {
             const r = await api.delete(`/api/admin/blocked-dates/${entry.id}`, token!);
@@ -537,7 +545,13 @@ export default function AdminDashboard() {
       await refreshCalOverrides();
       if (auditEntries.length > 0) setCalAuditLog(log => [...auditEntries, ...log].slice(0, 20));
     } catch (err) {
-      setCalError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Failed to save. Please try again.';
+      if (msg.includes('Insufficient permissions')) {
+        localStorage.clear();
+        router.push('/login');
+        return;
+      }
+      setCalError(msg);
     } finally {
       setCalSaving(null);
       setCalPendingMode(null);
@@ -1633,7 +1647,6 @@ export default function AdminDashboard() {
               const detailWeek = detailDate ? getAcademicWeek(CURRENT_TERM, detailDate) : null;
               const detailMode = detailWeek ? effectiveMode(detailWeek) : null;
               const detailIsBlocked = calSingle ? blockedSet.has(calSingle) : false;
-              const detailBlockedEntry = calSingle ? blockedDates.find((o: CalendarOverride) => o.date === calSingle) : undefined;
 
               const CAL_LEGEND = [
                 { key: 'inPerson', cls: 'bg-emerald-500/25', label: 'In-Person' },
@@ -1955,11 +1968,13 @@ export default function AdminDashboard() {
                         const pendingBlocked = calPendingBlocked !== null ? calPendingBlocked : detailIsBlocked;
                         const savedLabel = dateLabelMap.get(calSingle) ?? '';
                         const savedColor = dateColorMap.get(calSingle) ?? 'red';
+                        const savedBlockReason = blockedDates.find((o: CalendarOverride) => o.date === calSingle)?.label ?? '';
                         const hasPendingChanges =
                           calPendingMode !== null ||
                           calPendingLabel.trim() !== savedLabel ||
                           (!!savedLabel && calPendingColor !== savedColor) ||
-                          calPendingBlocked !== null;
+                          calPendingBlocked !== null ||
+                          (detailIsBlocked && calPendingBlockReason.trim() !== savedBlockReason);
                         return (
                           <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
                             <div className={`px-5 py-4 border-b ${c.cellBorder} bg-[#CC0000]/5`}>
@@ -2088,16 +2103,27 @@ export default function AdminDashboard() {
                                       }}
                                       disabled={isSaving}
                                       aria-label="Toggle blocked"
-                                      className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-40 ${pendingBlocked ? 'bg-red-500/60' : c.toggleOff}`}
+                                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-40 ${pendingBlocked ? 'bg-red-500' : c.toggleOff}`}
                                     >
-                                      <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-transform bg-white shadow-sm ${pendingBlocked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${pendingBlocked ? 'translate-x-6' : 'translate-x-1'}`} />
                                     </button>
                                   </div>
                                   {pendingBlocked && (
-                                    <p className={`${c.blockWarning} text-[10px] mt-1.5`}>No consultations on this day</p>
+                                    <div className="mt-2.5 space-y-1.5">
+                                      <input
+                                        type="text"
+                                        placeholder="Reason (e.g. Independence Day, No Classes)"
+                                        value={calPendingBlockReason}
+                                        onChange={e => setCalPendingBlockReason(e.target.value)}
+                                        maxLength={100}
+                                        disabled={isSaving}
+                                        className={`w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-red-500/50 disabled:opacity-40 ${c.input}`}
+                                      />
+                                      <p className={`${c.blockWarning} text-[10px]`}>No consultations on this day</p>
+                                    </div>
                                   )}
-                                  {calPendingBlocked !== null && (
-                                    <p className={`text-[10px] ${c.unsavedHint} mt-0.5`}>Unsaved change</p>
+                                  {(calPendingBlocked !== null || (detailIsBlocked && calPendingBlockReason.trim() !== savedBlockReason)) && (
+                                    <p className={`text-[10px] ${c.unsavedHint} mt-1`}>Unsaved change</p>
                                   )}
                                 </div>
                                 {/* Save */}

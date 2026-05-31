@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Label } from '@/components/ui/label';
 import DashboardShell from '@/components/DashboardShell';
+import UserProfileCard from '@/components/UserProfileCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -25,13 +26,26 @@ function parseNature(natureStr: string | null): string[] {
   }
 }
 
+function addMins(timeStr: string, mins: number): string {
+  const [h, m] = timeStr.slice(0, 5).split(':').map(Number);
+  const total = h * 60 + m + mins;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function fmtTime(c: { time: string | null; time_start: string; time_end: string }): string {
+  if (c.time) return `${c.time.slice(0, 5)}–${addMins(c.time, 30)}`;
+  return `${c.time_start?.slice(0, 5)}–${c.time_end?.slice(0, 5)}`;
+}
+
 type Consultation = {
   id: number;
+  student_id: number;
   student_name: string;
   student_number: string;
   program: string;
   date: string;
   day: string;
+  time: string | null;
   time_start: string;
   time_end: string;
   nature_of_advising: string;
@@ -45,6 +59,7 @@ type Consultation = {
   remarks: string | null;
   location?: string;
   meeting_link?: string | null;
+  student_avatar?: string | null;
 };
 
 type TimeRange = { time_start: string; time_end: string };
@@ -88,11 +103,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
+function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: string | null; size?: 'sm' | 'md' }) {
   const initials = (name || '').split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const sizeClass = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
   return (
-    <div className={`rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 font-semibold flex-shrink-0 ${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'}`}>
-      {initials}
+    <div className={`rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 font-semibold flex-shrink-0 overflow-hidden ${sizeClass}`}>
+      {avatarUrl
+        ? <img src={`${API_URL}${avatarUrl}`} alt={name} className="w-full h-full object-cover" />
+        : initials
+      }
     </div>
   );
 }
@@ -314,6 +333,8 @@ export default function ProfessorDashboard() {
   const [authReady, setAuthReady] = useState(false);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
+  const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
+
   // Complete modal
   const [completingConsult, setCompletingConsult] = useState<Consultation | null>(null);
   const [completeForm, setCompleteForm] = useState({ action_taken: '', referral: '', referral_specify: '', remarks: '' });
@@ -417,8 +438,10 @@ export default function ProfessorDashboard() {
         phone: prof.phone || '',
         avatar: avatarVal,
       });
-      if (avatarVal) localStorage.setItem('consulta-avatar', `${API_URL}${avatarVal}`);
+      const fullAvatarUrl = avatarVal ? `${API_URL}${avatarVal}` : null;
+      if (fullAvatarUrl) localStorage.setItem('consulta-avatar', fullAvatarUrl);
       else localStorage.removeItem('consulta-avatar');
+      window.dispatchEvent(new CustomEvent('consulta-avatar-change', { detail: { url: fullAvatarUrl } }));
       localStorage.setItem('consulta-name', prof.full_name || '');
     }
     setLoading(false);
@@ -802,10 +825,23 @@ export default function ProfessorDashboard() {
                   <div key={c.id} className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden transition-colors hover:border-white/10">
                     <div className="p-5">
                       <div className="flex items-start gap-4">
-                        <Avatar name={c.student_name} />
+                        <button
+                          type="button"
+                          onClick={() => setProfileCard({ id: c.student_id, role: 'student' })}
+                          className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none"
+                          title="View profile"
+                        >
+                          <Avatar name={c.student_name} avatarUrl={c.student_avatar} />
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <h3 className="text-white font-semibold text-sm">{c.student_name}</h3>
+                            <button
+                              type="button"
+                              onClick={() => setProfileCard({ id: c.student_id, role: 'student' })}
+                              className="text-white font-semibold text-sm hover:text-gray-300 transition-colors text-left"
+                            >
+                              {c.student_name}
+                            </button>
                             <StatusBadge status={c.status} />
                           </div>
                           <p className="text-gray-500 text-xs mt-0.5">{c.student_number} · {c.program}</p>
@@ -818,7 +854,7 @@ export default function ProfessorDashboard() {
                           <p className="text-gray-200 text-sm font-medium">
                             {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </p>
-                          <p className="text-gray-500 text-xs mt-0.5">{c.day} · {c.time_start?.slice(0, 5)}–{c.time_end?.slice(0, 5)}</p>
+                          <p className="text-gray-500 text-xs mt-0.5">{c.day} · {fmtTime(c)}</p>
                         </div>
                         <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
                           <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Meeting</p>
@@ -944,10 +980,10 @@ export default function ProfessorDashboard() {
                           {consultList.map(c => (
                             <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
-                                <Avatar name={c.student_name} size="sm" />
+                                <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
                                 <div>
                                   <p className="text-white text-sm font-medium">{c.student_name}</p>
-                                  <p className="text-gray-600 text-xs">{c.time_start?.slice(0, 5)}–{c.time_end?.slice(0, 5)} · {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
+                                  <p className="text-gray-600 text-xs">{fmtTime(c)} · {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
                                 </div>
                               </div>
                               <StatusBadge status={c.status} />
@@ -1392,7 +1428,7 @@ export default function ProfessorDashboard() {
         <Modal title="Mark as Completed" onClose={() => setCompletingConsult(null)}>
           <div className="px-5 py-5 space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
-              <Avatar name={completingConsult.student_name} size="sm" />
+              <Avatar name={completingConsult.student_name} avatarUrl={completingConsult.student_avatar} size="sm" />
               <div>
                 <p className="text-white text-sm font-semibold">{completingConsult.student_name}</p>
                 <p className="text-gray-500 text-xs mt-0.5">{completingConsult.student_number} · {new Date(completingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
@@ -1456,7 +1492,7 @@ export default function ProfessorDashboard() {
         <Modal title="Mark as Rescheduled" onClose={() => setReschedulingConsult(null)}>
           <div className="px-5 py-5 space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
-              <Avatar name={reschedulingConsult.student_name} size="sm" />
+              <Avatar name={reschedulingConsult.student_name} avatarUrl={reschedulingConsult.student_avatar} size="sm" />
               <div>
                 <p className="text-white text-sm font-semibold">{reschedulingConsult.student_name}</p>
                 <p className="text-gray-500 text-xs mt-0.5">{reschedulingConsult.student_number} · {new Date(reschedulingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
@@ -1569,6 +1605,15 @@ export default function ProfessorDashboard() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {profileCard && token && (
+        <UserProfileCard
+          profileId={profileCard.id}
+          profileRole={profileCard.role}
+          token={token}
+          onClose={() => setProfileCard(null)}
+        />
       )}
     </div>
     </DashboardShell>

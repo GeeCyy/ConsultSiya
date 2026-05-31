@@ -106,6 +106,42 @@ router.get('/profile', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/settings/profile/public — read-only profile card for any user by profile-table id
+router.get('/profile/public', authenticate, async (req, res) => {
+  const { role, profile_id } = req.query;
+  if (!role || !profile_id || !['professor', 'student'].includes(role)) {
+    return res.status(400).json({ error: 'role (professor|student) and profile_id are required.' });
+  }
+  try {
+    let data;
+    if (role === 'professor') {
+      const result = await pool.query(
+        `SELECT p.full_name, p.department, u.avatar
+         FROM professors p
+         JOIN users u ON u.id = p.user_id
+         WHERE p.id = $1`,
+        [profile_id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Profile not found.' });
+      data = { role: 'professor', ...result.rows[0] };
+    } else {
+      const result = await pool.query(
+        `SELECT s.full_name, s.student_number, s.program, s.year_level, u.avatar
+         FROM students s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.id = $1`,
+        [profile_id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Profile not found.' });
+      data = { role: 'student', ...result.rows[0] };
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('[Settings GET /profile/public]', err.message);
+    res.status(500).json({ error: 'Failed to fetch profile.' });
+  }
+});
+
 // ── PATCH /api/settings/profile ───────────────────────────────────────────────
 router.patch(
   '/profile',

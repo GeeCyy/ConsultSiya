@@ -219,7 +219,8 @@ router.post('/blocked-dates', authenticate, authorize('admin'), async (req, res)
     const result = await pool.query(
       `INSERT INTO calendar_overrides (type, date, label, created_by)
        VALUES ('blocked_date', $1, $2, $3)
-       ON CONFLICT (date) DO UPDATE SET
+       ON CONFLICT (date) WHERE date IS NOT NULL
+       DO UPDATE SET
          type = EXCLUDED.type,
          label = EXCLUDED.label,
          created_by = EXCLUDED.created_by
@@ -256,19 +257,34 @@ router.post('/calendar-overrides', authenticate, authorize('admin'), async (req,
     return res.status(400).json({ error: 'Invalid override type.' });
   }
   try {
-    const result = await pool.query(
-      `INSERT INTO calendar_overrides (type, date, week_number, value, label, color, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (date) DO UPDATE SET
-         type = EXCLUDED.type,
-         week_number = EXCLUDED.week_number,
-         value = EXCLUDED.value,
-         label = EXCLUDED.label,
-         color = EXCLUDED.color,
-         created_by = EXCLUDED.created_by
-       RETURNING id, type, date::text AS date, week_number, value, label, color, created_at`,
-      [type, date || null, week_number || null, value || null, label || null, color || null, req.user.id]
-    );
+    let result;
+    if (type === 'mode_override' && week_number) {
+      // Mode overrides key on week_number
+      result = await pool.query(
+        `INSERT INTO calendar_overrides (type, week_number, value, created_by)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (week_number) WHERE week_number IS NOT NULL AND type = 'mode_override'
+         DO UPDATE SET value = EXCLUDED.value, created_by = EXCLUDED.created_by
+         RETURNING id, type, date::text AS date, week_number, value, label, color, created_at`,
+        [type, week_number, value || null, req.user.id]
+      );
+    } else {
+      // All other types key on date
+      result = await pool.query(
+        `INSERT INTO calendar_overrides (type, date, week_number, value, label, color, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (date) WHERE date IS NOT NULL
+         DO UPDATE SET
+           type = EXCLUDED.type,
+           week_number = EXCLUDED.week_number,
+           value = EXCLUDED.value,
+           label = EXCLUDED.label,
+           color = EXCLUDED.color,
+           created_by = EXCLUDED.created_by
+         RETURNING id, type, date::text AS date, week_number, value, label, color, created_at`,
+        [type, date || null, week_number || null, value || null, label || null, color || null, req.user.id]
+      );
+    }
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
