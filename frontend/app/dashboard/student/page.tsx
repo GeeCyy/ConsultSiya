@@ -291,6 +291,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 export default function StudentDashboard() {
   const router = useRouter();
   const [view, setView] = useState<View>('book');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [consultTab, setConsultTab] = useState<'active' | 'past'>('active');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
@@ -526,12 +527,17 @@ export default function StudentDashboard() {
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <DashboardShell weekBadge={false}>
+    <DashboardShell weekBadge={false} onMenuToggle={() => setSidebarOpen(v => !v)}>
     <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-full ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
       <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
 
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[59] md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5 relative z-[60] h-full">
+      <aside className={`flex flex-col bg-[#111] border-r border-white/5 h-full w-60 flex-shrink-0 fixed md:static inset-y-0 left-0 z-[60] transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="px-5 py-5 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
@@ -554,15 +560,15 @@ export default function StudentDashboard() {
           <NavItem active={false} onClick={() => router.push('/dashboard/home')} label="Home"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>}
           />
-          <NavItem active={view === 'book'} onClick={() => setView('book')} label="Book a Slot"
+          <NavItem active={view === 'book'} onClick={() => { setView('book'); setSidebarOpen(false); }} label="Book a Slot"
             count={schedules.length}
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>}
           />
-          <NavItem active={view === 'my'} onClick={() => setView('my')} label="My Consultations"
+          <NavItem active={view === 'my'} onClick={() => { setView('my'); setSidebarOpen(false); }} label="My Consultations"
             count={activeConsults || undefined}
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>}
           />
-          <NavItem active={view === 'history'} onClick={() => setView('history')} label="History"
+          <NavItem active={view === 'history'} onClick={() => { setView('history'); setSidebarOpen(false); }} label="History"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
           />
         </nav>

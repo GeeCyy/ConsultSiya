@@ -306,9 +306,11 @@ function roleLabel(role: string): string {
 export default function DashboardShell({
   children,
   weekBadge = true,
+  onMenuToggle,
 }: {
   children: React.ReactNode;
   weekBadge?: boolean;
+  onMenuToggle?: () => void;
 }) {
   const router = useRouter();
   const [faqOpen, setFaqOpen] = useState(false);
@@ -388,6 +390,17 @@ export default function DashboardShell({
       {/* ── Global top bar ─────────────────────────────────────────────────── */}
       <div className={`flex-shrink-0 flex items-center justify-between px-4 py-2.5 z-30 border-b ${isDark ? 'bg-[#111] border-white/5' : 'bg-white border-black/10'}`}>
         <div className="flex items-center gap-2">
+          {onMenuToggle && (
+            <button
+              onClick={onMenuToggle}
+              className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+              aria-label="Toggle menu"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
           {weekBadge && <WeekBadge />}
         </div>
 
