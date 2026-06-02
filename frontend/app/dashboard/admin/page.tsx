@@ -179,6 +179,7 @@ type ReportPeriod = '' | 'week' | 'year' | 'semester';
 export default function AdminDashboard() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('home');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -700,8 +701,30 @@ export default function AdminDashboard() {
   return (
     <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-screen ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
 
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setSidebarOpen(v => !v)}
+        className={`fixed top-3 left-3 z-[70] md:hidden w-9 h-9 flex items-center justify-center rounded-lg border transition-colors ${isDark ? 'bg-[#111] border-white/10 text-gray-400 hover:text-white' : 'bg-white border-black/10 text-gray-500 hover:text-gray-900'}`}
+        aria-label="Toggle menu"
+      >
+        {sidebarOpen ? (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        )}
+      </button>
+
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[59] md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5">
+      <aside className={`flex flex-col bg-[#111] border-r border-white/5 w-60 flex-shrink-0 fixed md:static inset-y-0 left-0 z-[60] transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="px-5 py-5 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
@@ -722,7 +745,7 @@ export default function AdminDashboard() {
 
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map(item => (
-            <button key={item.key} onClick={() => setTab(item.key)}
+            <button key={item.key} onClick={() => { setTab(item.key); setSidebarOpen(false); }}
               className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 tab === item.key
                   ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30'

@@ -69,6 +69,35 @@ function AnnouncementIcon({ type }: { type: string }) {
   );
 }
 
+function linkify(text: string): React.ReactNode[] {
+  const urlRegex = /https?:\/\/[^\s]+/g;
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+    nodes.push(
+      <a key={match.index} href={match[0]} target="_blank" rel="noopener noreferrer"
+        className="text-blue-300 underline underline-offset-2 hover:text-blue-200 break-all transition-colors">
+        {match[0]}
+      </a>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+function formatAnnouncementDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / 86_400_000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 function CalendarView({
   overrides = [],
   phHolidays = [],
@@ -394,6 +423,7 @@ function NavItem({ icon, label, active, onClick }: {
 export default function HomePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [term, setTerm] = useState<TermConfig>(CURRENT_TERM);
@@ -548,11 +578,16 @@ export default function HomePage() {
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
 
   return (
-    <DashboardShell weekBadge={false}>
+    <DashboardShell weekBadge={false} onMenuToggle={() => setSidebarOpen(v => !v)}>
       <div className={`flex h-full overflow-hidden ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f2f3f5]'}`}>
 
+        {/* Mobile sidebar backdrop */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 bg-black/60 z-[59] md:hidden" onClick={() => setSidebarOpen(false)} />
+        )}
+
         {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-        <aside className="w-60 flex-shrink-0 flex flex-col bg-[#111] border-r border-white/5 h-full">
+        <aside className={`flex flex-col bg-[#111] border-r border-white/5 h-full w-60 flex-shrink-0 fixed md:static inset-y-0 left-0 z-[60] transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           {/* Logo */}
           <div className="px-5 py-5 border-b border-white/5">
             <div className="flex items-center gap-3">
@@ -752,10 +787,8 @@ export default function HomePage() {
                     <AnnouncementIcon type={a.type} />
                     <div>
                       <p className="text-sm font-semibold text-white leading-tight">{a.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{a.body}</p>
-                      <p className="text-[10px] text-gray-600 mt-1">
-                        {new Date(a.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
+                      <p className="text-xs text-gray-300 mt-0.5 leading-relaxed">{linkify(a.body)}</p>
+                      <p className="text-[10px] text-gray-500 mt-1">{formatAnnouncementDate(a.created_at)}</p>
                     </div>
                   </div>
                 ))}
