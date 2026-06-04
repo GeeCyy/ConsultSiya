@@ -3,15 +3,11 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const Brevo = require('@getbrevo/brevo');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/db');
 const { authenticate } = require('../middleware/auth.middleware');
 
-const brevoClient = Brevo.ApiClient.instance;
-brevoClient.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
-const brevoMailer = new Brevo.TransactionalEmailsApi();
 
 // ── Auth-specific rate limiter: max 10 requests per 15 min per IP ─────────────
 const authLimiter = rateLimit({
@@ -352,11 +348,17 @@ router.post(
 
       const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
 
-      await brevoMailer.sendTransacEmail({
-        sender: { email: process.env.EMAIL_FROM, name: 'ConsultSiya' },
-        to: [{ email: result.rows[0].email }],
-        subject: 'ConsultSiya - Password Reset Request',
-        html: `
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'ConsultSiya', email: process.env.EMAIL_FROM },
+          to: [{ email: result.rows[0].email }],
+          subject: 'ConsultSiya - Password Reset Request',
+          htmlContent: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -416,7 +418,14 @@ router.post(
   </table>
 </body>
 </html>`,
+        }),
       });
+
+      if (!brevoRes.ok) {
+        const errBody = await brevoRes.json().catch(() => ({}));
+        console.error('[Password Reset] Brevo error:', brevoRes.status, errBody);
+        return res.status(500).json({ error: 'Failed to send reset email. Please try again.' });
+      }
 
       console.log(`[Password Reset] Email sent to ${email}`);
       res.json({ message: 'If that email is registered, a reset link has been sent.' });
