@@ -3,21 +3,15 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const Brevo = require('@getbrevo/brevo');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/db');
 const { authenticate } = require('../middleware/auth.middleware');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const brevoClient = Brevo.ApiClient.instance;
+brevoClient.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
+const brevoMailer = new Brevo.TransactionalEmailsApi();
 
 // ── Auth-specific rate limiter: max 10 requests per 15 min per IP ─────────────
 const authLimiter = rateLimit({
@@ -358,9 +352,9 @@ router.post(
 
       const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
 
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || `"ConsultSiya" <${process.env.EMAIL_USER}>`,
-        to: result.rows[0].email,
+      await brevoMailer.sendTransacEmail({
+        sender: { email: process.env.EMAIL_FROM, name: 'ConsultSiya' },
+        to: [{ email: result.rows[0].email }],
         subject: 'ConsultSiya - Password Reset Request',
         html: `
 <!DOCTYPE html>
