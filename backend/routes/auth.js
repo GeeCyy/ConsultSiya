@@ -3,10 +3,19 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/db');
 const { authenticate } = require('../middleware/auth.middleware');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // ── Auth-specific rate limiter: max 10 requests per 15 min per IP ─────────────
 const authLimiter = rateLimit({
@@ -346,8 +355,74 @@ router.post(
       );
 
       const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
-      console.log(`[Password Reset] Link for ${email}: ${resetUrl}`);
 
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"ConsultSiya" <${process.env.EMAIL_USER}>`,
+        to: result.rows[0].email,
+        subject: 'ConsultSiya - Password Reset Request',
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:#b91c1c;padding:32px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">ConsultSiya</h1>
+              <p style="margin:6px 0 0;color:#fca5a5;font-size:13px;">Mapúa School of Information Technology</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px 40px 32px;">
+              <h2 style="margin:0 0 12px;color:#111827;font-size:18px;font-weight:600;">Password Reset Request</h2>
+              <p style="margin:0 0 20px;color:#4b5563;font-size:14px;line-height:1.6;">
+                We received a request to reset the password for your ConsultSiya account. Click the button below to set a new password.
+              </p>
+              <p style="margin:0 0 28px;color:#4b5563;font-size:14px;line-height:1.6;">
+                This link will expire in <strong>1 hour</strong>. If you didn't request a password reset, you can safely ignore this email.
+              </p>
+              <!-- Button -->
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-radius:8px;background:#b91c1c;">
+                    <a href="${resetUrl}" target="_blank" style="display:inline-block;padding:13px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">
+                      Reset My Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <!-- Fallback link -->
+              <p style="margin:28px 0 0;color:#9ca3af;font-size:12px;line-height:1.6;">
+                If the button doesn't work, copy and paste this link into your browser:<br />
+                <a href="${resetUrl}" style="color:#b91c1c;word-break:break-all;">${resetUrl}</a>
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px;border-top:1px solid #f3f4f6;text-align:center;">
+              <p style="margin:0;color:#9ca3af;font-size:12px;">
+                &copy; ${new Date().getFullYear()} ConsultSiya &mdash; Mapúa SOIT. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+      });
+
+      console.log(`[Password Reset] Email sent to ${email}`);
       res.json({ message: 'If that email is registered, a reset link has been sent.' });
     } catch (err) {
       console.error('[Forgot Password]', err.message);

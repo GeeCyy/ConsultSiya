@@ -165,12 +165,43 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
   return action_taken;
 }
 
+function ActionBadge({ action_taken, referral, referral_specify }: { action_taken: string | null; referral: string | null; referral_specify: string | null }) {
+  const label = actionLabel(action_taken, referral, referral_specify);
+  if (label === '—') return <span className="text-gray-600 text-xs">—</span>;
+  const isReferred = label.startsWith('Referred to');
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${
+      isReferred
+        ? 'bg-violet-500/20 text-violet-400'
+        : 'bg-green-500/20 text-green-500'
+    }`}>
+      {isReferred ? (
+        <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+        </svg>
+      ) : (
+        <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      )}
+      <span className="line-clamp-2">{label}</span>
+    </span>
+  );
+}
+
 function formatTime(t?: string | null): string {
   if (!t) return '';
   const [h, m] = t.split(':').map(Number);
   const ampm = h >= 12 ? 'PM' : 'AM';
   const hour = h % 12 || 12;
   return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function fmtDateTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  const date = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${date} · ${time}`;
 }
 
 type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar';
@@ -921,7 +952,7 @@ export default function AdminDashboard() {
                           <Avatar name={a.email} />
                           <div>
                             <p className="text-white text-sm font-medium">{a.email}</p>
-                            <p className="text-gray-600 text-xs">Admin · since {new Date(a.created_at).toLocaleDateString()}</p>
+                            <p className="text-gray-600 text-xs">Admin · joined {fmtDateTime(a.created_at)}</p>
                           </div>
                         </div>
                         <span className="text-[10px] text-[#CC0000] font-semibold uppercase tracking-wide">Admin</span>
@@ -952,6 +983,7 @@ export default function AdminDashboard() {
                               {u.role === 'professor' && u.department && (
                                 <p className="text-gray-600 text-xs">{u.department}</p>
                               )}
+                              <p className="text-gray-700 text-[10px] mt-0.5">Registered {fmtDateTime(u.created_at)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1023,6 +1055,7 @@ export default function AdminDashboard() {
                             {u.role === 'professor' && u.department && (
                               <p className="text-gray-600 text-xs">{u.department}</p>
                             )}
+                            <p className="text-gray-700 text-[10px] mt-0.5">Joined {fmtDateTime(u.created_at)}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1182,7 +1215,7 @@ export default function AdminDashboard() {
                               <div key={slot.id} className="px-5 py-3 flex items-center justify-between">
                                 <div className="flex items-center gap-4 text-sm text-gray-400">
                                   <span className="text-gray-300 font-medium w-24">{slot.day}</span>
-                                  <span className="font-mono">{slot.time_start?.slice(0, 5)} – {slot.time_end?.slice(0, 5)}</span>
+                                  <span className="font-mono">{formatTime(slot.time_start)} – {formatTime(slot.time_end)}</span>
                                   {slot.location && (
                                     <span className="text-gray-600 text-xs">{slot.location}</span>
                                   )}
@@ -1326,16 +1359,16 @@ export default function AdminDashboard() {
                               <tbody className="divide-y divide-white/5">
                                 {items.map(c => (
                                   <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
-                                    <td className="px-4 py-3 text-gray-300 text-xs whitespace-nowrap">
+                                    <td className="px-4 py-3 text-gray-300 text-xs font-semibold whitespace-nowrap">
                                       {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-300 text-xs truncate">{c.student_name}</td>
-                                    <td className="px-4 py-3 text-gray-300 text-xs truncate">{c.professor_name}</td>
-                                    <td className="px-4 py-3 text-gray-400 text-xs">
+                                    <td className="px-4 py-3 text-gray-300 text-xs font-semibold truncate">{c.student_name}</td>
+                                    <td className="px-4 py-3 text-gray-300 text-xs font-semibold truncate">{c.professor_name}</td>
+                                    <td className="px-4 py-3 text-gray-400 text-xs font-semibold">
                                       <span className="line-clamp-2">{natureLabel(c)}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-gray-400 text-xs">
-                                      <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
+                                    <td className="px-4 py-3">
+                                      <ActionBadge action_taken={c.action_taken} referral={c.referral} referral_specify={c.referral_specify} />
                                     </td>
                                     <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
                                   </tr>
