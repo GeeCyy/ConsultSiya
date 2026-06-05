@@ -11,8 +11,6 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
   const dateValue = (typeof date === 'string' && date.trim().length >= 8)
     ? date.trim().slice(0, 10)
     : null;
-  console.log('[schedules POST] received date:', JSON.stringify(date), '→ stored as:', dateValue);
-
   // Derive effective time_start/time_end from first/last range for backward compat
   const trArray = Array.isArray(time_ranges) && time_ranges.length > 0 ? time_ranges : null;
   const effectiveStart = trArray ? trArray[0].time_start : time_start;
@@ -35,7 +33,6 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
        RETURNING id, day, time_start, time_end, location, date::text AS date, time_ranges`,
       [professor_id, day, effectiveStart, effectiveEnd, location || null, dateValue, trJson]
     );
-    console.log('[schedules POST] row saved — id:', result.rows[0].id, 'date:', result.rows[0].date);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);

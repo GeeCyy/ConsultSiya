@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 require('dotenv').config();
@@ -33,16 +32,6 @@ app.use(helmet({
 // ── Body parser + cookies ─────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-
-// ── Global rate limiter (all API endpoints) ───────────────────────────────────
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests. Please try again later.' },
-});
-//app.use('/api/', globalLimiter);
 
 // ── Static uploads ─────────────────────────────────────────────────────────────
 // Avatars are public-facing (profile pictures in UI) so served as static assets.

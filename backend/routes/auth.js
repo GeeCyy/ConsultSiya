@@ -326,14 +326,11 @@ router.post(
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
 
     const email = req.body.email.trim().toLowerCase();
-    console.log(`[Forgot Password] Received request for email: "${email}"`);
     try {
       const result = await pool.query(`SELECT id, email FROM users WHERE LOWER(email) = $1`, [email]);
-      console.log(`[Forgot Password] DB rows found: ${result.rows.length}`, result.rows.map(r => r.email));
 
       // Always return success to avoid leaking which emails are registered
       if (result.rows.length === 0) {
-        console.log(`[Forgot Password] No user found for "${email}" — no link generated`);
         return res.json({ message: 'If that email is registered, a reset link has been sent.' });
       }
 
@@ -427,7 +424,6 @@ router.post(
         return res.status(500).json({ error: 'Failed to send reset email. Please try again.' });
       }
 
-      console.log(`[Password Reset] Email sent to ${email}`);
       res.json({ message: 'If that email is registered, a reset link has been sent.' });
     } catch (err) {
       console.error('[Forgot Password]', err.message);

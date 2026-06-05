@@ -291,6 +291,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 export default function StudentDashboard() {
   const router = useRouter();
   const [view, setView] = useState<View>('book');
+  const [viewReady, setViewReady] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [consultTab, setConsultTab] = useState<'active' | 'past'>('active');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -341,6 +342,9 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!token) { router.push('/login'); return; }
+    const v = new URLSearchParams(window.location.search).get('view');
+    if (v === 'my' || v === 'history' || v === 'book') setView(v as View);
+    setViewReady(true);
     fetchData();
   }, []);
 
@@ -560,15 +564,15 @@ export default function StudentDashboard() {
           <NavItem active={false} onClick={() => router.push('/dashboard/home')} label="Home"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>}
           />
-          <NavItem active={view === 'book'} onClick={() => { setView('book'); setSidebarOpen(false); }} label="Book a Slot"
+          <NavItem active={viewReady && view === 'book'} onClick={() => { setView('book'); setSidebarOpen(false); }} label="Book a Slot"
             count={schedules.length}
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>}
           />
-          <NavItem active={view === 'my'} onClick={() => { setView('my'); setSidebarOpen(false); }} label="My Consultations"
+          <NavItem active={viewReady && view === 'my'} onClick={() => { setView('my'); setSidebarOpen(false); }} label="My Consultations"
             count={activeConsults || undefined}
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg>}
           />
-          <NavItem active={view === 'history'} onClick={() => { setView('history'); setSidebarOpen(false); }} label="History"
+          <NavItem active={viewReady && view === 'history'} onClick={() => { setView('history'); setSidebarOpen(false); }} label="History"
             icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
           />
         </nav>
@@ -586,8 +590,8 @@ export default function StudentDashboard() {
         ) : view === 'book' ? (
           <div className="px-8 py-8">
             <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">Book a Consultation</h1>
-              <p className="text-gray-500 text-sm mt-1">{schedules.length} slot{schedules.length !== 1 ? 's' : ''} available</p>
+              <h1 className="text-white text-3xl font-bold">Book a Consultation</h1>
+              <p className="text-gray-500 text-base mt-1">{schedules.length} slot{schedules.length !== 1 ? 's' : ''} available</p>
             </div>
 
             {schedules.length === 0 ? (
@@ -613,31 +617,31 @@ export default function StudentDashboard() {
                           <button
                             type="button"
                             onClick={() => setProfileCard({ id: s.professor_id, role: 'professor' })}
-                            className="text-white font-semibold text-sm hover:text-gray-300 transition-colors text-left"
+                            className="text-white font-bold text-xl hover:text-gray-300 transition-colors text-left"
                           >
                             {s.professor_name}
                           </button>
-                          <p className="text-gray-500 text-xs mt-0.5">{s.department}</p>
+                          <p className="text-gray-300 text-base font-semibold mt-0.5">{s.department}</p>
                           {s.location && (
-                            <p className="text-gray-600 text-xs mt-0.5">
-                              <span className="text-purple-400">F2F: </span>{s.location}
+                            <p className="text-base mt-0.5 font-semibold">
+                              <span className="text-purple-400">F2F: </span><span className="text-gray-300">{s.location}</span>
                             </p>
                           )}
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-gray-200 text-sm font-medium">{s.day}</p>
+                          <p className="text-gray-200 text-xl font-bold">{s.day}</p>
                           {(s.time_ranges?.length
                             ? s.time_ranges
                             : [{ time_start: s.time_start, time_end: s.time_end }]
                           ).map((r, i) => (
-                            <p key={i} className="text-gray-500 text-xs mt-0.5 font-mono">
-                              {r.time_start?.slice(0, 5)}–{r.time_end?.slice(0, 5)}
+                            <p key={i} className="text-gray-200 text-base mt-0.5 font-bold font-mono">
+                              {r.time_start ? formatTime12(r.time_start.slice(0, 5)) : ''}–{r.time_end ? formatTime12(r.time_end.slice(0, 5)) : ''}
                             </p>
                           ))}
                         </div>
                       </div>
                       <div className="mt-4 flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-500">
+                        <span className="inline-flex items-center gap-1.5 text-sm text-emerald-500">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Available
                         </span>

@@ -155,13 +155,11 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       ? JSON.stringify(nature_of_advising)
       : (nature_of_advising || null);
 
-    const meeting_link = null;
-
     const result = await pool.query(
       `INSERT INTO consultations
        (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, meeting_link]
+      [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null]
     );
 
     res.status(201).json(result.rows[0]);
