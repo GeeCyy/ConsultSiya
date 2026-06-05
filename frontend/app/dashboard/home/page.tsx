@@ -432,12 +432,10 @@ export default function HomePage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [firstName, setFirstName] = useState<string | null>(null);
   const [consultations, setConsultations] = useState<{ date: string; time?: string; status: string }[] | null>(null);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('consulta-theme') !== 'light';
-    return true;
-  });
+  const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
+    setIsDark(localStorage.getItem('consulta-theme') !== 'light');
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
     window.addEventListener('consulta-theme-change', handler);
     return () => window.removeEventListener('consulta-theme-change', handler);
