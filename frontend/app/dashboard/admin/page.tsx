@@ -285,17 +285,20 @@ export default function AdminDashboard() {
   const [termError, setTermError] = useState<string | null>(null);
   const [termSuccess, setTermSuccess] = useState(false);
 
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('consulta-theme') !== 'light';
-    return true;
-  });
+  const [isDark, setIsDark] = useState(true);
+
+  useEffect(() => {
+    const dark = localStorage.getItem('consulta-theme') !== 'light';
+    setIsDark(dark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  }, []);
 
   const toggleTheme = () => {
-    setIsDark(d => {
-      const next = !d;
-      localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
-      return next;
-    });
+    const next = !isDark;
+    localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
+    setIsDark(next);
   };
 
   const stats = {
@@ -730,7 +733,7 @@ export default function AdminDashboard() {
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-screen ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
+    <div className={`flex h-screen ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
 
       {/* Mobile hamburger button */}
       <button
