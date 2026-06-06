@@ -67,6 +67,15 @@ function LoginContent() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem('consulta-theme-v2')) {
+      localStorage.setItem('consulta-theme-v2', '1');
+      localStorage.setItem('consulta-theme', 'light');
+    }
+    setIsDark(localStorage.getItem('consulta-theme') === 'dark');
+  }, []);
 
   useEffect(() => {
     if (searchParams.get('registered') === '1') {
@@ -82,6 +91,13 @@ function LoginContent() {
     return () => clearTimeout(timer);
   }, [error]);
 
+  const toggleTheme = () => {
+    const next = !isDark;
+    localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
+    setIsDark(next);
+  };
+
   const handleLogin = async () => {
     setError('');
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -96,7 +112,7 @@ function LoginContent() {
       setLocked(false);
       localStorage.setItem('token', data.token);
       localStorage.setItem('role', data.role);
-      const dest = data.role === 'admin' ? '/dashboard/admin' : '/dashboard/home';
+      const dest = data.role === 'admin' ? '/dashboard/admin' : data.role === 'professor' ? '/dashboard/professor' : '/dashboard/student';
       router.push(dest);
     } else {
       if (data.locked) setLocked(true);
@@ -105,19 +121,66 @@ function LoginContent() {
     setLoading(false);
   };
 
+  // Theme tokens
+  const pageBg      = isDark ? '#1a1a1a' : '#f2f3f5';
+  const cardBg      = isDark ? '#252525' : '#ffffff';
+  const cardBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+  const headerBg    = isDark ? '#1a1a1a' : '#f0f0f0';
+  const headerBorder= isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const inputBg     = isDark ? '#2d2d2d' : '#f5f5f5';
+  const inputBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.14)';
+  const inputText   = isDark ? 'text-white' : 'text-gray-900';
+  const labelCls    = isDark ? 'text-gray-300' : 'text-gray-700';
+  const placeholderCls = isDark ? 'placeholder-gray-500' : 'placeholder-gray-400';
+  const subText     = isDark ? 'text-gray-400' : 'text-gray-500';
+  const muteText    = isDark ? 'text-gray-500' : 'text-gray-400';
+  const eyeCls      = isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600';
+  const badgeBg     = isDark ? '#2d2d2d' : '#ebebeb';
+  const dividerClr  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)';
+  const itemText    = isDark ? 'text-gray-400' : 'text-gray-600';
+  const updateTitle = isDark ? 'text-white' : 'text-gray-900';
+  const toggleCls   = isDark
+    ? 'text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 hover:border-white/20'
+    : 'text-gray-600 hover:text-gray-900 hover:bg-black/8 border border-black/10 hover:border-black/20';
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ backgroundColor: '#1e1f22' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 py-10 transition-colors duration-200" style={{ backgroundColor: pageBg }}>
+
+      {/* Theme toggle — top right */}
+      <button
+        onClick={toggleTheme}
+        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        className={`fixed top-4 right-4 p-3 rounded-xl transition-all duration-200 ${toggleCls}`}
+      >
+        {isDark ? (
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" />
+          </svg>
+        ) : (
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" />
+          </svg>
+        )}
+      </button>
+
       <div className="flex flex-col lg:flex-row w-full max-w-4xl gap-6">
 
         {/* ── Login Form ──────────────────────────────────────────────────── */}
         <div
-          className="w-full lg:max-w-md flex-shrink-0 px-8 py-10 rounded-2xl border border-white/10 flex flex-col justify-center"
-          style={{ backgroundColor: '#2b2d31' }}
+          className="w-full lg:max-w-md flex-shrink-0 px-8 py-10 rounded-2xl flex flex-col justify-center transition-colors duration-200"
+          style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
         >
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>Consulta</h1>
-            <p className="text-gray-400 text-sm mt-1">SOIT Academic Consultation System</p>
-            <p className="text-gray-500 text-xs mt-1">Mapúa University</p>
+            <div className="flex justify-center mb-2">
+              <img
+                src="/consulta-logo.png"
+                alt="Consulta"
+                className="w-full object-contain"
+                style={{ maxHeight: '320px' }}
+              />
+            </div>
+            <p className={`text-sm mt-1 ${subText}`}>SOIT Academic Consultation System</p>
+            <p className={`text-xs mt-1 ${muteText}`}>Mapúa University</p>
           </div>
 
           {success && (
@@ -132,23 +195,22 @@ function LoginContent() {
             </div>
           )}
 
-          <div className="space-y-4">
+          <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleLogin(); }}>
             <div className="space-y-1">
-              <Label htmlFor="email" className="text-gray-300">Email</Label>
+              <Label htmlFor="email" className={labelCls}>Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                className="border text-white placeholder-gray-500"
-                style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
+                className={`border ${inputText} ${placeholderCls}`}
+                style={{ backgroundColor: inputBg, borderColor: inputBorder }}
               />
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="password" className="text-gray-300">Password</Label>
+              <Label htmlFor="password" className={labelCls}>Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -156,16 +218,15 @@ function LoginContent() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                  className="border text-white placeholder-gray-500 pr-10"
-                  style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
+                  className={`border ${inputText} ${placeholderCls} pr-10`}
+                  style={{ backgroundColor: inputBg, borderColor: inputBorder }}
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeCls}`}
                 >
                   <EyeIcon open={showPassword} />
                 </button>
@@ -173,37 +234,37 @@ function LoginContent() {
             </div>
 
             <Button
+              type="submit"
               className="w-full text-white font-semibold mt-2"
               style={{ backgroundColor: '#CC0000' }}
-              onClick={handleLogin}
               disabled={loading}
             >
               {loading ? 'Logging in...' : 'Sign In'}
             </Button>
-          </div>
+          </form>
 
           <p className="text-center text-sm mt-3">
-            <Link href="/forgot-password" className="text-gray-500 hover:text-[#CC0000] transition-colors text-xs">
+            <Link href="/forgot-password" className={`hover:text-[#CC0000] transition-colors text-xs ${muteText}`}>
               Forgot password?
             </Link>
           </p>
 
-          <p className="text-center text-sm text-gray-500 mt-3">
+          <p className={`text-center text-sm mt-3 ${subText}`}>
             No account yet?{' '}
             <Link href="/register" className="text-[#CC0000] hover:underline">Register</Link>
           </p>
-          <p className="text-center text-gray-600 text-xs mt-4">© 2026 Mapúa University SOIT</p>
+          <p className={`text-center text-xs mt-4 ${muteText}`}>© 2026 Mapúa University SOIT</p>
         </div>
 
-        {/* ── Developer Updates Board ─────────────────────────────────────── */}
+        {/* ── System Updates Board ────────────────────────────────────────── */}
         <div
-          className="flex flex-col flex-1 rounded-2xl border border-white/10 overflow-hidden"
-          style={{ backgroundColor: '#2b2d31' }}
+          className="flex flex-col flex-1 rounded-2xl overflow-hidden transition-colors duration-200"
+          style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
         >
           {/* Header */}
           <div
-            className="px-6 py-4 border-b border-white/10 flex items-center gap-3"
-            style={{ backgroundColor: '#1e1f22' }}
+            className="px-6 py-4 flex items-center gap-3 transition-colors duration-200"
+            style={{ backgroundColor: headerBg, borderBottom: `1px solid ${headerBorder}` }}
           >
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -214,8 +275,8 @@ function LoginContent() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">System Updates</p>
-              <p className="text-[11px] text-gray-500">Patch notes & release history</p>
+              <p className={`text-sm font-semibold ${updateTitle}`}>System Updates</p>
+              <p className={`text-[11px] ${muteText}`}>Patch notes & release history</p>
             </div>
             <span
               className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -232,16 +293,16 @@ function LoginContent() {
                 <div className="flex items-center gap-2 mb-2">
                   <span
                     className="text-[11px] font-bold px-2 py-0.5 rounded-md"
-                    style={{ backgroundColor: '#383a40', color: '#CC0000' }}
+                    style={{ backgroundColor: badgeBg, color: '#CC0000' }}
                   >
                     {release.version}
                   </span>
-                  <span className="text-[11px] text-gray-500">{release.date}</span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                  <span className={`text-[11px] ${muteText}`}>{release.date}</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: dividerClr }} />
                 </div>
                 <ul className="space-y-1.5">
                   {release.items.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
+                    <li key={i} className={`flex items-start gap-2 text-sm ${itemText}`}>
                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#CC0000' }} />
                       {item}
                     </li>
@@ -253,11 +314,11 @@ function LoginContent() {
 
           {/* Footer */}
           <div
-            className="px-6 py-3 border-t border-white/5 flex items-center justify-between"
-            style={{ backgroundColor: '#1e1f22' }}
+            className="px-6 py-3 flex items-center justify-between transition-colors duration-200"
+            style={{ backgroundColor: headerBg, borderTop: `1px solid ${headerBorder}` }}
           >
-            <span className="text-[10px] text-gray-600">Consulta © 2026 Mapúa University SOIT</span>
-            <span className="text-[10px] text-gray-600">Build 2026.05</span>
+            <span className={`text-[10px] ${muteText}`}>Consulta © 2026 Mapúa University SOIT</span>
+            <span className={`text-[10px] ${muteText}`}>Build 2026.05</span>
           </div>
         </div>
 

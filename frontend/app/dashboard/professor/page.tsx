@@ -4,8 +4,21 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Label } from '@/components/ui/label';
-import DashboardShell from '@/components/DashboardShell';
 import UserProfileCard from '@/components/UserProfileCard';
+import ProfessorNavbar, { type ProfessorTab } from '@/components/ProfessorNavbar';
+import ChatbotWidget from '@/components/ChatbotWidget';
+import {
+  CURRENT_TERM,
+  buildTermFromConfig,
+  getAcademicWeek,
+  getWeekMode,
+  daysUntil,
+  getTermDates,
+  getTermProgress,
+  type CalendarOverride,
+  type TermConfig,
+  type RawTermConfig,
+} from '@/lib/academicCalendar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -30,6 +43,13 @@ function addMins(timeStr: string, mins: number): string {
   const [h, m] = timeStr.slice(0, 5).split(':').map(Number);
   const total = h * 60 + m + mins;
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function to12h(t: string): string {
+  const [h, m] = t.slice(0, 5).split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
 function fmtTime(c: { time: string | null; time_start: string; time_end: string }): string {
@@ -118,17 +138,6 @@ function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: st
 }
 
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-        active ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
-      }`}>
-      {icon}{label}
-    </button>
-  );
-}
-
 function getQuarterLabel(dateStr: string): string {
   const d = new Date(dateStr);
   const m = d.getMonth();
@@ -157,7 +166,15 @@ function actionLabel(action_taken: string | null, referral: string | null, refer
 }
 
 
-type Tab = 'consultations' | 'calendar' | 'schedules' | 'export' | 'history' | 'profile';
+type Tab = ProfessorTab | 'profile';
+
+type Announcement = {
+  id: number;
+  title: string;
+  body: string;
+  type: 'info' | 'warning';
+  created_at: string;
+};
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -173,7 +190,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#161616] shadow-2xl"
+        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#252525] shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
           <h2 className="text-white font-bold text-base">{title}</h2>
@@ -191,10 +208,12 @@ function ScheduleDatePicker({
   selected,
   onSelect,
   disabledDates,
+  isDark = true,
 }: {
   selected: string;
   onSelect: (dateStr: string, dayName: string) => void;
   disabledDates: string[];
+  isDark?: boolean;
 }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -220,25 +239,34 @@ function ScheduleDatePicker({
     else setViewMonth(m => m + 1);
   };
 
+  const calBg      = isDark ? '#1e1e1e'              : '#f5f5f5';
+  const calBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+  const monthText  = isDark ? 'text-white'            : 'text-gray-800';
+  const navBtn     = isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-800 hover:bg-black/8';
+  const dayHeader  = isDark ? 'text-gray-600'         : 'text-gray-400';
+  const dayNormal  = isDark ? 'text-gray-300 hover:bg-white/10' : 'text-gray-700 hover:bg-black/8';
+  const dayDisabled= isDark ? 'text-gray-700'         : 'text-gray-300';
+  const dayToday   = isDark ? 'text-white ring-1 ring-inset ring-[#CC0000]/40 hover:bg-white/10' : 'text-gray-900 ring-1 ring-inset ring-[#CC0000]/40 hover:bg-black/8';
+
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-3 min-h-[220px]" />;
+  if (!mounted) return <div className="rounded-xl p-3 min-h-[220px]" style={{ backgroundColor: calBg, border: `1px solid ${calBorder}` }} />;
 
   return (
-    <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-3 select-none">
+    <div className="rounded-xl p-3 select-none" style={{ backgroundColor: calBg, border: `1px solid ${calBorder}` }}>
       <div className="flex items-center justify-between mb-3">
         <button type="button" onClick={prevMonth} disabled={isCurrentMonth}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+          className={`w-7 h-7 flex items-center justify-center rounded-lg disabled:opacity-20 disabled:cursor-not-allowed transition-colors ${navBtn}`}>
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <span className="text-white text-sm font-medium">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <span className={`text-sm font-medium ${monthText}`}>{MONTH_NAMES[viewMonth]} {viewYear}</span>
         <button type="button" onClick={nextMonth}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors">
+          className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${navBtn}`}>
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
       <div className="grid grid-cols-7 mb-1">
         {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
-          <div key={d} className="text-center text-gray-600 text-[10px] font-medium py-1">{d}</div>
+          <div key={d} className={`text-center text-[10px] font-medium py-1 ${dayHeader}`}>{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-0.5">
@@ -264,9 +292,9 @@ function ScheduleDatePicker({
               className={[
                 'rounded-lg text-xs py-1.5 font-medium transition-colors w-full',
                 isSelected ? 'bg-[#CC0000] text-white' :
-                isDisabled ? 'text-gray-700 cursor-not-allowed' :
-                isToday ? 'text-white ring-1 ring-inset ring-[#CC0000]/40 hover:bg-white/10' :
-                'text-gray-300 hover:bg-white/10',
+                isDisabled ? `${dayDisabled} cursor-not-allowed` :
+                isToday ? dayToday :
+                dayNormal,
               ].join(' ')}>
               {day}
             </button>
@@ -304,7 +332,7 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
   const HOURS = ['1','2','3','4','5','6','7','8','9','10','11','12'];
   const MINS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
   const sel = dark
-    ? 'bg-[#0a0a0a] border border-white/15 text-white text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#CC0000]/50 cursor-pointer hover:border-white/30 transition-colors'
+    ? 'bg-[#1e1e1e] border border-white/15 text-white text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#CC0000]/50 cursor-pointer hover:border-white/30 transition-colors'
     : 'bg-white border border-gray-300 text-gray-900 text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#CC0000]/60 cursor-pointer hover:border-gray-400 transition-colors';
   return (
     <div className="flex items-center gap-1.5">
@@ -324,10 +352,256 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
   );
 }
 
+// ── Academic mini-calendar ───────────────────────────────────────────────────
+const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const NOTE_COLORS = [
+  { id: 'indigo', dot: 'bg-indigo-400',  ring: 'ring-indigo-400' },
+  { id: 'sky',    dot: 'bg-sky-400',     ring: 'ring-sky-400'    },
+  { id: 'teal',   dot: 'bg-teal-400',    ring: 'ring-teal-400'   },
+  { id: 'rose',   dot: 'bg-rose-400',    ring: 'ring-rose-400'   },
+  { id: 'amber',  dot: 'bg-amber-400',   ring: 'ring-amber-400'  },
+  { id: 'violet', dot: 'bg-violet-400',  ring: 'ring-violet-400' },
+] as const;
+
+type UserNote = { id: number; date: string; note: string; color: string };
+
+function MiniCalendar({
+  dateLabelMap, dateColorMap, isDark, token, calOverrides,
+}: {
+  dateLabelMap: Map<string, string>;
+  dateColorMap: Map<string, string>;
+  isDark: boolean;
+  token: string | null;
+  calOverrides: CalendarOverride[];
+}) {
+  const [viewYear, setViewYear]   = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  const [todayStr, setTodayStr]   = useState('');
+  const [selected, setSelected]   = useState<string | null>(null);
+  const [userNotes, setUserNotes] = useState<UserNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteDraftColor, setNoteDraftColor] = useState('indigo');
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  useEffect(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    setTodayStr(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`);
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/calendar/notes`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setUserNotes(data); })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!selected) { setNoteDraft(''); setNoteDraftColor('indigo'); return; }
+    const existing = userNotes.find(n => n.date === selected);
+    setNoteDraft(existing?.note ?? '');
+    setNoteDraftColor(existing?.color ?? 'indigo');
+  }, [selected, userNotes]);
+
+  const prevMonth = () => viewMonth === 0 ? (setViewMonth(11), setViewYear(y => y-1)) : setViewMonth(m => m-1);
+  const nextMonth = () => viewMonth === 11 ? (setViewMonth(0),  setViewYear(y => y+1)) : setViewMonth(m => m+1);
+
+  const handleSaveNote = async () => {
+    if (!token || !selected || !noteDraft.trim()) return;
+    setNoteSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/calendar/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date: selected, note: noteDraft.trim(), color: noteDraftColor }),
+      });
+      if (res.ok) {
+        const saved: UserNote = await res.json();
+        setUserNotes(prev => [...prev.filter(n => n.date !== selected), saved]);
+      }
+    } finally { setNoteSaving(false); }
+  };
+
+  const handleDeleteNote = async (noteId: number) => {
+    if (!token) return;
+    const res = await fetch(`${API_URL}/api/calendar/notes/${noteId}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) setUserNotes(prev => prev.filter(n => n.id !== noteId));
+  };
+
+  const firstDow   = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth= new Date(viewYear, viewMonth + 1, 0).getDate();
+  const monthPfx   = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+
+  const augmented = new Map(dateLabelMap);
+  const augColors  = new Map(dateColorMap);
+
+  // Blocked dates (holidays / no-class) from admin overrides
+  const blockedMap = new Map(
+    calOverrides
+      .filter(o => o.type === 'blocked_date' && o.date)
+      .map(o => [o.date!, o.label ?? o.value ?? 'No Class'])
+  );
+
+  const noteMap = new Map(userNotes.map(n => [n.date, n]));
+
+  const dotCls: Record<string, string> = {
+    red: 'bg-red-500', orange: 'bg-orange-400', blue: 'bg-blue-500',
+    green: 'bg-emerald-500', yellow: 'bg-yellow-400', purple: 'bg-purple-500',
+  };
+  const card = isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm';
+  const tp   = isDark ? 'text-white' : 'text-gray-900';
+  const ts   = isDark ? 'text-gray-400' : 'text-gray-500';
+  const tm   = isDark ? 'text-gray-600' : 'text-gray-400';
+
+  const events = Array.from(augmented.entries())
+    .filter(([d]) => d.startsWith(monthPfx))
+    .sort(([a],[b]) => a.localeCompare(b));
+
+  // Blocked entries for the current month (not already shown as a date_label)
+  const blockedEvents = Array.from(blockedMap.entries())
+    .filter(([d]) => d.startsWith(monthPfx) && !augmented.has(d))
+    .sort(([a],[b]) => a.localeCompare(b));
+
+  const existingNote = selected ? noteMap.get(selected) : undefined;
+  const noteChanged  = selected ? (noteDraft.trim() !== (existingNote?.note ?? '') || noteDraftColor !== (existingNote?.color ?? 'indigo')) : false;
+
+  return (
+    <div className={`rounded-2xl border p-4 ${card}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className={`text-sm font-semibold ${tp}`}>{MONTH_NAMES_FULL[viewMonth]} {viewYear}</span>
+        <div className="flex gap-1">
+          <button onClick={prevMonth} className={`w-6 h-6 flex items-center justify-center rounded hover:bg-white/5 ${tm}`}>
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button onClick={nextMonth} className={`w-6 h-6 flex items-center justify-center rounded hover:bg-white/5 ${tm}`}>
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {['SUN','MON','TUE','WED','THU','FRI','SAT'].map(d => (
+          <div key={d} className={`text-center text-[9px] font-medium ${tm} py-0.5`}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const ds  = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isT = ds === todayStr;
+          const isSel = ds === selected;
+          const isBlocked = blockedMap.has(ds);
+          const evColor = augColors.get(ds);
+          const userNote = noteMap.get(ds);
+          const nc = userNote ? (NOTE_COLORS.find(c => c.id === userNote.color) ?? NOTE_COLORS[0]) : null;
+          return (
+            <button
+              key={ds}
+              onClick={() => setSelected(isSel ? null : ds)}
+              className={`relative flex flex-col items-center py-0.5 rounded-md transition-colors ${
+                isBlocked ? 'bg-red-500/15' :
+                isSel && !isT ? (isDark ? 'bg-white/10' : 'bg-gray-100') :
+                (!isT ? (isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50') : '')
+              }`}
+            >
+              <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] font-medium ${
+                isT ? 'bg-[#CC0000] text-white' :
+                isBlocked ? 'text-red-400' :
+                isDark ? 'text-gray-300' : 'text-gray-700'
+              }`}>{day}</div>
+              {evColor && <div className={`w-1 h-1 rounded-full mt-0.5 ${dotCls[evColor] ?? 'bg-red-500'}`} />}
+              {!evColor && isBlocked && <div className="w-1 h-1 rounded-full mt-0.5 bg-red-400" />}
+              {nc && !evColor && !isBlocked && <div className={`w-1 h-1 rounded-full mt-0.5 ${nc.dot}`} />}
+              {nc && (evColor || isBlocked) && <div className={`absolute top-0.5 right-0.5 w-1 h-1 rounded-full ${nc.dot}`} />}
+            </button>
+          );
+        })}
+      </div>
+      {(events.length > 0 || blockedEvents.length > 0) && (
+        <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} space-y-1.5`}>
+          {events.slice(0, 5).map(([date, label]) => {
+            const d = new Date(date + 'T12:00:00');
+            const c = augColors.get(date) ?? 'red';
+            return (
+              <div key={date} className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls[c] ?? 'bg-red-500'}`} />
+                <span className={`text-[11px] ${tm}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
+                <span className={`text-[11px] font-medium ${date === todayStr ? 'text-[#CC0000]' : ts}`}>
+                  {date === todayStr ? 'Today' : label}
+                </span>
+              </div>
+            );
+          })}
+          {blockedEvents.map(([date, label]) => {
+            const d = new Date(date + 'T12:00:00');
+            return (
+              <div key={date} className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-400" />
+                <span className={`text-[11px] ${tm}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
+                <span className="text-[11px] font-medium text-red-400">{label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Selected date note editor */}
+      {selected && token && (
+        <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+          <p className={`text-[10px] font-semibold uppercase tracking-wider mb-2 ${tm}`}>
+            Note — {MONTH_NAMES_SHORT[parseInt(selected.slice(5,7))-1]} {parseInt(selected.slice(8,10))}
+          </p>
+          <textarea
+            rows={2}
+            value={noteDraft}
+            onChange={e => setNoteDraft(e.target.value)}
+            placeholder="Add a personal note for this date…"
+            className={`w-full rounded-lg px-2.5 py-2 text-xs border focus:outline-none resize-none placeholder-gray-600 ${
+              isDark
+                ? 'bg-[#1e1f22] border-white/10 text-white focus:border-indigo-500/50'
+                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-indigo-400'
+            }`}
+          />
+          <div className="flex items-center gap-1.5 mt-2">
+            {NOTE_COLORS.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setNoteDraftColor(c.id)}
+                className={`w-3.5 h-3.5 rounded-full ${c.dot} transition-transform ${
+                  noteDraftColor === c.id ? `scale-125 ring-2 ${c.ring} ring-offset-1 ${isDark ? 'ring-offset-[#252525]' : 'ring-offset-white'}` : 'hover:scale-110'
+                }`}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2 mt-2">
+            {existingNote && (
+              <button
+                onClick={() => handleDeleteNote(existingNote.id)}
+                className={`flex-1 py-1.5 rounded-lg text-xs border transition-colors text-red-400 border-red-500/20 ${isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-50'}`}
+              >Delete</button>
+            )}
+            <button
+              onClick={handleSaveNote}
+              disabled={noteSaving || !noteDraft.trim() || !noteChanged}
+              className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {noteSaving ? 'Saving…' : existingNote ? 'Update' : 'Save Note'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProfessorDashboard() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('consultations');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>('home');
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [pastSlotsOpen, setPastSlotsOpen] = useState(false);
@@ -380,15 +654,35 @@ export default function ProfessorDashboard() {
   // Profile
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '', avatar: null });
 
-  // Theme — synced with DashboardShell's global toggle
-  const [isDark, setIsDark] = useState(true);
+  // Home-tab data
+  const [term, setTerm] = useState<TermConfig>(CURRENT_TERM);
+  const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    setIsDark(localStorage.getItem('consulta-theme') !== 'light');
+    // One-time migration: clear any stale 'dark' set by old defaults and reset to light.
+    // 'consulta-theme-v2' acts as a marker so this only runs once per browser.
+    if (!localStorage.getItem('consulta-theme-v2')) {
+      localStorage.setItem('consulta-theme-v2', '1');
+      localStorage.setItem('consulta-theme', 'light');
+    }
+    const dark = localStorage.getItem('consulta-theme') === 'dark';
+    setIsDark(dark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
     window.addEventListener('consulta-theme-change', handler);
     return () => window.removeEventListener('consulta-theme-change', handler);
   }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
+    setIsDark(next);
+  };
 
   // Auth guard — confirm token + role before rendering anything
   useEffect(() => {
@@ -403,7 +697,7 @@ export default function ProfessorDashboard() {
   useEffect(() => {
     if (!authReady) return;
     const vParam = new URLSearchParams(window.location.search).get('view');
-    if (vParam && (['consultations','calendar','schedules','export','history','profile'] as string[]).includes(vParam)) setTab(vParam as Tab);
+    if (vParam && (['home','consultations','calendar','schedules','export','history','profile'] as string[]).includes(vParam)) setTab(vParam as Tab);
     fetchAll();
   }, [authReady]);
 
@@ -427,13 +721,19 @@ export default function ProfessorDashboard() {
   const fetchAll = async () => {
     // Mark overdue consultations before loading so the list is already accurate
     await api.post('/api/consultations/mark-missed', {}, token!);
-    const [c, s, prof] = await Promise.all([
+    const [c, s, prof, ann, cal, termData] = await Promise.all([
       api.get('/api/consultations', token!),
       api.get('/api/schedules/mine', token!),
       api.get('/api/auth/profile', token!),
+      fetch(`${API_URL}/api/announcements`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`${API_URL}/api/calendar`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`${API_URL}/api/settings/term`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
     setConsultations(Array.isArray(c) ? c : []);
     setSchedules(Array.isArray(s) ? s : []);
+    if (Array.isArray(ann)) setAnnouncements(ann);
+    if (Array.isArray(cal)) setCalOverrides(cal);
+    if (termData && !termData.error) setTerm(buildTermFromConfig(termData as RawTermConfig));
     if (!prof.error) {
       const avatarVal = prof.avatar || null;
       setProfile({
@@ -562,10 +862,8 @@ export default function ProfessorDashboard() {
     if (!pendingSched) return;
     setShowConfirmSched(false);
     const payload = { ...pendingSched, date: newSchedDate };
-    console.log('[Schedule] Sending payload to backend:', JSON.stringify(payload));
     const data = await api.post('/api/schedules', payload, token!);
     if (data.error) { setSchedError(data.error); return; }
-    console.log('[Schedule] Saved — server returned date:', data.date);
     setNewSched({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] });
     setNewSchedDate('');
     setPendingSched(null);
@@ -649,7 +947,7 @@ export default function ProfessorDashboard() {
 
   const radioCls = (selected: boolean) =>
     `flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
-      selected ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30 text-white' : 'bg-[#1a1a1a] text-gray-400 hover:bg-white/5'
+      selected ? 'bg-[#CC0000]/10 ring-1 ring-[#CC0000]/30 text-white' : 'bg-[#2d2d2d] text-gray-400 hover:bg-white/5'
     }`;
 
   const radioBtn = (selected: boolean) => (
@@ -661,7 +959,7 @@ export default function ProfessorDashboard() {
   );
 
   const fieldCls = isDark
-    ? 'px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50'
+    ? 'px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#CC0000]/50'
     : 'px-3 py-2 rounded-lg text-gray-900 text-sm bg-white border border-gray-300 focus:outline-none focus:border-[#CC0000]/60';
 
   // Calendar: group consultations by date for the calendar view
@@ -671,64 +969,104 @@ export default function ProfessorDashboard() {
     return acc;
   }, {});
 
-  const navItems: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'schedules',     label: 'Manage Schedules', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg> },
-    { key: 'calendar',     label: 'Booking Calendar', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 9v7.5" /></svg> },
-    { key: 'consultations', label: 'My Consultations', icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" /></svg> },
-    { key: 'export',       label: 'Export Report',   icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0-4-4m4 4V4" /></svg> },
-    { key: 'history',      label: 'History',          icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg> },
-  ];
+  // ── Home-tab derived values ──────────────────────────────────────────────────
+  const now = new Date();
+  const currentWeek = getAcademicWeek(term, now);
+  const calModeMap = new Map(
+    calOverrides.filter(o => o.type === 'mode_override' && o.week_number && o.value)
+      .map(o => [o.week_number!, o.value!])
+  );
+  const currentMode = currentWeek ? (calModeMap.get(currentWeek) ?? getWeekMode(term, currentWeek)) : null;
+  const nextWeekNum = currentWeek && currentWeek < term.totalWeeks ? currentWeek + 1 : null;
+  const nextMode = nextWeekNum ? (calModeMap.get(nextWeekNum) ?? getWeekMode(term, nextWeekNum)) : null;
+  const { finalsDate, endDate } = getTermDates(term);
+  const daysToFinals = daysUntil(finalsDate, now);
+  const daysToEnd   = daysUntil(endDate, now);
+  const termProgress = getTermProgress(term, now);
+
+  // This-week window (Mon–Sun)
+  const dow = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow));
+  monday.setHours(0, 0, 0, 0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const mondayStr = monday.toISOString().slice(0, 10);
+  const sundayStr = sunday.toISOString().slice(0, 10);
+
+  const thisWeek  = consultations.filter(c => c.date >= mondayStr && c.date <= sundayStr);
+  const scheduledCount = thisWeek.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
+  const completedCount = thisWeek.filter(c => c.status === 'completed').length;
+  const pendingCount   = thisWeek.filter(c => c.status === 'pending').length;
+  const totalStudents  = new Set(consultations.map(c => c.student_id)).size;
+
+  // Today's consultations (for Today's Schedule sidebar widget)
+  const todayConsultations = consultations
+    .filter(c => c.date === todayStr && (c.status === 'pending' || c.status === 'confirmed'))
+    .sort((a, b) => (a.time || a.time_start).localeCompare(b.time || b.time_start));
+
+  // Greeting
+  const greetingHour = now.getHours();
+  const greetingWord = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
+  const firstName = profile.full_name.trim().split(/\s+/)[0] ?? '';
+
+  // Calendar event maps for sidebar mini-calendar
+  const dateLabelMap = new Map(
+    calOverrides.filter(o => o.type === 'date_label' && o.date && o.value).map(o => [o.date!, o.value!])
+  );
+  const dateColorMap = new Map(
+    calOverrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.color ?? 'red'])
+  );
+
+  // Shared style helpers for the home tab
+  const card      = isDark ? 'bg-[#252525] border border-white/5' : 'bg-white border border-gray-200 shadow-sm';
+  const tp        = isDark ? 'text-white'    : 'text-gray-900';
+  const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
+  const tm        = isDark ? 'text-gray-600' : 'text-gray-400';
+  const modePill  = (m: string) => m === 'Online'
+    ? isDark ? 'bg-blue-500/20 text-blue-300'      : 'bg-blue-50 text-blue-600'
+    : isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700';
+  const modeDot   = (m: string) => m === 'Online' ? 'bg-blue-400' : 'bg-emerald-400';
+  const cardRaw    = isDark ? 'bg-[#252525]' : 'bg-white';
+  const innerCard  = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-gray-50 border-gray-100';
+  const dividerCls = isDark ? 'divide-white/5' : 'divide-gray-100';
+  const borderSoft = isDark ? 'border-white/5' : 'border-gray-200';
+  const borderMid  = isDark ? 'border-white/10' : 'border-gray-200';
+  const hoverBg    = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/80';
+
+  const handleTabChange = (next: ProfessorTab) => {
+    setTab(next);
+    router.replace(`?view=${next}`, { scroll: false });
+  };
 
   // Block all rendering until token + role are confirmed — prevents flash of wrong layout
   if (!authReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0c0c0c' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: isDark ? '#1a1a1a' : '#f2f3f5' }}>
         <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <DashboardShell weekBadge={false} onMenuToggle={() => setSidebarOpen(v => !v)}>
-    <div data-theme={isDark ? 'dark' : 'light'} className={`flex h-full ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
+    <div className={`min-h-screen flex flex-col ${isDark ? 'bg-[#2d2d2d]' : 'bg-[#f2f3f5]'}`}>
 
-      {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[59] md:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`flex flex-col bg-[#111] border-r border-white/5 h-full w-60 flex-shrink-0 fixed md:static inset-y-0 left-0 z-[60] transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="px-5 py-5 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-white font-bold text-sm leading-none">Consulta</p>
-              <p className="text-gray-600 text-xs mt-0.5">Mapúa SOIT</p>
-            </div>
-          </div>
-        </div>
-        <div className="px-5 py-3 border-b border-white/5">
-          <span className="text-[10px] font-semibold text-[#CC0000] uppercase tracking-widest">Professor</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          <NavItem active={false} onClick={() => router.push('/dashboard/home')} label="Home"
-            icon={<svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>}
-          />
-          {navItems.map(item => (
-            <NavItem key={item.key} active={tab === item.key} onClick={() => { setTab(item.key); setSidebarOpen(false); router.replace(`?view=${item.key}`, { scroll: false }); }} label={item.label} icon={item.icon} />
-          ))}
-        </nav>
-      </aside>
+      <ProfessorNavbar
+        tab={tab === 'profile' ? 'home' : tab}
+        onTabChange={handleTabChange}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        profileName={profile.full_name}
+        profileAvatar={profile.avatar}
+        pendingConsultations={consultations.filter(c => c.status === 'pending')}
+        announcements={announcements}
+        storageKey={`prof_read_notifs_${profile.email || 'default'}`}
+      />
 
       {/* Confirmation dialogs */}
       {showConfirmSched && pendingSched && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-4">Confirm New Schedule</h2>
             <div className="space-y-2 mb-5">
               <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {newSchedDate ? new Date(newSchedDate + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingSched.day}</p>
@@ -747,7 +1085,7 @@ export default function ProfessorDashboard() {
 
       {editLinkConsult && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-1">Edit Meeting Link</h2>
             <p className="text-gray-500 text-sm mb-5">Update the Zoom or Google Meet link for this consultation.</p>
             <div className="mb-5">
@@ -758,7 +1096,7 @@ export default function ProfessorDashboard() {
                 value={editLinkInput}
                 onChange={e => setEditLinkInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSaveMeetingLink()}
-                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
               />
             </div>
             <div className="flex gap-2">
@@ -771,7 +1109,7 @@ export default function ProfessorDashboard() {
 
       {meetingLinkConsult && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-1">Confirm Online Consultation</h2>
             <p className="text-gray-500 text-sm mb-5">Provide a Zoom or Google Meet link for the student to join.</p>
             <div className="mb-5">
@@ -782,7 +1120,7 @@ export default function ProfessorDashboard() {
                 value={meetingLinkInput}
                 onChange={e => setMeetingLinkInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleConfirmWithLink()}
-                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
               />
             </div>
             <div className="flex gap-2">
@@ -795,7 +1133,7 @@ export default function ProfessorDashboard() {
 
       {showConfirmEdit && pendingEdit && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-4">Confirm Schedule Edit</h2>
             <div className="space-y-2 mb-5">
               <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {pendingEdit.date ? new Date(pendingEdit.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingEdit.day}</p>
@@ -813,42 +1151,234 @@ export default function ProfessorDashboard() {
       )}
 
       {/* Main */}
-      <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f5f5f5]'}`}>
+      <main className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
             <p className="text-gray-600 text-sm">Loading...</p>
           </div>
 
+        ) : tab === 'home' ? (
+            <div>
+              {/* ── Hero ── */}
+              <div
+                className="relative"
+                style={{
+                  backgroundImage: "url('/mapua-banner.jpg')",
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center 40%',
+                  backgroundRepeat: 'no-repeat',
+                }}
+              >
+                {/* Dark overlay so text stays readable over the photo */}
+                <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-[#6b0000]/80" />
+                <div className="relative px-8 py-8">
+                  <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-3">
+                    MAPUA UNIVERSITY · SOIT ADVISING PORTAL
+                  </p>
+                  <h1 style={{ color: '#ffffff' }} className="text-3xl font-bold mb-1.5">
+                    {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
+                  </h1>
+                  <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-sm">
+                    {visibleConsultations.length > 0
+                      ? `You have ${visibleConsultations.length} upcoming consultation${visibleConsultations.length !== 1 ? 's' : ''} this week.`
+                      : 'No upcoming consultations this week.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-8 py-6 space-y-6">
+
+                {/* ── Stats row ── */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {([
+                    { icon: '🕐', value: daysToFinals, label: 'Days to Finals',      sub: finalsDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}), color: isDark ? 'text-orange-400' : 'text-orange-500' },
+                    { icon: '📅', value: daysToEnd,    label: 'Days to End of Term', sub: endDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}),    color: isDark ? 'text-pink-400'   : 'text-pink-500'   },
+                    { icon: '📈', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, label: 'Weeks Remaining', sub: `of ${term.totalWeeks} weeks`, color: isDark ? 'text-blue-400' : 'text-blue-600' },
+                    { icon: '✅', value: `${Math.round(termProgress)}%`, label: 'Term Progress', sub: currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
+                  ] as const).map((s, i) => (
+                    <div key={i} className={`rounded-2xl p-5 ${card}`}>
+                      <span className="text-2xl">{s.icon}</span>
+                      <p className={`text-4xl font-bold mt-2 ${s.color}`}>{s.value}</p>
+                      <p className={`text-sm font-medium mt-1 ${tp}`}>{s.label}</p>
+                      <p className={`text-xs mt-0.5 ${tm}`}>{s.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Main 2-column grid ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
+
+                  {/* Left column */}
+                  <div className="space-y-6">
+
+                    {/* Week cards */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className={`rounded-2xl p-5 ${card}`}>
+                        <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
+                            <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
+                            <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
+                          </div>
+                          <div>
+                            <p className={`text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                            {currentMode && (
+                              <span className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(currentMode)}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${modeDot(currentMode)}`} />
+                                {currentMode}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={`rounded-2xl p-5 ${card}`}>
+                        <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Next Week</p>
+                        {nextWeekNum ? (
+                          <>
+                            <p className={`text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
+                            {nextMode && (
+                              <span className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(nextMode)}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${modeDot(nextMode)}`} />
+                                {nextMode}
+                              </span>
+                            )}
+                            <p className={`text-xs mt-2 ${tm}`}>Plan ahead for your upcoming consultations.</p>
+                          </>
+                        ) : (
+                          <p className={`text-sm ${ts}`}>Last week of term</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Upcoming consultations list */}
+                    <div className={`rounded-2xl p-5 ${card}`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
+                        <button onClick={() => handleTabChange('consultations')}
+                          className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
+                          View all
+                        </button>
+                      </div>
+                      {visibleConsultations.length === 0 ? (
+                        <p className={`text-sm text-center py-6 ${tm}`}>No upcoming consultations</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {visibleConsultations.slice(0, 6).map(c => (
+                            <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'} transition-colors`}>
+                              <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium truncate ${tp}`}>{c.student_name}</p>
+                                <p className={`text-xs truncate ${tm}`}>{c.program}</p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className={`text-xs font-medium ${ts}`}>{(c.time || c.time_start)?.slice(0,5)}</p>
+                                <p className={`text-xs ${tm}`}>{new Date(c.date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                  c.mode === 'F2F'
+                                    ? isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'
+                                    : isDark ? 'bg-cyan-500/10 text-cyan-400'     : 'bg-cyan-50 text-cyan-600'
+                                }`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</span>
+                                <StatusBadge status={c.status} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>{/* /Left column */}
+
+                  {/* Right sidebar */}
+                  <div className="space-y-4">
+
+                    {/* This Week stats */}
+                    <div className={`rounded-2xl p-4 ${card}`}>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wider mb-3 ${tm}`}>This Week</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([
+                          { label: 'Scheduled', value: scheduledCount, bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
+                          { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
+                          { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
+                          { label: 'Students',  value: totalStudents,  bg: isDark ? 'bg-purple-500/10'  : 'bg-purple-50',  color: isDark ? 'text-purple-400'  : 'text-purple-600'  },
+                        ] as const).map(s => (
+                          <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
+                            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                            <p className={`text-[11px] mt-0.5 ${ts}`}>{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Mini calendar */}
+                    <MiniCalendar
+                      dateLabelMap={dateLabelMap}
+                      dateColorMap={dateColorMap}
+                      isDark={isDark}
+                      token={token}
+                      calOverrides={calOverrides}
+                    />
+
+                    {/* Today's Schedule */}
+                    {todayConsultations.length > 0 && (
+                      <div className={`rounded-2xl p-4 ${card}`}>
+                        <p className={`text-sm font-semibold mb-3 ${tp}`}>Today's Schedule</p>
+                        <div className="space-y-2.5">
+                          {todayConsultations.map(c => {
+                            const t = (c.time || c.time_start)?.slice(0, 5) ?? '';
+                            return (
+                              <div key={c.id} className="flex items-start gap-3">
+                                <span className={`text-[10px] font-mono flex-shrink-0 mt-0.5 ${tm}`}>{t}</span>
+                                <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
+                                  <p className={`text-xs font-medium truncate ${tp}`}>Consultation – {c.student_name.split(' ').slice(0,2).join(' ')}</p>
+                                  <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? c.location || 'In-Person' : 'Online'}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>{/* /Right sidebar */}
+
+                </div>{/* /2-col grid */}
+
+              </div>{/* /px-8 py-6 */}
+            </div>
+
         ) : tab === 'consultations' ? (
           <div className="px-8 py-8">
             <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">My Consultations</h1>
+              <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
               <p className="text-gray-500 text-sm mt-1">Review and manage student consultation requests</p>
             </div>
 
             <div className="grid grid-cols-3 gap-3 mb-7">
               {[
-                { label: 'Total', value: stats.total, color: 'text-white' },
+                { label: 'Total', value: stats.total, color: tp },
                 { label: 'Pending', value: stats.pending, color: 'text-amber-400' },
                 { label: 'Confirmed', value: stats.confirmed, color: 'text-blue-400' },
               ].map(s => (
-                <div key={s.label} className="rounded-xl border border-white/5 bg-[#161616] px-4 py-3">
+                <div key={s.label} className={`rounded-xl px-4 py-3 ${card}`}>
                   <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                  <p className="text-gray-600 text-xs mt-0.5">{s.label}</p>
+                  <p className={`text-xs mt-0.5 ${tm}`}>{s.label}</p>
                 </div>
               ))}
             </div>
 
             {visibleConsultations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
-                <p className="text-gray-400 font-medium text-sm">No consultations yet</p>
-                <p className="text-gray-600 text-xs mt-1">Students will appear here once they book a slot</p>
+              <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
+                <p className={`font-medium text-sm ${ts}`}>No consultations yet</p>
+                <p className={`text-xs mt-1 ${tm}`}>Students will appear here once they book a slot</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {visibleConsultations.map(c => (
-                  <div key={c.id} className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden transition-colors hover:border-white/10">
+                  <div key={c.id} className={`rounded-2xl overflow-hidden transition-colors ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-gray-300'}`}>
                     <div className="p-5">
                       <div className="flex items-start gap-4">
                         <button
@@ -864,7 +1394,7 @@ export default function ProfessorDashboard() {
                             <button
                               type="button"
                               onClick={() => setProfileCard({ id: c.student_id, role: 'student' })}
-                              className="text-white font-semibold text-sm hover:text-gray-300 transition-colors text-left"
+                              className={`font-semibold text-sm transition-colors text-left ${isDark ? 'text-white hover:text-gray-300' : 'text-gray-900 hover:text-gray-600'}`}
                             >
                               {c.student_name}
                             </button>
@@ -875,15 +1405,15 @@ export default function ProfessorDashboard() {
                       </div>
 
                       <div className="mt-4 grid grid-cols-2 gap-2.5">
-                        <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
-                          <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Date & Time</p>
-                          <p className="text-gray-200 text-sm font-medium">
+                        <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
+                          <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Date & Time</p>
+                          <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                             {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </p>
-                          <p className="text-gray-500 text-xs mt-0.5">{c.day} · {fmtTime(c)}</p>
+                          <p className={`text-xs mt-0.5 ${ts}`}>{c.day} · {fmtTime(c)}</p>
                         </div>
-                        <div className="rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
-                          <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Meeting</p>
+                        <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
+                          <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Meeting</p>
                           <div className="flex items-center gap-1.5">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
                             <span className={`text-sm font-medium ${c.mode === 'F2F' ? 'text-purple-300' : 'text-cyan-300'}`}>
@@ -921,9 +1451,9 @@ export default function ProfessorDashboard() {
                         </div>
                       </div>
 
-                      <div className="mt-3 rounded-lg bg-white/3 border border-white/5 px-3 py-2.5">
-                        <p className="text-gray-600 text-[10px] uppercase tracking-wide mb-1">Nature of Advising</p>
-                        <p className="text-gray-200 text-sm line-clamp-2">{natureLabel(c)}</p>
+                      <div className={`mt-3 rounded-lg border px-3 py-2.5 ${innerCard}`}>
+                        <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Nature of Advising</p>
+                        <p className={`text-sm line-clamp-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{natureLabel(c)}</p>
                       </div>
 
                       <div className="mt-3.5 flex items-center justify-between flex-wrap gap-2">
@@ -978,12 +1508,12 @@ export default function ProfessorDashboard() {
         ) : tab === 'calendar' ? (
           <div className="px-8 py-8">
             <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">Booking Calendar</h1>
+              <h1 className={`text-2xl font-bold ${tp}`}>Booking Calendar</h1>
               <p className="text-gray-500 text-sm mt-1">Overview of student bookings by date</p>
             </div>
             {visibleConsultations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-white/5 bg-[#161616]">
-                <p className="text-gray-400 text-sm">No upcoming bookings</p>
+              <div className={`flex flex-col items-center justify-center py-20 rounded-2xl ${card}`}>
+                <p className={`text-sm ${ts}`}>No upcoming bookings</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -992,10 +1522,10 @@ export default function ProfessorDashboard() {
                   .map(([date, consultList]) => {
                     const isPast = new Date(date) < new Date(new Date().toDateString());
                     return (
-                      <div key={date} className={`rounded-2xl border bg-[#161616] overflow-hidden ${isPast ? 'border-white/5 opacity-60' : 'border-white/10'}`}>
-                        <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+                      <div key={date} className={`rounded-2xl overflow-hidden ${cardRaw} ${isPast ? `border ${borderSoft} opacity-60` : `border ${borderMid}`}`}>
+                        <div className={`px-5 py-3 border-b ${borderSoft} flex items-center justify-between`}>
                           <div>
-                            <p className="text-white font-semibold text-sm">
+                            <p className={`font-semibold text-sm ${tp}`}>
                               {new Date(date).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                             </p>
                           </div>
@@ -1006,14 +1536,14 @@ export default function ProfessorDashboard() {
                             <span className="text-gray-600 text-xs">{consultList.length} booking{consultList.length !== 1 ? 's' : ''}</span>
                           </div>
                         </div>
-                        <div className="divide-y divide-white/5">
+                        <div className={`divide-y ${dividerCls}`}>
                           {consultList.map(c => (
                             <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
                                 <div>
-                                  <p className="text-white text-sm font-medium">{c.student_name}</p>
-                                  <p className="text-gray-600 text-xs">{fmtTime(c)} · {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
+                                  <p className={`text-sm font-medium ${tp}`}>{c.student_name}</p>
+                                  <p className={`text-xs ${tm}`}>{fmtTime(c)} · {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
                                 </div>
                               </div>
                               <StatusBadge status={c.status} />
@@ -1034,23 +1564,23 @@ export default function ProfessorDashboard() {
                 .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || a.time_start.localeCompare(b.time_start));
               return (
                 <div className="mt-8">
-                  <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">Your Slots ({upcomingSlots.length})</p>
+                  <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${tm}`}>Your Slots ({upcomingSlots.length})</p>
                   {upcomingSlots.length === 0 ? (
-                    <div className="text-center py-10 rounded-2xl border border-white/5 bg-[#161616]">
-                      <p className="text-gray-500 text-sm">No slots created yet.</p>
+                    <div className={`text-center py-10 rounded-2xl ${card}`}>
+                      <p className={`text-sm ${ts}`}>No slots created yet.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {upcomingSlots.map(s => {
                         const booked = Number(s.upcoming_count) > 0;
                         return (
-                          <div key={s.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-white/5 bg-[#161616]">
+                          <div key={s.id} className={`flex items-center justify-between px-4 py-3 rounded-xl ${card}`}>
                             <div className="flex items-center gap-3">
                               <span className={`w-2 h-2 rounded-full ${booked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                              <span className="text-white text-sm">
+                              <span className={`text-sm ${tp}`}>
                                 {new Date(s.date! + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}
                               </span>
-                              <span className="text-gray-400 text-sm font-mono">{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</span>
+                              <span className={`text-sm font-mono ${ts}`}>{s.time_start?.slice(0, 5)} – {s.time_end?.slice(0, 5)}</span>
                             </div>
                             <span className={`text-xs ${booked ? 'text-amber-400' : 'text-emerald-400'}`}>
                               {booked ? `${s.upcoming_count} booked` : 'Available'}
@@ -1068,20 +1598,21 @@ export default function ProfessorDashboard() {
         ) : tab === 'schedules' ? (
           <div className="px-8 py-8">
             <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">Manage Schedules</h1>
+              <h1 className={`text-2xl font-bold ${tp}`}>Manage Schedules</h1>
               <p className="text-gray-500 text-sm mt-1">Add or edit your available consultation time slots</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* ── Left: Add new slot form ── */}
-              <div className="rounded-2xl border border-white/5 bg-[#161616] p-5">
-                <p className="text-white text-sm font-semibold mb-4">Add New Slot</p>
+              <div className={`rounded-2xl p-5 ${card}`}>
+                <p className={`text-sm font-semibold mb-4 ${tp}`}>Add New Slot</p>
                 <div className="mb-3">
                   <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
                   <ScheduleDatePicker
                     selected={newSchedDate}
                     onSelect={(dateStr, dayName) => { setNewSchedDate(dateStr); setNewSched(s => ({ ...s, day: dayName })); }}
                     disabledDates={schedules.map(s => s.date).filter((d): d is string => !!d)}
+                    isDark={isDark}
                   />
                 </div>
                 <div className="mb-3">
@@ -1153,22 +1684,22 @@ export default function ProfessorDashboard() {
                   const renderSlot = (s: Schedule, dimmed = false) => {
                     const hasBookings = Number(s.upcoming_count) > 0;
                     return (
-                      <div key={s.id} className={`rounded-xl border border-white/5 bg-[#161616] overflow-hidden transition-colors ${dimmed ? 'opacity-50' : 'hover:border-white/10'}`}>
+                      <div key={s.id} className={`rounded-xl overflow-hidden transition-colors ${card} ${dimmed ? 'opacity-50' : isDark ? 'hover:border-white/10' : 'hover:border-gray-300'}`}>
                         <div className="flex items-center justify-between px-4 py-3.5">
                           <div className="flex items-center gap-4">
                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dimmed ? 'bg-gray-600' : hasBookings ? 'bg-amber-400' : 'bg-emerald-400'}`} />
                             <div>
-                              <span className={`text-sm font-medium ${dimmed ? 'text-gray-500' : 'text-white'}`}>
+                              <span className={`text-sm font-medium ${dimmed ? ts : tp}`}>
                                 {s.date
                                   ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
                                   : s.day}
                               </span>
                             </div>
-                            <span className="text-gray-400 text-sm font-mono">
+                            <span className={`text-sm font-mono ${ts}`}>
                               {(s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
-                                .map(r => `${r.time_start?.slice(0, 5)}–${r.time_end?.slice(0, 5)}`).join(', ')}
+                                .map(r => `${to12h(r.time_start)}–${to12h(r.time_end)}`).join(',  ')}
                             </span>
-                            {s.location && <span className="text-gray-600 text-xs">{s.location}</span>}
+                            {s.location && <span className={`text-xs font-semibold ${tm}`}>{s.location}</span>}
                           </div>
                           <div className="flex items-center gap-2">
                             {!dimmed && (
@@ -1193,12 +1724,12 @@ export default function ProfessorDashboard() {
                   return (
                     <>
                       {/* ── Active slots ── */}
-                      <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
+                      <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${tm}`}>
                         Your Slots ({activeSlots.length})
                       </p>
                       {activeSlots.length === 0 ? (
-                        <div className="text-center py-12 rounded-2xl border border-white/5 bg-[#161616]">
-                          <p className="text-gray-500 text-sm">No slots created yet.</p>
+                        <div className={`text-center py-12 rounded-2xl ${card}`}>
+                          <p className={`text-sm ${ts}`}>No slots created yet.</p>
                         </div>
                       ) : (
                         <div className="space-y-2">{activeSlots.map(s => renderSlot(s))}</div>
@@ -1234,16 +1765,16 @@ export default function ProfessorDashboard() {
         ) : tab === 'history' ? (
           <div className="px-8 py-8">
             <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">History</h1>
+              <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
               <p className="text-gray-500 text-sm mt-1">Past advising records grouped by term</p>
             </div>
             {(() => {
               const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'rescheduled' || c.status === 'missed');
               if (historyItems.length === 0) {
                 return (
-                  <div className="flex flex-col items-center justify-center py-24 rounded-2xl border border-white/5 bg-[#161616]">
-                    <p className="text-gray-400 font-medium text-sm">No history yet</p>
-                    <p className="text-gray-600 text-xs mt-1">Completed advising sessions will appear here</p>
+                  <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
+                    <p className={`font-medium text-sm ${ts}`}>No history yet</p>
+                    <p className={`text-xs mt-1 ${tm}`}>Completed advising sessions will appear here</p>
                   </div>
                 );
               }
@@ -1252,34 +1783,34 @@ export default function ProfessorDashboard() {
                   {groupByQuarter(historyItems).map(([quarter, items]) => (
                     <div key={quarter}>
                       <div className="flex items-center gap-3 mb-3">
-                        <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">{quarter}</p>
-                        <span className="text-gray-700 text-xs">{items.length} session{items.length !== 1 ? 's' : ''}</span>
+                        <p className={`text-[10px] font-semibold uppercase tracking-widest ${ts}`}>{quarter}</p>
+                        <span className={`text-xs ${tm}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
+                      <div className={`rounded-2xl overflow-hidden ${card}`}>
                         <table className="w-full table-fixed">
                           <thead>
-                            <tr className="border-b border-white/5">
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[110px]">Date</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[160px]">Student</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3">Purpose</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[170px]">Action Taken</th>
-                              <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[130px]">Status</th>
+                            <tr className={`border-b ${borderSoft}`}>
+                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[110px] ${tm}`}>Date</th>
+                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[160px] ${tm}`}>Student</th>
+                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm}`}>Purpose</th>
+                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[170px] ${tm}`}>Action Taken</th>
+                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[130px] ${tm}`}>Status</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-white/5">
+                          <tbody className={`divide-y ${dividerCls}`}>
                             {items.map(c => (
-                              <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
-                                <td className="px-4 py-3 text-gray-300 text-xs whitespace-nowrap">
+                              <tr key={c.id} className={`transition-colors ${hoverBg}`}>
+                                <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                                   {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                                 </td>
-                                <td className="px-4 py-3 text-gray-300 text-xs">
+                                <td className={`px-4 py-3 text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                                   <p className="truncate font-medium">{c.student_name}</p>
-                                  <p className="text-gray-600 text-[10px] mt-0.5">{c.student_number}</p>
+                                  <p className={`text-[10px] mt-0.5 ${tm}`}>{c.student_number}</p>
                                 </td>
-                                <td className="px-4 py-3 text-gray-400 text-xs">
+                                <td className={`px-4 py-3 text-xs ${ts}`}>
                                   <span className="line-clamp-2">{natureLabel(c)}</span>
                                 </td>
-                                <td className="px-4 py-3 text-gray-400 text-xs">
+                                <td className={`px-4 py-3 text-xs ${ts}`}>
                                   <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
                                 </td>
                                 <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
@@ -1300,7 +1831,7 @@ export default function ProfessorDashboard() {
             <div>
 
               {/* Avatar hero */}
-              <div className="relative flex flex-col items-center pb-8 mb-8 border-b border-white/10">
+              <div className={`relative flex flex-col items-center pb-8 mb-8 border-b ${borderMid}`}>
                 <button
                   onClick={() => router.push('/settings')}
                   className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:opacity-90 transition-opacity">
@@ -1314,7 +1845,7 @@ export default function ProfessorDashboard() {
                   }
                 </div>
 
-                <h2 className="text-white text-xl font-bold mt-4 text-center">{profile.full_name || '—'}</h2>
+                <h2 className={`text-xl font-bold mt-4 text-center ${tp}`}>{profile.full_name || '—'}</h2>
                 <p className="text-gray-500 text-sm mt-1 text-center">
                   {profile.department ? `${profile.department} · ` : ''}{profile.email || 'No email set'}
                 </p>
@@ -1336,39 +1867,39 @@ export default function ProfessorDashboard() {
                 <div className="space-y-5">
 
                   {/* Personal Information */}
-                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-white/10">
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                    <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Personal Information</p>
                     </div>
-                    <div className="divide-y divide-white/10">
+                    <div className={`divide-y ${isDark ? 'divide-white/10' : 'divide-gray-100'}`}>
                       <div className="flex items-center gap-4 px-5 py-3.5">
-                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Full Name</span>
-                        <span className="text-white text-sm font-medium">{profile.full_name || '—'}</span>
+                        <span className={`text-xs font-medium w-32 flex-shrink-0 ${ts}`}>Full Name</span>
+                        <span className={`text-sm font-medium ${tp}`}>{profile.full_name || '—'}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Faculty Information */}
-                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-white/10">
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                    <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Faculty Information</p>
                     </div>
-                    <div className="divide-y divide-white/10">
+                    <div className={`divide-y ${isDark ? 'divide-white/10' : 'divide-gray-100'}`}>
                       <div className="flex items-center gap-4 px-5 py-3.5">
-                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Department</span>
-                        <span className="text-white text-sm font-medium">{profile.department || '—'}</span>
+                        <span className={`text-xs font-medium w-32 flex-shrink-0 ${ts}`}>Department</span>
+                        <span className={`text-sm font-medium ${tp}`}>{profile.department || '—'}</span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
-                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">School</span>
-                        <span className="text-white text-sm font-medium">School of Information Technology</span>
+                        <span className={`text-xs font-medium w-32 flex-shrink-0 ${ts}`}>School</span>
+                        <span className={`text-sm font-medium ${tp}`}>School of Information Technology</span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
-                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">Role</span>
-                        <span className="text-white text-sm font-medium">Faculty · Academic Adviser</span>
+                        <span className={`text-xs font-medium w-32 flex-shrink-0 ${ts}`}>Role</span>
+                        <span className={`text-sm font-medium ${tp}`}>Faculty · Academic Adviser</span>
                       </div>
                       <div className="flex items-center gap-4 px-5 py-3.5">
-                        <span className="text-gray-400 text-xs font-medium w-32 flex-shrink-0">University</span>
-                        <span className="text-white text-sm font-medium">Mapúa University</span>
+                        <span className={`text-xs font-medium w-32 flex-shrink-0 ${ts}`}>University</span>
+                        <span className={`text-sm font-medium ${tp}`}>Mapúa University</span>
                       </div>
                     </div>
                   </div>
@@ -1379,34 +1910,34 @@ export default function ProfessorDashboard() {
                 <div className="space-y-5">
 
                   {/* Contact Information */}
-                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-white/10">
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                    <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Contact Information</p>
                     </div>
-                    <div className="divide-y divide-white/10">
+                    <div className={`divide-y ${isDark ? 'divide-white/10' : 'divide-gray-100'}`}>
                       <div className="px-5 py-3.5">
-                        <p className="text-gray-400 text-xs font-medium mb-1.5">Email Address</p>
-                        <p className="text-white text-sm font-medium break-all">{profile.email || '—'}</p>
+                        <p className={`text-xs font-medium mb-1.5 ${ts}`}>Email Address</p>
+                        <p className={`text-sm font-medium break-all ${tp}`}>{profile.email || '—'}</p>
                       </div>
                       <div className="px-5 py-3.5">
-                        <p className="text-gray-400 text-xs font-medium mb-1.5">Phone Number</p>
-                        <p className="text-white text-sm font-medium">{profile.phone || '—'}</p>
+                        <p className={`text-xs font-medium mb-1.5 ${ts}`}>Phone Number</p>
+                        <p className={`text-sm font-medium ${tp}`}>{profile.phone || '—'}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Account */}
-                  <div className="rounded-2xl border border-white/10 bg-[#161616] overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-white/10">
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                    <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#CC0000] uppercase tracking-widest">Account</p>
                     </div>
-                    <div className="divide-y divide-white/10">
+                    <div className={`divide-y ${isDark ? 'divide-white/10' : 'divide-gray-100'}`}>
                       <div className="px-5 py-3.5">
-                        <p className="text-gray-400 text-xs font-medium mb-1.5">Role</p>
-                        <p className="text-white text-sm font-medium">Professor</p>
+                        <p className={`text-xs font-medium mb-1.5 ${ts}`}>Role</p>
+                        <p className={`text-sm font-medium ${tp}`}>Professor</p>
                       </div>
                       <div className="px-5 py-3.5">
-                        <p className="text-gray-400 text-xs font-medium mb-1.5">Status</p>
+                        <p className={`text-xs font-medium mb-1.5 ${ts}`}>Status</p>
                         <span className="inline-flex items-center gap-1.5 text-sm text-emerald-400">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                           Active
@@ -1424,29 +1955,29 @@ export default function ProfessorDashboard() {
         ) : (
           <div className="px-8 py-8">
             <div className="mb-7">
-              <h1 className="text-white text-2xl font-bold">Export Report</h1>
+              <h1 className={`text-2xl font-bold ${tp}`}>Export Report</h1>
               <p className="text-gray-500 text-sm mt-1">Download your faculty academic advising report</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <button onClick={() => handleExport('excel')}
-                className="rounded-2xl border border-white/5 bg-[#161616] hover:border-emerald-500/20 hover:bg-emerald-500/5 p-6 text-left transition-all group">
+                className={`rounded-2xl p-6 text-left transition-all group hover:border-emerald-500/20 hover:bg-emerald-500/5 ${card}`}>
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
                   <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z" />
                   </svg>
                 </div>
-                <p className="text-white font-semibold text-sm">Excel Spreadsheet</p>
-                <p className="text-gray-600 text-xs mt-1">Download full data as .xlsx</p>
+                <p className={`font-semibold text-sm ${tp}`}>Excel Spreadsheet</p>
+                <p className={`text-xs mt-1 ${tm}`}>Download full data as .xlsx</p>
               </button>
               <button onClick={() => handleExport('pdf')}
-                className="rounded-2xl border border-white/5 bg-[#161616] hover:border-blue-500/20 hover:bg-blue-500/5 p-6 text-left transition-all group">
+                className={`rounded-2xl p-6 text-left transition-all group hover:border-blue-500/20 hover:bg-blue-500/5 ${card}`}>
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
                   <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
                   </svg>
                 </div>
-                <p className="text-white font-semibold text-sm">PDF Document</p>
-                <p className="text-gray-600 text-xs mt-1">Download formatted report as .pdf</p>
+                <p className={`font-semibold text-sm ${tp}`}>PDF Document</p>
+                <p className={`text-xs mt-1 ${tm}`}>Download formatted report as .pdf</p>
               </button>
             </div>
           </div>
@@ -1491,7 +2022,7 @@ export default function ProfessorDashboard() {
                   ))}
                 </div>
                 {completeForm.referral === 'Other Office (Please Specify)' && (
-                  <input className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                  <input className="mt-2 w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
                     placeholder="Please specify the office…"
                     value={completeForm.referral_specify}
                     onChange={e => { setCompleteForm(f => ({ ...f, referral_specify: e.target.value })); setCompleteError(''); }} />
@@ -1501,7 +2032,7 @@ export default function ProfessorDashboard() {
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
               <textarea value={completeForm.remarks} onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
-                rows={2} className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
+                rows={2} className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
                 placeholder="Additional remarks…" />
             </div>
             {completeError && <p className="text-red-400 text-xs">{completeError}</p>}
@@ -1542,7 +2073,7 @@ export default function ProfessorDashboard() {
                 ))}
               </div>
               {rescheduleForm.referral === 'Other Office (Please Specify)' && (
-                <input className="mt-2 w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                <input className="mt-2 w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
                   placeholder="Specify office…"
                   value={rescheduleForm.referral_specify}
                   onChange={e => setRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
@@ -1551,7 +2082,7 @@ export default function ProfessorDashboard() {
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
               <textarea value={rescheduleForm.remarks} onChange={e => setRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
-                rows={2} className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
+                rows={2} className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#CC0000]/50 resize-none placeholder-gray-600"
                 placeholder="Reason for rescheduling…" />
             </div>
             {rescheduleError && <p className="text-red-400 text-xs">{rescheduleError}</p>}
@@ -1577,13 +2108,14 @@ export default function ProfessorDashboard() {
                 selected={editSchedDate}
                 onSelect={(dateStr, dayName) => { setEditSchedDate(dateStr); setEditSched(f => ({ ...f, day: dayName })); }}
                 disabledDates={schedules.filter(s => s.id !== editingScheduleSlot!.id).map(s => s.date).filter((d): d is string => !!d)}
+                isDark={isDark}
               />
             </div>
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
               <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
                 placeholder="Optional"
-                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
+                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600" />
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -1654,7 +2186,7 @@ export default function ProfessorDashboard() {
                 value={cancelReason}
                 onChange={e => { setCancelReason(e.target.value); setCancelError(''); }}
                 rows={3}
-                className="w-full rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-red-500/50 resize-none placeholder-gray-600"
+                className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-red-500/50 resize-none placeholder-gray-600"
                 placeholder="e.g. Schedule conflict, unavailable, etc."
                 autoFocus
               />
@@ -1680,7 +2212,8 @@ export default function ProfessorDashboard() {
           onClose={() => setProfileCard(null)}
         />
       )}
+
+      <ChatbotWidget token={token} role="professor" />
     </div>
-    </DashboardShell>
   );
 }

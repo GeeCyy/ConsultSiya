@@ -314,7 +314,7 @@ export default function DashboardShell({
 }) {
   const router = useRouter();
   const [faqOpen, setFaqOpen] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [navAvatar, setNavAvatar] = useState<string | null>(null);
   const [navName, setNavName] = useState('');
@@ -323,7 +323,7 @@ export default function DashboardShell({
 
   useEffect(() => {
     const saved = localStorage.getItem('consulta-theme');
-    const dark = saved !== 'light';
+    const dark = saved === 'dark';
     setIsDark(dark);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
 

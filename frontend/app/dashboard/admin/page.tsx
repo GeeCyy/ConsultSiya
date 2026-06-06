@@ -1077,23 +1077,23 @@ export default function AdminDashboard() {
                           )}
                           {!u.is_approved && u.is_active && (
                             <button onClick={() => handleApprove(u.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 transition-colors">
                               Approve
                             </button>
                           )}
                           {u.is_active ? (
                             <button onClick={() => handleDeactivate(u.id, u.full_name)}
-                              className="px-2.5 py-1 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors">
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-500/10 transition-colors">
                               Deactivate
                             </button>
                           ) : (
                             <button onClick={() => handleActivate(u.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 transition-colors">
                               Activate
                             </button>
                           )}
                           <button onClick={() => handleDeleteUser(u.id, u.full_name)}
-                            className="px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors">
                             Delete
                           </button>
                         </div>

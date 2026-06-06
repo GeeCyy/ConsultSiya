@@ -146,7 +146,7 @@ export default function HelpPage() {
     if (!token) { router.push('/login'); return; }
     setRole(r);
     const saved = localStorage.getItem('consulta-theme');
-    setIsDark(saved !== 'light');
+    setIsDark(saved === 'dark');
     setMounted(true);
 
     const onThemeChange = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
