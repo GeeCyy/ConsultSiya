@@ -144,30 +144,30 @@ function LoginContent() {
     : 'text-gray-600 hover:text-gray-900 hover:bg-black/8 border border-black/10 hover:border-black/20';
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 transition-colors duration-200" style={{ backgroundColor: pageBg }}>
+    <div className="min-h-screen flex items-center justify-center px-3 sm:px-4 py-8 sm:py-10 transition-colors duration-200" style={{ backgroundColor: pageBg }}>
 
       {/* Theme toggle — top right */}
       <button
         onClick={toggleTheme}
         title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-        className={`fixed top-4 right-4 p-3 rounded-xl transition-all duration-200 ${toggleCls}`}
+        className={`fixed top-3 right-3 sm:top-4 sm:right-4 p-2.5 sm:p-3 rounded-xl transition-all duration-200 ${toggleCls}`}
       >
         {isDark ? (
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" />
           </svg>
         ) : (
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" />
           </svg>
         )}
       </button>
 
-      <div className="flex flex-col lg:flex-row w-full max-w-4xl gap-6">
+      <div className="flex flex-col lg:flex-row w-full max-w-4xl gap-4 sm:gap-6">
 
         {/* ── Login Form ──────────────────────────────────────────────────── */}
         <div
-          className="w-full lg:max-w-md flex-shrink-0 px-8 py-10 rounded-2xl flex flex-col justify-center transition-colors duration-200"
+          className="w-full lg:max-w-md flex-shrink-0 px-5 sm:px-8 py-8 sm:py-10 rounded-2xl flex flex-col justify-center transition-colors duration-200"
           style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
         >
           <div className="text-center mb-8">
@@ -256,9 +256,9 @@ function LoginContent() {
           <p className={`text-center text-xs mt-4 ${muteText}`}>© 2026 Mapúa University SOIT</p>
         </div>
 
-        {/* ── System Updates Board ────────────────────────────────────────── */}
+        {/* ── System Updates Board — hidden on mobile ─────────────────────── */}
         <div
-          className="flex flex-col flex-1 rounded-2xl overflow-hidden transition-colors duration-200"
+          className="hidden lg:flex flex-col flex-1 rounded-2xl overflow-hidden transition-colors duration-200"
           style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
         >
           {/* Header */}

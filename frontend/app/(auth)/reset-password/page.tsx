@@ -61,9 +61,9 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: '#1e1f22' }}>
+    <div className="min-h-screen flex items-center justify-center px-3 sm:px-4" style={{ backgroundColor: '#1e1f22' }}>
       <div
-        className="w-full max-w-md px-8 py-10 rounded-2xl border border-white/10"
+        className="w-full max-w-md px-5 sm:px-8 py-8 sm:py-10 rounded-2xl border border-white/10"
         style={{ backgroundColor: '#2b2d31' }}
       >
         <div className="text-center mb-8">

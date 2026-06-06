@@ -859,11 +859,11 @@ export default function StudentDashboard() {
             {/* ── Hero ── */}
             <div className="relative" style={{ backgroundImage: "url('/mapua-banner.jpg')", backgroundSize: 'cover', backgroundPosition: 'center 40%', backgroundRepeat: 'no-repeat' }}>
               <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-[#6b0000]/80" />
-              <div className="relative px-8 py-8">
-                <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-3">
+              <div className="relative px-4 sm:px-8 py-5 sm:py-8">
+                <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-2 sm:mb-3">
                   MAPUA UNIVERSITY · SOIT ADVISING PORTAL
                 </p>
-                <h1 style={{ color: '#ffffff' }} className="text-3xl font-bold mb-1.5">
+                <h1 style={{ color: '#ffffff' }} className="text-2xl sm:text-3xl font-bold mb-1.5">
                   {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
                 </h1>
                 <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-sm">
@@ -874,7 +874,7 @@ export default function StudentDashboard() {
               </div>
             </div>
 
-            <div className="px-8 py-6 space-y-6">
+            <div className="px-3 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
               {/* ── Stat cards ── */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -900,16 +900,16 @@ export default function StudentDashboard() {
                 <div className="space-y-6">
 
                   {/* Week cards */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className={`rounded-2xl p-5 ${card}`}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
                       <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
                       <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
                           <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
                           <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
                         </div>
                         <div>
-                          <p className={`text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                          <p className={`text-lg sm:text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
                           {currentMode && (
                             <span className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(currentMode)}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${modeDot(currentMode)}`} />
@@ -920,11 +920,11 @@ export default function StudentDashboard() {
                       </div>
                     </div>
 
-                    <div className={`rounded-2xl p-5 ${card}`}>
+                    <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
                       <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Next Week</p>
                       {nextWeekNum ? (
                         <>
-                          <p className={`text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
+                          <p className={`text-2xl sm:text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
                           {nextMode && (
                             <span className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(nextMode)}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${modeDot(nextMode)}`} />
@@ -1048,13 +1048,13 @@ export default function StudentDashboard() {
           </div>
 
         ) : tab === 'book' ? (
-          <div className="px-8 py-8">
-            <div className="mb-7">
-              <h1 className={`text-3xl font-bold ${tp}`}>Book a Consultation</h1>
-              <p className={`text-base mt-1 ${ts}`}>{schedules.length} slot{schedules.length !== 1 ? 's' : ''} available</p>
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
+              <h1 className={`text-2xl sm:text-3xl font-bold ${tp}`}>Book a Consultation</h1>
+              <p className={`text-sm sm:text-base mt-1 ${ts}`}>{schedules.length} slot{schedules.length !== 1 ? 's' : ''} available</p>
             </div>
             {schedules.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
+              <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
                 <p className={`font-medium text-sm ${ts}`}>No slots available</p>
                 <p className={`text-xs mt-1 ${tm}`}>Check back later when professors post their schedules</p>
               </div>
@@ -1062,32 +1062,32 @@ export default function StudentDashboard() {
               <div className="space-y-3">
                 {schedules.map(s => (
                   <div key={s.id} className={`rounded-2xl overflow-hidden transition-colors ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-gray-300'}`}>
-                    <div className="p-5">
-                      <div className="flex items-start gap-4">
+                    <div className="p-4 sm:p-5">
+                      <div className="flex items-start gap-3 sm:gap-4">
                         <button type="button" onClick={() => setProfileCard({ id: s.professor_id, role: 'professor' })}
                           className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
                           <Avatar name={s.professor_name} avatarUrl={s.professor_avatar} />
                         </button>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <button type="button" onClick={() => setProfileCard({ id: s.professor_id, role: 'professor' })}
-                            className={`font-bold text-xl hover:opacity-75 transition-opacity text-left ${tp}`}>
+                            className={`font-bold text-base sm:text-xl hover:opacity-75 transition-opacity text-left ${tp}`}>
                             {s.professor_name}
                           </button>
-                          <p className={`text-base font-semibold mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{s.department}</p>
+                          <p className={`text-sm sm:text-base font-semibold mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{s.department}</p>
                           {s.location && (
-                            <p className="text-base mt-0.5 font-semibold">
+                            <p className="text-sm mt-0.5 font-semibold">
                               <span className="text-purple-400">F2F: </span>
                               <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>{s.location}</span>
                             </p>
                           )}
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className={`text-xl font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{s.day}</p>
+                          <p className={`text-base sm:text-xl font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{s.day}</p>
                           {(s.time_ranges?.length
                             ? s.time_ranges
                             : [{ time_start: s.time_start, time_end: s.time_end }]
                           ).map((r, i) => (
-                            <p key={i} className={`text-base mt-0.5 font-bold font-mono ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                            <p key={i} className={`text-xs sm:text-base mt-0.5 font-bold font-mono ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                               {r.time_start ? formatTime12(r.time_start.slice(0, 5)) : ''}–{r.time_end ? formatTime12(r.time_end.slice(0, 5)) : ''}
                             </p>
                           ))}
@@ -1099,7 +1099,7 @@ export default function StudentDashboard() {
                           Available
                         </span>
                         <button onClick={() => openBookingModal(s)}
-                          className="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#CC0000] text-white hover:bg-[#aa0000] shadow-lg shadow-red-900/20">
+                          className="min-h-[44px] sm:min-h-0 px-4 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#CC0000] text-white hover:bg-[#aa0000] shadow-lg shadow-red-900/20">
                           Book this slot
                         </button>
                       </div>
@@ -1111,8 +1111,8 @@ export default function StudentDashboard() {
           </div>
 
         ) : tab === 'history' ? (
-          <div className="px-8 py-8">
-            <div className="mb-7">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
               <p className={`text-sm mt-1 ${ts}`}>Past consultations grouped by term</p>
             </div>
@@ -1120,7 +1120,7 @@ export default function StudentDashboard() {
               const historyItems = consultations.filter(c => ['completed', 'cancelled', 'rescheduled'].includes(c.status));
               if (historyItems.length === 0) {
                 return (
-                  <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
+                  <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
                     <p className={`font-medium text-sm ${ts}`}>No history yet</p>
                     <p className={`text-xs mt-1 ${tm}`}>Completed consultations will appear here</p>
                   </div>
@@ -1135,41 +1135,43 @@ export default function StudentDashboard() {
                         <span className={`text-xs ${tm}`}>{items.length} consultation{items.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className={`rounded-2xl overflow-hidden ${card}`}>
-                        <table className="w-full table-fixed">
-                          <thead>
-                            <tr className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                              {['Date','Purpose','Adviser','Action Taken','Status','Receipt'].map((h, hi) => (
-                                <th key={h} className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm} ${
-                                  hi === 0 ? 'w-[110px]' : hi === 2 ? 'w-[150px]' : hi === 3 ? 'w-[155px]' : hi === 4 ? 'w-[100px]' : hi === 5 ? 'w-[80px]' : ''
-                                }`}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
-                            {items.map(c => (
-                              <tr key={c.id} className={`transition-colors ${hoverBg}`}>
-                                <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  {new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </td>
-                                <td className={`px-4 py-3 text-xs ${ts}`}><span className="line-clamp-2">{natureLabel(c)}</span></td>
-                                <td className={`px-4 py-3 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{c.professor_name}</td>
-                                <td className={`px-4 py-3 text-xs ${ts}`}><span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span></td>
-                                <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
-                                <td className="px-4 py-3">
-                                  {c.status === 'completed' && (
-                                    <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
-                                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
-                                      {downloadingReceipt === c.id
-                                        ? <span className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                                        : <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
-                                      PDF
-                                    </button>
-                                  )}
-                                </td>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[600px] table-fixed">
+                            <thead>
+                              <tr className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                                {['Date','Purpose','Adviser','Action Taken','Status','Receipt'].map((h, hi) => (
+                                  <th key={h} className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm} ${
+                                    hi === 0 ? 'w-[110px]' : hi === 2 ? 'w-[150px]' : hi === 3 ? 'w-[155px]' : hi === 4 ? 'w-[100px]' : hi === 5 ? 'w-[80px]' : ''
+                                  }`}>{h}</th>
+                                ))}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
+                              {items.map(c => (
+                                <tr key={c.id} className={`transition-colors ${hoverBg}`}>
+                                  <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    {new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </td>
+                                  <td className={`px-4 py-3 text-xs ${ts}`}><span className="line-clamp-2">{natureLabel(c)}</span></td>
+                                  <td className={`px-4 py-3 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{c.professor_name}</td>
+                                  <td className={`px-4 py-3 text-xs ${ts}`}><span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span></td>
+                                  <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                                  <td className="px-4 py-3">
+                                    {c.status === 'completed' && (
+                                      <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+                                        {downloadingReceipt === c.id
+                                          ? <span className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                                          : <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
+                                        PDF
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1180,14 +1182,14 @@ export default function StudentDashboard() {
 
         ) : (
           /* My Consultations */
-          <div className="px-8 py-8">
-            <div className="mb-6">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-6">
               <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
               <p className={`text-sm mt-1 ${ts}`}>{upcomingConsultations.length} upcoming · {activeConsults} active</p>
             </div>
 
             {/* Tab switcher */}
-            <div className={`flex gap-1 p-1 rounded-xl mb-6 w-fit ${isDark ? 'bg-[#1e1e1e] border border-white/5' : 'bg-gray-100 border border-gray-200'}`}>
+            <div className={`flex gap-1 p-1 rounded-xl mb-4 sm:mb-6 w-full sm:w-fit overflow-x-auto ${isDark ? 'bg-[#1e1e1e] border border-white/5' : 'bg-gray-100 border border-gray-200'}`}>
               {([
                 { key: 'active', label: 'Active & Upcoming', count: activeTabConsultations.length },
                 { key: 'past',   label: 'Past',              count: pastTabConsultations.length  },
@@ -1239,7 +1241,7 @@ export default function StudentDashboard() {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2.5">
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                         <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Date & Time</p>
                         <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -1274,8 +1276,8 @@ export default function StudentDashboard() {
                       </div>
                     </div>
 
-                    <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex items-center justify-between flex-wrap gap-2`}>
-                      <div className="flex items-center gap-2">
+                    <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2`}>
+                      <div className="flex flex-wrap items-center gap-2">
                         <button onClick={handleDownloadSlip} disabled={downloadingSlip === -1}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'}`}>
                           {downloadingSlip === -1

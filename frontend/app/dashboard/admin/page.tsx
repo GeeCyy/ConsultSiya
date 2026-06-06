@@ -823,7 +823,7 @@ export default function AdminDashboard() {
             <p className="text-gray-600 text-sm">Loading...</p>
           </div>
         ) : (
-          <div className="px-8 py-8">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
 
             {/* ── Consultations ── */}
             {tab === 'consultations' && (
@@ -834,7 +834,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex items-center gap-1 mb-5 bg-[#161616] border border-white/5 rounded-xl p-1 w-fit">
+                <div className="flex items-center gap-1 mb-5 bg-[#161616] border border-white/5 rounded-xl p-1 w-full sm:w-fit overflow-x-auto">
                   {([
                     { key: 'all',       label: 'All',       color: 'text-white'       },
                     { key: 'pending',   label: 'Pending',   color: 'text-amber-400'   },
@@ -925,13 +925,13 @@ export default function AdminDashboard() {
             {/* ── Accounts ── */}
             {tab === 'accounts' && (
               <>
-                <div className="mb-7 flex items-start justify-between gap-4">
+                <div className="mb-7 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div>
                     <h1 className="text-white text-2xl font-bold">Account Management</h1>
                     <p className="text-gray-500 text-sm mt-1">Approve registrations, add or remove accounts</p>
                   </div>
                   <button onClick={() => setShowAddUser(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20 flex-shrink-0">
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20 sm:flex-shrink-0 min-h-[44px] sm:min-h-0">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                     Add Account
                   </button>
@@ -972,7 +972,7 @@ export default function AdminDashboard() {
                     </p>
                     <div className="space-y-2">
                       {pendingUsers.map(u => (
-                        <div key={u.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                        <div key={u.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="flex items-center gap-3">
                             <button type="button" onClick={() => setProfileCard({ id: u.profile_id, role: u.role })} className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
                               <Avatar name={u.full_name || u.email} avatarUrl={u.avatar} />
@@ -989,13 +989,13 @@ export default function AdminDashboard() {
                               <p className="text-gray-700 text-[10px] mt-0.5">Registered {fmtDateTime(u.created_at)}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-shrink-0">
                             <button onClick={() => handleApprove(u.id)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                              className="px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors min-h-[40px] sm:min-h-0">
                               Approve
                             </button>
                             <button onClick={() => handleReject(u.id)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+                              className="px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors min-h-[40px] sm:min-h-0">
                               Reject
                             </button>
                           </div>
@@ -1028,7 +1028,7 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="space-y-2">
                     {filteredUsers.map(u => (
-                      <div key={u.id} className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 flex-wrap transition-colors ${
+                      <div key={u.id} className={`rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-colors ${
                         !u.is_active
                           ? 'border-white/5 bg-[#111] opacity-60'
                           : 'border-white/5 bg-[#161616] hover:border-white/10'
@@ -1061,7 +1061,7 @@ export default function AdminDashboard() {
                             <p className="text-gray-700 text-[10px] mt-0.5">Joined {fmtDateTime(u.created_at)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {!u.is_active ? (
                             <span className="text-xs text-gray-500 flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />Deactivated
@@ -1189,7 +1189,7 @@ export default function AdminDashboard() {
             {/* ── Schedules ── */}
             {tab === 'schedules' && (
               <>
-                <div className="mb-7">
+                <div className="mb-5 sm:mb-7">
                   <h1 className="text-white text-2xl font-bold">Schedules</h1>
                   <p className="text-gray-500 text-sm mt-1">All professor availability slots</p>
                 </div>
@@ -1215,10 +1215,10 @@ export default function AdminDashboard() {
                           {[...prof.slots]
                             .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.time_start.localeCompare(b.time_start))
                             .map(slot => (
-                              <div key={slot.id} className="px-5 py-3 flex items-center justify-between">
-                                <div className="flex items-center gap-4 text-sm text-gray-400">
-                                  <span className="text-gray-300 font-medium w-24">{slot.day}</span>
-                                  <span className="font-mono">{formatTime(slot.time_start)} – {formatTime(slot.time_end)}</span>
+                              <div key={slot.id} className="px-5 py-3 flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-3 sm:gap-4 text-sm text-gray-400 flex-wrap">
+                                  <span className="text-gray-300 font-medium w-20 sm:w-24">{slot.day}</span>
+                                  <span className="font-mono text-xs sm:text-sm">{formatTime(slot.time_start)} – {formatTime(slot.time_end)}</span>
                                   {slot.location && (
                                     <span className="text-gray-600 text-xs">{slot.location}</span>
                                   )}
@@ -1240,13 +1240,13 @@ export default function AdminDashboard() {
             {/* ── Reports ── */}
             {tab === 'reports' && (
               <>
-                <div className="mb-7">
+                <div className="mb-5 sm:mb-7">
                   <h1 className="text-white text-2xl font-bold">Reports</h1>
                   <p className="text-gray-500 text-sm mt-1">Download advising reports per professor or combined</p>
                 </div>
 
                 {/* Time period filter */}
-                <div className="flex items-center gap-2 mb-6">
+                <div className="flex flex-wrap items-center gap-2 mb-6">
                   <p className="text-gray-600 text-xs mr-1">Period:</p>
                   {([['', 'All Time'], ['week', 'This Week'], ['semester', 'This Semester'], ['year', 'This Year']] as [ReportPeriod, string][]).map(([val, label]) => (
                     <button key={val} onClick={() => setReportPeriod(val)}
@@ -1325,7 +1325,7 @@ export default function AdminDashboard() {
             {/* ── History ── */}
             {tab === 'history' && (
               <>
-                <div className="mb-7">
+                <div className="mb-5 sm:mb-7">
                   <h1 className="text-white text-2xl font-bold">History</h1>
                   <p className="text-gray-500 text-sm mt-1">All completed consultation records grouped by term</p>
                 </div>
@@ -1348,7 +1348,8 @@ export default function AdminDashboard() {
                             <span className="text-gray-700 text-xs">{items.length} record{items.length !== 1 ? 's' : ''}</span>
                           </div>
                           <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                            <table className="w-full table-fixed">
+                            <div className="overflow-x-auto">
+                            <table className="w-full table-fixed min-w-[640px]">
                               <thead>
                                 <tr className="border-b border-white/5">
                                   <th className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-3 w-[100px]">Date</th>
@@ -1378,6 +1379,7 @@ export default function AdminDashboard() {
                                 ))}
                               </tbody>
                             </table>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1390,7 +1392,7 @@ export default function AdminDashboard() {
             {/* ── Home ── */}
             {tab === 'home' && (
               <>
-                <div className="mb-7">
+                <div className="mb-5 sm:mb-7">
                   <h1 className="text-white text-2xl font-bold">Dashboard</h1>
                   <p className="text-gray-500 text-sm mt-1">{term.label} · Admin Overview</p>
                 </div>
@@ -1883,10 +1885,10 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Two-panel layout */}
-                  <div className="flex gap-4 items-start">
+                  <div className="flex flex-col lg:flex-row gap-4 items-start">
 
                     {/* Left: Calendar + blocked list */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 w-full">
 
                       {/* Filter legend (clickable toggles) */}
                       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -2057,7 +2059,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Right: Control panel */}
-                    <div className="w-72 flex-shrink-0 space-y-3">
+                    <div className="w-full lg:w-72 lg:flex-shrink-0 space-y-3">
 
                       {/* Empty state */}
                       {calSelectedArr.length === 0 && (

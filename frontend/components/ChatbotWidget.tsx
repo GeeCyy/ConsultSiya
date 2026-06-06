@@ -338,13 +338,13 @@ export default function ChatbotWidget({
   const rootOptionCount = tree['root'].options.length;
 
   return (
-    <div className="fixed bottom-5 right-5 z-[55] flex flex-col items-end gap-3">
+    <div className="fixed bottom-5 right-3 sm:right-5 z-[55] flex flex-col items-end gap-3">
 
       {/* ── FAQ panel ── */}
       {open && (
         <div
-          className="w-80 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          style={{ backgroundColor: '#1e1f22', maxHeight: '520px', border: '1px solid rgba(255,255,255,0.08)' }}
+          className="w-[calc(100vw-24px)] sm:w-80 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[480px] sm:max-h-[520px]"
+          style={{ backgroundColor: '#1e1f22', border: '1px solid rgba(255,255,255,0.08)' }}
         >
           {/* Header */}
           <div
