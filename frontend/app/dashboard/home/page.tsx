@@ -432,10 +432,10 @@ export default function HomePage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [firstName, setFirstName] = useState<string | null>(null);
   const [consultations, setConsultations] = useState<{ date: string; time?: string; status: string }[] | null>(null);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    setIsDark(localStorage.getItem('consulta-theme') !== 'light');
+    setIsDark(localStorage.getItem('consulta-theme') === 'dark');
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
     window.addEventListener('consulta-theme-change', handler);
     return () => window.removeEventListener('consulta-theme-change', handler);
@@ -446,6 +446,8 @@ export default function HomePage() {
     const r = localStorage.getItem('role');
     if (!token) { router.push('/login'); return; }
     if (r === 'admin') { router.push('/dashboard/admin'); return; }
+    if (r === 'professor') { router.push('/dashboard/professor'); return; }
+    if (r === 'student') { router.push('/dashboard/student'); return; }
     setToken(token);
     setRole(r);
     setMounted(true);
