@@ -1172,11 +1172,11 @@ export default function ProfessorDashboard() {
               >
                 {/* Dark overlay so text stays readable over the photo */}
                 <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-[#6b0000]/80" />
-                <div className="relative px-8 py-8">
-                  <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-3">
+                <div className="relative px-4 sm:px-8 py-5 sm:py-8">
+                  <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-2 sm:mb-3">
                     MAPUA UNIVERSITY · SOIT ADVISING PORTAL
                   </p>
-                  <h1 style={{ color: '#ffffff' }} className="text-3xl font-bold mb-1.5">
+                  <h1 style={{ color: '#ffffff' }} className="text-2xl sm:text-3xl font-bold mb-1.5">
                     {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
                   </h1>
                   <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-sm">
@@ -1187,10 +1187,10 @@ export default function ProfessorDashboard() {
                 </div>
               </div>
 
-              <div className="px-8 py-6 space-y-6">
+              <div className="px-3 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
                 {/* ── Stats row ── */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {([
                     { icon: '🕐', value: daysToFinals, label: 'Days to Finals',      sub: finalsDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}), color: isDark ? 'text-orange-400' : 'text-orange-500' },
                     { icon: '📅', value: daysToEnd,    label: 'Days to End of Term', sub: endDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}),    color: isDark ? 'text-pink-400'   : 'text-pink-500'   },
@@ -1213,16 +1213,16 @@ export default function ProfessorDashboard() {
                   <div className="space-y-6">
 
                     {/* Week cards */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className={`rounded-2xl p-5 ${card}`}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
                         <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
                         <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
                             <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
                             <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
                           </div>
                           <div>
-                            <p className={`text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                            <p className={`text-lg sm:text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
                             {currentMode && (
                               <span className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(currentMode)}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${modeDot(currentMode)}`} />
@@ -1233,11 +1233,11 @@ export default function ProfessorDashboard() {
                         </div>
                       </div>
 
-                      <div className={`rounded-2xl p-5 ${card}`}>
+                      <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
                         <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Next Week</p>
                         {nextWeekNum ? (
                           <>
-                            <p className={`text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
+                            <p className={`text-2xl sm:text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
                             {nextMode && (
                               <span className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(nextMode)}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${modeDot(nextMode)}`} />
@@ -1351,13 +1351,13 @@ export default function ProfessorDashboard() {
             </div>
 
         ) : tab === 'consultations' ? (
-          <div className="px-8 py-8">
-            <div className="mb-7">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
               <p className="text-gray-500 text-sm mt-1">Review and manage student consultation requests</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-7">
+            <div className="grid grid-cols-3 gap-3 mb-5 sm:mb-7">
               {[
                 { label: 'Total', value: stats.total, color: tp },
                 { label: 'Pending', value: stats.pending, color: 'text-amber-400' },
@@ -1404,7 +1404,7 @@ export default function ProfessorDashboard() {
                         </div>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-2.5">
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                           <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Date & Time</p>
                           <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -1456,8 +1456,8 @@ export default function ProfessorDashboard() {
                         <p className={`text-sm line-clamp-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{natureLabel(c)}</p>
                       </div>
 
-                      <div className="mt-3.5 flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
+                      <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {c.uploaded_form_path && (
                             <button
                               onClick={() => handleDownloadStudentForm(c.id)}
@@ -1506,8 +1506,8 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'calendar' ? (
-          <div className="px-8 py-8">
-            <div className="mb-7">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Booking Calendar</h1>
               <p className="text-gray-500 text-sm mt-1">Overview of student bookings by date</p>
             </div>
@@ -1596,8 +1596,8 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'schedules' ? (
-          <div className="px-8 py-8">
-            <div className="mb-7">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Manage Schedules</h1>
               <p className="text-gray-500 text-sm mt-1">Add or edit your available consultation time slots</p>
             </div>
@@ -1763,8 +1763,8 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'history' ? (
-          <div className="px-8 py-8">
-            <div className="mb-7">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
               <p className="text-gray-500 text-sm mt-1">Past advising records grouped by term</p>
             </div>
@@ -1772,7 +1772,7 @@ export default function ProfessorDashboard() {
               const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'rescheduled' || c.status === 'missed');
               if (historyItems.length === 0) {
                 return (
-                  <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
+                  <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
                     <p className={`font-medium text-sm ${ts}`}>No history yet</p>
                     <p className={`text-xs mt-1 ${tm}`}>Completed advising sessions will appear here</p>
                   </div>
@@ -1787,37 +1787,39 @@ export default function ProfessorDashboard() {
                         <span className={`text-xs ${tm}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className={`rounded-2xl overflow-hidden ${card}`}>
-                        <table className="w-full table-fixed">
-                          <thead>
-                            <tr className={`border-b ${borderSoft}`}>
-                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[110px] ${tm}`}>Date</th>
-                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[160px] ${tm}`}>Student</th>
-                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm}`}>Purpose</th>
-                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[170px] ${tm}`}>Action Taken</th>
-                              <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[130px] ${tm}`}>Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className={`divide-y ${dividerCls}`}>
-                            {items.map(c => (
-                              <tr key={c.id} className={`transition-colors ${hoverBg}`}>
-                                <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </td>
-                                <td className={`px-4 py-3 text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  <p className="truncate font-medium">{c.student_name}</p>
-                                  <p className={`text-[10px] mt-0.5 ${tm}`}>{c.student_number}</p>
-                                </td>
-                                <td className={`px-4 py-3 text-xs ${ts}`}>
-                                  <span className="line-clamp-2">{natureLabel(c)}</span>
-                                </td>
-                                <td className={`px-4 py-3 text-xs ${ts}`}>
-                                  <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
-                                </td>
-                                <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[600px] table-fixed">
+                            <thead>
+                              <tr className={`border-b ${borderSoft}`}>
+                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[110px] ${tm}`}>Date</th>
+                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[160px] ${tm}`}>Student</th>
+                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm}`}>Purpose</th>
+                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[170px] ${tm}`}>Action Taken</th>
+                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[130px] ${tm}`}>Status</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className={`divide-y ${dividerCls}`}>
+                              {items.map(c => (
+                                <tr key={c.id} className={`transition-colors ${hoverBg}`}>
+                                  <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </td>
+                                  <td className={`px-4 py-3 text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <p className="truncate font-medium">{c.student_name}</p>
+                                    <p className={`text-[10px] mt-0.5 ${tm}`}>{c.student_number}</p>
+                                  </td>
+                                  <td className={`px-4 py-3 text-xs ${ts}`}>
+                                    <span className="line-clamp-2">{natureLabel(c)}</span>
+                                  </td>
+                                  <td className={`px-4 py-3 text-xs ${ts}`}>
+                                    <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
+                                  </td>
+                                  <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1827,7 +1829,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'profile' ? (
-          <div className="px-8 py-10">
+          <div className="px-3 sm:px-8 py-6 sm:py-10">
             <div>
 
               {/* Avatar hero */}
@@ -1861,7 +1863,7 @@ export default function ProfessorDashboard() {
               </div>
 
               {/* Two-column layout */}
-              <div className="grid grid-cols-[3fr_2fr] gap-5 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-[3fr_2fr] gap-5 items-start">
 
                 {/* Left column */}
                 <div className="space-y-5">
@@ -1953,12 +1955,12 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : (
-          <div className="px-8 py-8">
-            <div className="mb-7">
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
+            <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Export Report</h1>
               <p className="text-gray-500 text-sm mt-1">Download your faculty academic advising report</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button onClick={() => handleExport('excel')}
                 className={`rounded-2xl p-6 text-left transition-all group hover:border-emerald-500/20 hover:bg-emerald-500/5 ${card}`}>
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
