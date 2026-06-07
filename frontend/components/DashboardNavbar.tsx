@@ -54,7 +54,7 @@ function relTime(iso: string): string {
 }
 
 function fmtNotifDate(date: string, time: string | null, timeStart: string): string {
-  const d = new Date(date + 'T12:00:00');
+  const d = new Date(date.slice(0, 10) + 'T12:00:00');
   const dow = d.toLocaleDateString('en-PH', { weekday: 'short' });
   const mon = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
   const t = (time || timeStart)?.slice(0, 5);
@@ -96,7 +96,7 @@ export default function DashboardNavbar({
 
   // Notification dropdown
   const [notifOpen, setNotifOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [_mounted, setMounted] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [expandedAnn, setExpandedAnn] = useState<number | null>(null);
