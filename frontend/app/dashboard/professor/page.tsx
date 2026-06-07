@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
 import ProfessorNavbar, { type ProfessorTab } from '@/components/ProfessorNavbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
+import { ToastContainer, useToast } from '@/components/Toast';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import {
   CURRENT_TERM,
   buildTermFromConfig,
@@ -470,24 +472,44 @@ function MiniCalendar({
   const noteChanged  = selected ? (noteDraft.trim() !== (existingNote?.note ?? '') || noteDraftColor !== (existingNote?.color ?? 'indigo')) : false;
 
   return (
-    <div className={`rounded-2xl border p-4 ${card}`}>
+    <div className={`rounded-2xl border p-4 w-full min-w-0 ${card}`}>
+
+      {/* ── Header: month/year + nav arrows ── */}
       <div className="flex items-center justify-between mb-3">
-        <span className={`text-sm font-semibold ${tp}`}>{MONTH_NAMES_FULL[viewMonth]} {viewYear}</span>
-        <div className="flex gap-1">
-          <button onClick={prevMonth} className={`w-6 h-6 flex items-center justify-center rounded hover:bg-white/5 ${tm}`}>
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <span className={`text-sm font-bold ${tp}`}>{MONTH_NAMES_FULL[viewMonth]} {viewYear}</span>
+        <div className="flex gap-0.5">
+          <button
+            onClick={prevMonth}
+            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+              isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
           </button>
-          <button onClick={nextMonth} className={`w-6 h-6 flex items-center justify-center rounded hover:bg-white/5 ${tm}`}>
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+          <button
+            onClick={nextMonth}
+            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+              isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
           </button>
         </div>
       </div>
+
+      {/* ── Day-of-week headers ── */}
       <div className="grid grid-cols-7 mb-1">
-        {['SUN','MON','TUE','WED','THU','FRI','SAT'].map(d => (
-          <div key={d} className={`text-center text-[9px] font-medium ${tm} py-0.5`}>{d}</div>
+        {['S','M','T','W','T','F','S'].map((d, i) => (
+          <div key={i} className={`text-center text-[11px] font-bold py-1.5 ${tm}`}>{d}</div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-0.5">
+
+      {/* ── Date grid ── */}
+      <div className="grid grid-cols-7 gap-y-0.5">
         {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
         {Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1;
@@ -502,93 +524,103 @@ function MiniCalendar({
             <button
               key={ds}
               onClick={() => setSelected(isSel ? null : ds)}
-              className={`relative flex flex-col items-center py-0.5 rounded-md transition-colors ${
-                isBlocked ? 'bg-red-500/15' :
+              className={`relative flex flex-col items-center py-0.5 rounded-lg transition-colors ${
+                isBlocked ? (isDark ? 'bg-red-500/15' : 'bg-red-50') :
                 isSel && !isT ? (isDark ? 'bg-white/10' : 'bg-gray-100') :
                 (!isT ? (isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50') : '')
               }`}
             >
-              <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] font-medium ${
-                isT ? 'bg-[#CC0000] text-white' :
-                isBlocked ? 'text-red-400' :
-                isDark ? 'text-gray-300' : 'text-gray-700'
+              <div className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium ${
+                isT ? 'bg-[#CC0000] text-white font-semibold' :
+                isBlocked ? (isDark ? 'text-red-400' : 'text-red-500') :
+                isDark ? 'text-gray-200' : 'text-gray-800'
               }`}>{day}</div>
-              {evColor && <div className={`w-1 h-1 rounded-full mt-0.5 ${dotCls[evColor] ?? 'bg-red-500'}`} />}
-              {!evColor && isBlocked && <div className="w-1 h-1 rounded-full mt-0.5 bg-red-400" />}
-              {nc && !evColor && !isBlocked && <div className={`w-1 h-1 rounded-full mt-0.5 ${nc.dot}`} />}
-              {nc && (evColor || isBlocked) && <div className={`absolute top-0.5 right-0.5 w-1 h-1 rounded-full ${nc.dot}`} />}
+              {evColor && <div className={`w-1.5 h-1.5 rounded-full mt-0.5 ${dotCls[evColor] ?? 'bg-red-500'}`} />}
+              {!evColor && isBlocked && <div className="w-1.5 h-1.5 rounded-full mt-0.5 bg-red-400" />}
+              {nc && !evColor && !isBlocked && <div className={`w-1.5 h-1.5 rounded-full mt-0.5 ${nc.dot}`} />}
+              {nc && (evColor || isBlocked) && <div className={`absolute top-0 right-0.5 w-1.5 h-1.5 rounded-full ${nc.dot}`} />}
             </button>
           );
         })}
       </div>
+
+      {/* ── Events / holidays legend ── */}
       {(events.length > 0 || blockedEvents.length > 0) && (
-        <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} space-y-1.5`}>
-          {events.slice(0, 5).map(([date, label]) => {
-            const d = new Date(date + 'T12:00:00');
-            const c = augColors.get(date) ?? 'red';
-            return (
-              <div key={date} className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls[c] ?? 'bg-red-500'}`} />
-                <span className={`text-[11px] ${tm}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
-                <span className={`text-[11px] font-medium ${date === todayStr ? 'text-[#CC0000]' : ts}`}>
-                  {date === todayStr ? 'Today' : label}
-                </span>
-              </div>
-            );
-          })}
-          {blockedEvents.map(([date, label]) => {
-            const d = new Date(date + 'T12:00:00');
-            return (
-              <div key={date} className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-400" />
-                <span className={`text-[11px] ${tm}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
-                <span className="text-[11px] font-medium text-red-400">{label}</span>
-              </div>
-            );
-          })}
+        <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+          <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${tm}`}>This Month</p>
+          <div className="space-y-1.5">
+            {events.slice(0, 4).map(([date, label]) => {
+              const d = new Date(date + 'T12:00:00');
+              const c = augColors.get(date) ?? 'red';
+              return (
+                <div key={date} className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls[c] ?? 'bg-red-500'}`} />
+                  <span className={`text-[10px] font-semibold flex-shrink-0 ${ts}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
+                  <span className={`text-[10px] truncate ${date === todayStr ? 'text-[#CC0000] font-semibold' : tm}`}>
+                    {date === todayStr ? 'Today' : label}
+                  </span>
+                </div>
+              );
+            })}
+            {blockedEvents.map(([date, label]) => {
+              const d = new Date(date + 'T12:00:00');
+              return (
+                <div key={date} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-400" />
+                  <span className={`text-[10px] font-semibold flex-shrink-0 ${ts}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
+                  <span className="text-[10px] truncate text-red-400">{label}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Selected date note editor */}
+      {/* ── Selected date note editor ── */}
       {selected && token && (
         <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-          <p className={`text-[10px] font-semibold uppercase tracking-wider mb-2 ${tm}`}>
+          <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${tm}`}>
             Note — {MONTH_NAMES_SHORT[parseInt(selected.slice(5,7))-1]} {parseInt(selected.slice(8,10))}
           </p>
           <textarea
             rows={2}
             value={noteDraft}
             onChange={e => setNoteDraft(e.target.value)}
-            placeholder="Add a personal note for this date…"
-            className={`w-full rounded-lg px-2.5 py-2 text-xs border focus:outline-none resize-none placeholder-gray-600 ${
+            placeholder="Add a personal note…"
+            className={`w-full rounded-lg px-2.5 py-2 text-xs border focus:outline-none resize-none transition-colors ${
               isDark
-                ? 'bg-[#1e1f22] border-white/10 text-white focus:border-indigo-500/50'
-                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-indigo-400'
+                ? 'bg-white/[0.04] border-white/10 text-white placeholder-gray-500 focus:border-indigo-500/60 focus:bg-white/[0.06]'
+                : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-indigo-400 focus:bg-white'
             }`}
           />
-          <div className="flex items-center gap-1.5 mt-2">
-            {NOTE_COLORS.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setNoteDraftColor(c.id)}
-                className={`w-3.5 h-3.5 rounded-full ${c.dot} transition-transform ${
-                  noteDraftColor === c.id ? `scale-125 ring-2 ${c.ring} ring-offset-1 ${isDark ? 'ring-offset-[#252525]' : 'ring-offset-white'}` : 'hover:scale-110'
-                }`}
-              />
-            ))}
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`text-[9px] font-semibold ${tm}`}>Color</span>
+            <div className="flex items-center gap-1.5">
+              {NOTE_COLORS.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setNoteDraftColor(c.id)}
+                  className={`w-3.5 h-3.5 rounded-full ${c.dot} transition-all ${
+                    noteDraftColor === c.id
+                      ? `scale-125 ring-2 ${c.ring} ring-offset-1 ${isDark ? 'ring-offset-[#252525]' : 'ring-offset-white'}`
+                      : 'hover:scale-110 opacity-70 hover:opacity-100'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
           <div className="flex gap-2 mt-2">
             {existingNote && (
               <button
                 onClick={() => handleDeleteNote(existingNote.id)}
-                className={`flex-1 py-1.5 rounded-lg text-xs border transition-colors text-red-400 border-red-500/20 ${isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-50'}`}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors text-red-400 border-red-500/20 ${isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-50'}`}
               >Delete</button>
             )}
             <button
               onClick={handleSaveNote}
               disabled={noteSaving || !noteDraft.trim() || !noteChanged}
-              className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {noteSaving ? 'Saving…' : existingNote ? 'Update' : 'Save Note'}
             </button>
@@ -659,11 +691,23 @@ export default function ProfessorDashboard() {
   const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
-  const [isDark, setIsDark] = useState(false);
+  // Theme — mounted guard prevents server/client mismatch
+  const [mounted, setMounted] = useState(false);
+  const [_isDark, setIsDark] = useState(false);
+  const isDark = mounted ? _isDark : false;
+
+  const { toasts, toast, removeToast } = useToast();
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; confirmLabel: string; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', confirmLabel: 'Confirm', onConfirm: () => {} });
+  const openConfirm = (title: string, message: string, onConfirm: () => void) =>
+    setConfirmState({ open: true, title, message, confirmLabel: 'Confirm', onConfirm });
+  const closeConfirm = () => setConfirmState(s => ({ ...s, open: false }));
 
   useEffect(() => {
     // One-time migration: clear any stale 'dark' set by old defaults and reset to light.
     // 'consulta-theme-v2' acts as a marker so this only runs once per browser.
+    setMounted(true);
     if (!localStorage.getItem('consulta-theme-v2')) {
       localStorage.setItem('consulta-theme-v2', '1');
       localStorage.setItem('consulta-theme', 'light');
@@ -755,7 +799,7 @@ export default function ProfessorDashboard() {
   const handleConfirm = async (id: number, meetingLink?: string) => {
     const body = meetingLink ? { meeting_link: meetingLink } : {};
     const data = await api.patch(`/api/consultations/${id}/confirm`, body, token!);
-    if (data.error) { alert(data.error); return; }
+    if (data.error) { toast.error(data.error); return; }
     fetchAll();
   };
 
@@ -769,7 +813,7 @@ export default function ProfessorDashboard() {
   const handleSaveMeetingLink = async () => {
     if (!editLinkConsult) return;
     const data = await api.patch(`/api/consultations/${editLinkConsult.id}/meeting-link`, { meeting_link: editLinkInput.trim() || null }, token!);
-    if (data.error) { alert(data.error); return; }
+    if (data.error) { toast.error(data.error); return; }
     setEditLinkConsult(null);
     setEditLinkInput('');
     fetchAll();
@@ -834,7 +878,7 @@ export default function ProfessorDashboard() {
       const res = await fetch(`${API_URL}/api/forms/download/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) { const e = await res.json(); alert(e.error || 'Download failed.'); return; }
+      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Download failed.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -907,24 +951,30 @@ export default function ProfessorDashboard() {
     fetchAll();
   };
 
-  const handleDeleteSchedule = async (id: number) => {
-    if (!confirm('Delete this schedule slot?')) return;
-    const data = await api.delete(`/api/schedules/${id}`, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+  const handleDeleteSchedule = (id: number) => {
+    openConfirm(
+      'Delete Schedule Slot',
+      'Are you sure you want to delete this schedule slot? This cannot be undone.',
+      async () => {
+        closeConfirm();
+        const data = await api.delete(`/api/schedules/${id}`, token!);
+        if (data.error) { toast.error(data.error); return; }
+        fetchAll();
+      }
+    );
   };
 
   const handleExport = async (format: 'excel' | 'pdf') => {
     const endpoint = format === 'excel' ? '/api/reports/excel' : '/api/reports/pdf';
     try {
       const res = await fetch(`${API_URL}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { const e = await res.json(); alert(e.error || 'Export failed.'); return; }
+      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Export failed.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = `advising-report.${format === 'excel' ? 'xlsx' : 'pdf'}`; a.click();
       URL.revokeObjectURL(url);
-    } catch { alert('Export failed. Please try again.'); }
+    } catch { toast.error('Export failed. Please try again.'); }
   };
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -1051,6 +1101,16 @@ export default function ProfessorDashboard() {
   return (
     <div className={`min-h-screen flex flex-col ${isDark ? 'bg-[#2d2d2d]' : 'bg-[#f2f3f5]'}`}>
 
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        onConfirm={confirmState.onConfirm}
+        onCancel={closeConfirm}
+      />
+
       <ProfessorNavbar
         tab={tab === 'profile' ? 'home' : tab}
         onTabChange={handleTabChange}
@@ -1162,7 +1222,7 @@ export default function ProfessorDashboard() {
             <div>
               {/* ── Hero ── */}
               <div
-                className="relative"
+                className="relative overflow-hidden"
                 style={{
                   backgroundImage: "url('/mapua-banner.jpg')",
                   backgroundSize: 'cover',
@@ -1189,13 +1249,12 @@ export default function ProfessorDashboard() {
 
               <div className="px-3 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
-                {/* ── Stats row ── */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {/* ── ROW 1: 3 stat cards ── */}
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {([
                     { icon: '🕐', value: daysToFinals, label: 'Days to Finals',      sub: finalsDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}), color: isDark ? 'text-orange-400' : 'text-orange-500' },
                     { icon: '📅', value: daysToEnd,    label: 'Days to End of Term', sub: endDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}),    color: isDark ? 'text-pink-400'   : 'text-pink-500'   },
                     { icon: '📈', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, label: 'Weeks Remaining', sub: `of ${term.totalWeeks} weeks`, color: isDark ? 'text-blue-400' : 'text-blue-600' },
-                    { icon: '✅', value: `${Math.round(termProgress)}%`, label: 'Term Progress', sub: currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
                   ] as const).map((s, i) => (
                     <div key={i} className={`rounded-2xl p-5 ${card}`}>
                       <span className="text-2xl">{s.icon}</span>
@@ -1206,114 +1265,70 @@ export default function ProfessorDashboard() {
                   ))}
                 </div>
 
-                {/* ── Main 2-column grid ── */}
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
+                {/* ── ROW 2: Term Progress bar ── */}
+                <div className={`rounded-2xl p-5 ${card}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`text-sm font-semibold ${tp}`}>Term Progress</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-emerald-500">{Math.round(termProgress)}%</span>
+                      <span className={`text-xs ${tm}`}>{term.label}</span>
+                    </div>
+                  </div>
+                  <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}>
+                    <div className="h-full bg-[#CC0000] rounded-full transition-all duration-700" style={{ width: `${Math.round(termProgress)}%` }} />
+                  </div>
+                  <div className="relative h-4 mt-1.5">
+                    <span className={`absolute left-0 text-[10px] ${tm}`}>Start</span>
+                    <span className={`absolute text-[10px] ${tm}`} style={{ left: `${(term.midtermWeek / term.totalWeeks) * 100}%`, transform: 'translateX(-50%)' }}>Midterm (W{term.midtermWeek})</span>
+                    <span className={`absolute text-[10px] ${tm}`} style={{ left: `${(term.finalsWeek / term.totalWeeks) * 100}%`, transform: 'translateX(-50%)' }}>Finals (W{term.finalsWeek})</span>
+                    <span className={`absolute right-0 text-[10px] ${tm}`}>End</span>
+                  </div>
+                  <p className={`text-xs mt-0.5 ${tm}`}>{currentWeek ? `Currently at Week ${currentWeek} of ${term.totalWeeks} weeks` : 'Term not yet started'}</p>
+                </div>
 
-                  {/* Left column */}
-                  <div className="space-y-6">
+                {/* ── ROW 3: 4 equal columns ── */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
 
-                    {/* Week cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
-                        <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
-                        <div className="flex items-center gap-4">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
-                            <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                            <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
-                          </div>
-                          <div>
-                            <p className={`text-lg sm:text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
-                            {currentMode && (
-                              <span className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(currentMode)}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${modeDot(currentMode)}`} />
-                                {currentMode}
-                              </span>
-                            )}
-                          </div>
+                  {/* Col 1: Current Academic Week */}
+                  <div className={`rounded-2xl p-4 sm:p-5 h-full ${card}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
+                        <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
+                        <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
+                      </div>
+                      <div>
+                        <p className={`text-lg sm:text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Col 2: Pending Actions */}
+                  <div className={`rounded-2xl p-4 sm:p-5 h-full ${card}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className={`text-xs font-semibold uppercase tracking-wider ${tm}`}>Pending Actions</p>
+                      <button onClick={() => handleTabChange('consultations')} className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">View all</button>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                          <span className={`text-sm ${ts}`}>Pending</span>
                         </div>
+                        <span className={`text-sm font-semibold text-amber-500`}>{pendingCount}</span>
                       </div>
-
-                      <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
-                        <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Next Week</p>
-                        {nextWeekNum ? (
-                          <>
-                            <p className={`text-2xl sm:text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
-                            {nextMode && (
-                              <span className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(nextMode)}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${modeDot(nextMode)}`} />
-                                {nextMode}
-                              </span>
-                            )}
-                            <p className={`text-xs mt-2 ${tm}`}>Plan ahead for your upcoming consultations.</p>
-                          </>
-                        ) : (
-                          <p className={`text-sm ${ts}`}>Last week of term</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Upcoming consultations list */}
-                    <div className={`rounded-2xl p-5 ${card}`}>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
-                        <button onClick={() => handleTabChange('consultations')}
-                          className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
-                          View all
-                        </button>
-                      </div>
-                      {visibleConsultations.length === 0 ? (
-                        <p className={`text-sm text-center py-6 ${tm}`}>No upcoming consultations</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {visibleConsultations.slice(0, 6).map(c => (
-                            <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'} transition-colors`}>
-                              <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${tp}`}>{c.student_name}</p>
-                                <p className={`text-xs truncate ${tm}`}>{c.program}</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className={`text-xs font-medium ${ts}`}>{(c.time || c.time_start)?.slice(0,5)}</p>
-                                <p className={`text-xs ${tm}`}>{new Date(c.date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}</p>
-                              </div>
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                                  c.mode === 'F2F'
-                                    ? isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'
-                                    : isDark ? 'bg-cyan-500/10 text-cyan-400'     : 'bg-cyan-50 text-cyan-600'
-                                }`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</span>
-                                <StatusBadge status={c.status} />
-                              </div>
-                            </div>
-                          ))}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                          <span className={`text-sm ${ts}`}>To Complete</span>
                         </div>
-                      )}
-                    </div>
-
-                  </div>{/* /Left column */}
-
-                  {/* Right sidebar */}
-                  <div className="space-y-4">
-
-                    {/* This Week stats */}
-                    <div className={`rounded-2xl p-4 ${card}`}>
-                      <p className={`text-[10px] font-semibold uppercase tracking-wider mb-3 ${tm}`}>This Week</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {([
-                          { label: 'Scheduled', value: scheduledCount, bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
-                          { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
-                          { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
-                          { label: 'Students',  value: totalStudents,  bg: isDark ? 'bg-purple-500/10'  : 'bg-purple-50',  color: isDark ? 'text-purple-400'  : 'text-purple-600'  },
-                        ] as const).map(s => (
-                          <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
-                            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-                            <p className={`text-[11px] mt-0.5 ${ts}`}>{s.label}</p>
-                          </div>
-                        ))}
+                        <span className={`text-sm font-semibold text-blue-500`}>{todayConsultations.filter(c => c.status === 'confirmed').length}</span>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Mini calendar */}
+                  {/* Col 3: Academic Calendar */}
+                  <div>
                     <MiniCalendar
                       dateLabelMap={dateLabelMap}
                       dateColorMap={dateColorMap}
@@ -1321,31 +1336,86 @@ export default function ProfessorDashboard() {
                       token={token}
                       calOverrides={calOverrides}
                     />
+                  </div>
 
-                    {/* Today's Schedule */}
-                    {todayConsultations.length > 0 && (
-                      <div className={`rounded-2xl p-4 ${card}`}>
-                        <p className={`text-sm font-semibold mb-3 ${tp}`}>Today's Schedule</p>
-                        <div className="space-y-2.5">
-                          {todayConsultations.map(c => {
-                            const t = (c.time || c.time_start)?.slice(0, 5) ?? '';
-                            return (
-                              <div key={c.id} className="flex items-start gap-3">
-                                <span className={`text-[10px] font-mono flex-shrink-0 mt-0.5 ${tm}`}>{t}</span>
-                                <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
-                                  <p className={`text-xs font-medium truncate ${tp}`}>Consultation – {c.student_name.split(' ').slice(0,2).join(' ')}</p>
-                                  <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? c.location || 'In-Person' : 'Online'}</p>
-                                </div>
-                              </div>
-                            );
-                          })}
+                  {/* Col 4: This Week stats */}
+                  <div className={`rounded-2xl p-4 h-full ${card}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-3 ${tm}`}>This Week</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { label: 'Scheduled', value: scheduledCount, bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
+                        { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
+                        { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
+                        { label: 'Students',  value: totalStudents,  bg: isDark ? 'bg-purple-500/10'  : 'bg-purple-50',  color: isDark ? 'text-purple-400'  : 'text-purple-600'  },
+                      ] as const).map(s => (
+                        <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
+                          <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                          <p className={`text-[11px] mt-0.5 ${ts}`}>{s.label}</p>
                         </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
+                  </div>
 
-                  </div>{/* /Right sidebar */}
+                </div>{/* /4-col row */}
 
-                </div>{/* /2-col grid */}
+                {/* ── ROW 4: Upcoming Consultations ── */}
+                <div className={`rounded-2xl p-5 ${card}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
+                    <button onClick={() => handleTabChange('consultations')}
+                      className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
+                      View all
+                    </button>
+                  </div>
+                  {visibleConsultations.length === 0 ? (
+                    <p className={`text-sm text-center py-6 ${tm}`}>No upcoming consultations</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {visibleConsultations.slice(0, 6).map(c => (
+                        <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'} transition-colors`}>
+                          <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium truncate ${tp}`}>{c.student_name}</p>
+                            <p className={`text-xs truncate ${tm}`}>{c.program}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className={`text-xs font-medium ${ts}`}>{(c.time || c.time_start)?.slice(0,5)}</p>
+                            <p className={`text-xs ${tm}`}>{new Date(c.date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                              c.mode === 'F2F'
+                                ? isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'
+                                : isDark ? 'bg-cyan-500/10 text-cyan-400'     : 'bg-cyan-50 text-cyan-600'
+                            }`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</span>
+                            <StatusBadge status={c.status} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Today's Schedule (conditional) */}
+                {todayConsultations.length > 0 && (
+                  <div className={`rounded-2xl p-4 ${card}`}>
+                    <p className={`text-sm font-semibold mb-3 ${tp}`}>Today's Schedule</p>
+                    <div className="space-y-2.5">
+                      {todayConsultations.map(c => {
+                        const t = (c.time || c.time_start)?.slice(0, 5) ?? '';
+                        return (
+                          <div key={c.id} className="flex items-start gap-3">
+                            <span className={`text-[10px] font-mono flex-shrink-0 mt-0.5 ${tm}`}>{t}</span>
+                            <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
+                              <p className={`text-xs font-medium truncate ${tp}`}>Consultation – {c.student_name.split(' ').slice(0,2).join(' ')}</p>
+                              <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? c.location || 'In-Person' : 'Online'}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
               </div>{/* /px-8 py-6 */}
             </div>

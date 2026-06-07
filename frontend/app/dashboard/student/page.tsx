@@ -6,6 +6,8 @@ import { api } from '@/lib/api';
 import UserProfileCard from '@/components/UserProfileCard';
 import DashboardNavbar from '@/components/DashboardNavbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
+import { ToastContainer, useToast } from '@/components/Toast';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import {
   CURRENT_TERM, buildTermFromConfig, getAcademicWeek, getWeekMode,
   daysUntil, getTermDates, getTermProgress,
@@ -545,12 +547,23 @@ export default function StudentDashboard() {
     full_name: '', student_number: '', program: '', year_level: '', email: '', phone: '', avatar: null,
   });
 
-  // Theme — default light (same as professor)
-  const [isDark, setIsDark] = useState(false);
+  // Theme — mounted guard prevents server/client mismatch
+  const [mounted, setMounted] = useState(false);
+  const [_isDark, setIsDark] = useState(false);
+  const isDark = mounted ? _isDark : false;
+
+  const { toasts, toast, removeToast } = useToast();
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string; confirmLabel: string; onConfirm: () => void;
+  }>({ open: false, title: '', message: '', confirmLabel: 'Confirm', onConfirm: () => {} });
+  const openConfirm = (title: string, message: string, onConfirm: () => void) =>
+    setConfirmState({ open: true, title, message, confirmLabel: 'Confirm', onConfirm });
+  const closeConfirm = () => setConfirmState(s => ({ ...s, open: false }));
 
   // ── Effects ──
 
   useEffect(() => {
+    setMounted(true);
     if (!localStorage.getItem('consulta-theme-v2')) {
       localStorage.setItem('consulta-theme-v2', '1');
       localStorage.setItem('consulta-theme', 'light');
@@ -664,18 +677,24 @@ export default function StudentDashboard() {
     setTab('my');
   };
 
-  const handleCancel = async (id: number) => {
-    if (!confirm('Cancel this consultation?')) return;
-    const data = await api.patch(`/api/consultations/${id}/cancel`, {}, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchData();
+  const handleCancel = (id: number) => {
+    openConfirm(
+      'Cancel Consultation',
+      'Are you sure you want to cancel this consultation?',
+      async () => {
+        closeConfirm();
+        const data = await api.patch(`/api/consultations/${id}/cancel`, {}, token!);
+        if (data.error) { toast.error(data.error); return; }
+        fetchData();
+      }
+    );
   };
 
   const handleDownloadSlip = async () => {
     setDownloadingSlip(-1);
     try {
       const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { alert('Failed to download form template.'); return; }
+      if (!res.ok) { toast.error('Failed to download form template.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf'; a.click();
@@ -687,7 +706,7 @@ export default function StudentDashboard() {
     setDownloadingReceipt(c.id);
     try {
       const res = await fetch(`${API_URL}/api/forms/advising-slip/${c.id}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { alert('Failed to generate receipt.'); return; }
+      if (!res.ok) { toast.error('Failed to generate receipt.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = `receipt-consultation-${c.id}.pdf`; a.click();
@@ -710,7 +729,7 @@ export default function StudentDashboard() {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
       });
       const data = await res.json();
-      if (data.error) { alert(data.error); return; }
+      if (data.error) { toast.error(data.error); return; }
       await fetchData();
     } finally { setUploadingId(null); uploadForId.current = null; }
   };
@@ -730,33 +749,16 @@ export default function StudentDashboard() {
   const todayStr = now.toISOString().slice(0, 10);
 
   const currentWeek = getAcademicWeek(term, now);
-  const calModeMap  = new Map(
-    calOverrides.filter(o => o.type === 'mode_override' && o.week_number && o.value)
-      .map(o => [o.week_number!, o.value!])
-  );
-  const currentMode = currentWeek ? (calModeMap.get(currentWeek) ?? getWeekMode(term, currentWeek)) : null;
-  const nextWeekNum = currentWeek && currentWeek < term.totalWeeks ? currentWeek + 1 : null;
-  const nextMode    = nextWeekNum ? (calModeMap.get(nextWeekNum) ?? getWeekMode(term, nextWeekNum)) : null;
   const { finalsDate, endDate } = getTermDates(term);
   const daysToFinals  = daysUntil(finalsDate, now);
   const daysToEnd     = daysUntil(endDate, now);
   const termProgress  = getTermProgress(term, now);
 
-  // This-week window (Mon–Sun)
-  const dow    = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow));
-  monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const sundayStr = sunday.toISOString().slice(0, 10);
-
-  const thisWeek          = consultations.filter(c => c.date >= mondayStr && c.date <= sundayStr);
-  const thisWeekBooked    = thisWeek.length;
-  const thisWeekConfirmed = thisWeek.filter(c => c.status === 'confirmed').length;
-  const thisWeekPending   = thisWeek.filter(c => c.status === 'pending').length;
-  const thisWeekCompleted = thisWeek.filter(c => c.status === 'completed').length;
+  // All-time consultation counts
+  const allConsultsTotal     = consultations.length;
+  const allConsultsCompleted = consultations.filter(c => c.status === 'completed').length;
+  const allConsultsPending   = consultations.filter(c => c.status === 'pending').length;
+  const allConsultsCancelled = consultations.filter(c => c.status === 'cancelled').length;
 
   // Greeting
   const greetingHour = now.getHours();
@@ -794,10 +796,6 @@ export default function StudentDashboard() {
   const tp        = isDark ? 'text-white'    : 'text-gray-900';
   const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
   const tm        = isDark ? 'text-gray-600' : 'text-gray-400';
-  const modePill  = (m: string) => m === 'Online'
-    ? isDark ? 'bg-blue-500/20 text-blue-300'      : 'bg-blue-50 text-blue-600'
-    : isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700';
-  const modeDot   = (m: string) => m === 'Online' ? 'bg-blue-400' : 'bg-emerald-400';
   const innerCard = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-gray-50 border-gray-100';
   const hoverBg   = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/80';
 
@@ -831,6 +829,16 @@ export default function StudentDashboard() {
   return (
     <div className={`min-h-screen flex flex-col ${isDark ? 'bg-[#2d2d2d]' : 'bg-[#F0F0F0]'}`}>
 
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        onConfirm={confirmState.onConfirm}
+        onCancel={closeConfirm}
+      />
+
       <DashboardNavbar
         role="student"
         navItems={STUDENT_NAV_ITEMS}
@@ -857,7 +865,7 @@ export default function StudentDashboard() {
         ) : tab === 'home' ? (
           <div>
             {/* ── Hero ── */}
-            <div className="relative" style={{ backgroundImage: "url('/mapua-banner.jpg')", backgroundSize: 'cover', backgroundPosition: 'center 40%', backgroundRepeat: 'no-repeat' }}>
+            <div className="relative overflow-hidden" style={{ backgroundImage: "url('/mapua-banner.jpg')", backgroundSize: 'cover', backgroundPosition: 'center 40%', backgroundRepeat: 'no-repeat' }}>
               <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-[#6b0000]/80" />
               <div className="relative px-4 sm:px-8 py-5 sm:py-8">
                 <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-2 sm:mb-3">
@@ -876,13 +884,12 @@ export default function StudentDashboard() {
 
             <div className="px-3 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
-              {/* ── Stat cards ── */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* ── ROW 1: 3 stat cards ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {([
                   { icon: '🕐', value: daysToFinals, label: 'Days to Finals',      sub: finalsDate.toLocaleDateString('en-PH', { month: 'long', day: 'numeric' }), color: isDark ? 'text-orange-400' : 'text-orange-500' },
                   { icon: '📅', value: daysToEnd,    label: 'Days to End of Term', sub: endDate.toLocaleDateString('en-PH', { month: 'long', day: 'numeric' }),    color: isDark ? 'text-pink-400'   : 'text-pink-500'   },
                   { icon: '📈', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, label: 'Weeks Remaining', sub: `of ${term.totalWeeks} weeks`, color: isDark ? 'text-blue-400' : 'text-blue-600' },
-                  { icon: '✅', value: `${Math.round(termProgress)}%`, label: 'Term Progress', sub: currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
                 ] as const).map((s, i) => (
                   <div key={i} className={`rounded-2xl p-5 ${card}`}>
                     <span className="text-2xl">{s.icon}</span>
@@ -893,124 +900,68 @@ export default function StudentDashboard() {
                 ))}
               </div>
 
-              {/* ── Two-column grid ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
+              {/* ── ROW 2: Term Progress bar ── */}
+              <div className={`rounded-2xl p-5 ${card}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className={`text-sm font-semibold ${tp}`}>Term Progress</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-emerald-500">{Math.round(termProgress)}%</span>
+                    <span className={`text-xs ${tm}`}>{term.label}</span>
+                  </div>
+                </div>
+                <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}>
+                  <div className="h-full bg-[#CC0000] rounded-full transition-all duration-700" style={{ width: `${Math.round(termProgress)}%` }} />
+                </div>
+                <div className="relative h-4 mt-1.5">
+                  <span className={`absolute left-0 text-[10px] ${tm}`}>Start</span>
+                  <span className={`absolute text-[10px] ${tm}`} style={{ left: `${(term.midtermWeek / term.totalWeeks) * 100}%`, transform: 'translateX(-50%)' }}>Midterm (W{term.midtermWeek})</span>
+                  <span className={`absolute text-[10px] ${tm}`} style={{ left: `${(term.finalsWeek / term.totalWeeks) * 100}%`, transform: 'translateX(-50%)' }}>Finals (W{term.finalsWeek})</span>
+                  <span className={`absolute right-0 text-[10px] ${tm}`}>End</span>
+                </div>
+                <p className={`text-xs mt-0.5 ${tm}`}>{currentWeek ? `Currently at Week ${currentWeek} of ${term.totalWeeks} weeks` : 'Term not yet started'}</p>
+              </div>
 
-                {/* Left column */}
-                <div className="space-y-6">
+              {/* ── ROW 3: 3 equal columns ── */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
 
-                  {/* Week cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
-                          <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                          <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
-                        </div>
-                        <div>
-                          <p className={`text-lg sm:text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
-                          {currentMode && (
-                            <span className={`inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(currentMode)}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${modeDot(currentMode)}`} />
-                              {currentMode}
-                            </span>
-                          )}
-                        </div>
+                {/* Col 1: Current Academic Week */}
+                <div className={`rounded-2xl p-6 h-full flex flex-col ${card}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-wider mb-6 ${tm}`}>Current Academic Week</p>
+                  <div className="flex items-center gap-5">
+                    <div className="w-20 h-20 rounded-2xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
+                      <span className="text-white text-4xl font-black leading-none">{currentWeek ?? '–'}</span>
+                      <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider mt-1">WEEK</span>
+                    </div>
+                    <p className={`text-3xl font-bold leading-tight ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                  </div>
+                </div>
+
+                {/* Col 2: My Consultations stats */}
+                <div className={`rounded-2xl p-5 h-full flex flex-col ${card}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${tm}`}>My Consultations</p>
+                  <div className="grid grid-cols-2 gap-3 flex-1">
+                    {([
+                      { label: 'Total',     value: allConsultsTotal,     bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
+                      { label: 'Completed', value: allConsultsCompleted, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
+                      { label: 'Pending',   value: allConsultsPending,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
+                      { label: 'Cancelled', value: allConsultsCancelled, bg: isDark ? 'bg-red-500/10'     : 'bg-red-50',     color: isDark ? 'text-red-400'     : 'text-red-600'     },
+                    ] as const).map(s => (
+                      <div key={s.label} className={`rounded-xl p-4 flex flex-col justify-between ${s.bg}`}>
+                        <p className={`text-4xl font-bold leading-none ${s.color}`}>{s.value}</p>
+                        <p className={`text-sm mt-2 ${ts}`}>{s.label}</p>
                       </div>
-                    </div>
-
-                    <div className={`rounded-2xl p-4 sm:p-5 ${card}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Next Week</p>
-                      {nextWeekNum ? (
-                        <>
-                          <p className={`text-2xl sm:text-3xl font-bold ${tp}`}>Week {nextWeekNum}</p>
-                          {nextMode && (
-                            <span className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${modePill(nextMode)}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${modeDot(nextMode)}`} />
-                              {nextMode}
-                            </span>
-                          )}
-                          <p className={`text-xs mt-2 ${tm}`}>Stay ahead of your consultations.</p>
-                        </>
-                      ) : (
-                        <p className={`text-sm ${ts}`}>Last week of term</p>
-                      )}
-                    </div>
+                    ))}
                   </div>
-
-                  {/* Term progress bar */}
-                  <div className={`rounded-2xl p-5 ${card}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className={`text-sm font-semibold ${tp}`}>Term Progress</h3>
-                      <span className="text-xs font-medium text-emerald-500">{Math.round(termProgress)}%</span>
-                    </div>
-                    <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}>
-                      <div
-                        className="h-full bg-[#CC0000] rounded-full transition-all duration-700"
-                        style={{ width: `${Math.round(termProgress)}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className={`text-xs ${tm}`}>{term.label}</p>
-                      <p className={`text-xs ${tm}`}>{currentWeek ? `Week ${currentWeek}` : 'Not started'}</p>
-                    </div>
+                  <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                    <button onClick={() => handleTabChange('my')}
+                      className="text-xs text-[#CC0000] hover:text-red-400 font-medium transition-colors">
+                      View all →
+                    </button>
                   </div>
+                </div>
 
-                  {/* Upcoming consultations */}
-                  <div className={`rounded-2xl p-5 ${card}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
-                      <button onClick={() => handleTabChange('my')} className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
-                        View all
-                      </button>
-                    </div>
-                    {upcomingConsultations.length === 0 ? (
-                      <p className={`text-sm text-center py-6 ${tm}`}>No upcoming consultations</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {upcomingConsultations.slice(0, 6).map(c => (
-                          <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl ${hoverBg} transition-colors`}>
-                            <Avatar name={c.professor_name} size="sm" />
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium truncate ${tp}`}>{c.professor_name}</p>
-                              <p className={`text-xs truncate ${tm}`}>{natureLabel(c).split(',')[0]}</p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className={`text-xs font-medium ${ts}`}>{(c.time || c.time_start)?.slice(0, 5)}</p>
-                              <p className={`text-xs ${tm}`}>{new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</p>
-                            </div>
-                            <div className="flex-shrink-0"><StatusBadge status={c.status} /></div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                </div>{/* /Left column */}
-
-                {/* Right sidebar */}
-                <div className="space-y-4">
-
-                  {/* This Week mini stats */}
-                  <div className={`rounded-2xl p-4 ${card}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-3 ${tm}`}>This Week</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        { label: 'Booked',    value: thisWeekBooked,    bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
-                        { label: 'Confirmed', value: thisWeekConfirmed, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
-                        { label: 'Pending',   value: thisWeekPending,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
-                        { label: 'Completed', value: thisWeekCompleted, bg: isDark ? 'bg-purple-500/10'  : 'bg-purple-50',  color: isDark ? 'text-purple-400'  : 'text-purple-600'  },
-                      ] as const).map(s => (
-                        <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
-                          <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-                          <p className={`text-[11px] mt-0.5 ${ts}`}>{s.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Academic Calendar */}
+                {/* Col 3: Academic Calendar */}
+                <div className="h-full">
                   <MiniCalendar
                     dateLabelMap={dateLabelMap}
                     dateColorMap={dateColorMap}
@@ -1018,31 +969,60 @@ export default function StudentDashboard() {
                     token={token}
                     calOverrides={calOverrides}
                   />
+                </div>
 
-                  {/* Today's Consultations */}
-                  {todayConsultations.length > 0 && (
-                    <div className={`rounded-2xl p-4 ${card}`}>
-                      <p className={`text-sm font-semibold mb-3 ${tp}`}>Today's Consultations</p>
-                      <div className="space-y-2.5">
-                        {todayConsultations.map(c => {
-                          const t = (c.time || c.time_start)?.slice(0, 5) ?? '';
-                          return (
-                            <div key={c.id} className="flex items-start gap-3">
-                              <span className={`text-[10px] font-mono flex-shrink-0 mt-0.5 ${tm}`}>{t}</span>
-                              <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
-                                <p className={`text-xs font-medium truncate ${tp}`}>{c.professor_name}</p>
-                                <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? c.location || 'In-Person' : 'Online'}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
+              </div>{/* /3-col row */}
+
+              {/* ── ROW 4: Upcoming Consultations ── */}
+              <div className={`rounded-2xl p-5 ${card}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
+                  <button onClick={() => handleTabChange('my')} className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
+                    View all
+                  </button>
+                </div>
+                {upcomingConsultations.length === 0 ? (
+                  <p className={`text-sm text-center py-6 ${tm}`}>No upcoming consultations</p>
+                ) : (
+                  <div className="space-y-2">
+                    {upcomingConsultations.slice(0, 6).map(c => (
+                      <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl ${hoverBg} transition-colors`}>
+                        <Avatar name={c.professor_name} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${tp}`}>{c.professor_name}</p>
+                          <p className={`text-xs truncate ${tm}`}>{natureLabel(c).split(',')[0]}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className={`text-xs font-medium ${ts}`}>{formatTime12((c.time || c.time_start)?.slice(0, 5) ?? '')}</p>
+                          <p className={`text-xs ${tm}`}>{new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</p>
+                        </div>
+                        <div className="flex-shrink-0"><StatusBadge status={c.status} /></div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                </div>{/* /Right sidebar */}
-
-              </div>{/* /2-col grid */}
+              {/* Today's Consultations (conditional) */}
+              {todayConsultations.length > 0 && (
+                <div className={`rounded-2xl p-4 ${card}`}>
+                  <p className={`text-sm font-semibold mb-3 ${tp}`}>Today's Consultations</p>
+                  <div className="space-y-2.5">
+                    {todayConsultations.map(c => {
+                      const t = (c.time || c.time_start)?.slice(0, 5) ?? '';
+                      return (
+                        <div key={c.id} className="flex items-start gap-3">
+                          <span className={`text-[10px] font-mono flex-shrink-0 mt-0.5 ${tm}`}>{t}</span>
+                          <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
+                            <p className={`text-xs font-medium truncate ${tp}`}>{c.professor_name}</p>
+                            <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? c.location || 'In-Person' : 'Online'}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
             </div>{/* /px-8 py-6 */}
           </div>

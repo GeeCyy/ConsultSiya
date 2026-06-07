@@ -96,18 +96,17 @@ export default function DashboardNavbar({
 
   // Notification dropdown
   const [notifOpen, setNotifOpen] = useState(false);
-  const [readIds, setReadIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try { return new Set(JSON.parse(localStorage.getItem(storageKey) || '[]')); }
-    catch { return new Set(); }
-  });
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try { return new Set(JSON.parse(localStorage.getItem(storageKey + '_dismissed') || '[]')); }
-    catch { return new Set(); }
-  });
+  const [mounted, setMounted] = useState(false);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [expandedAnn, setExpandedAnn] = useState<number | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    try { setReadIds(new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'))); } catch { /* */ }
+    try { setDismissedIds(new Set(JSON.parse(localStorage.getItem(storageKey + '_dismissed') || '[]'))); } catch { /* */ }
+  }, [storageKey]);
 
   const persistRead = (ids: Set<string>) => {
     setReadIds(ids);
@@ -274,13 +273,10 @@ export default function DashboardNavbar({
               )}
             </button>
 
-            {/* Notification dropdown — full-width on mobile */}
+            {/* Notification dropdown */}
             {notifOpen && (
-              <div className={`absolute right-0 top-full mt-2 rounded-xl shadow-2xl overflow-hidden z-[60] border ${dropBg}
-                w-[calc(100vw-24px)] sm:w-80
-                max-w-sm
-                -right-2 sm:right-0`}
-                style={{ right: 'calc(-1 * (100vw - 100% - 12px))' }}
+              <div className={`fixed top-14 right-3 sm:right-4 rounded-xl shadow-2xl overflow-hidden z-[60] border ${dropBg}
+                w-[calc(100vw-24px)] sm:w-80 max-w-sm`}
               >
                 {/* Header */}
                 <div className={`flex items-center justify-between px-4 py-3 border-b ${dropHeader}`}>
