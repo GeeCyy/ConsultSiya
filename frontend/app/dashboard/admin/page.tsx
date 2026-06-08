@@ -16,6 +16,7 @@ import {
   type RawTermConfig,
 } from '@/lib/academicCalendar';
 import UserProfileCard from '@/components/UserProfileCard';
+import LeftSidebar, { type NavItem } from '@/components/LeftSidebar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -213,7 +214,7 @@ type ReportPeriod = '' | 'week' | 'year' | 'semester';
 export default function AdminDashboard() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('home');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminName, setAdminName] = useState('Administrator');
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -295,6 +296,7 @@ export default function AdminDashboard() {
     const dark = localStorage.getItem('consulta-theme') !== 'light';
     setIsDark(dark);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    setAdminName(localStorage.getItem('consulta-name') || 'Administrator');
   }, []);
 
   const toggleTheme = () => {
@@ -703,137 +705,35 @@ export default function AdminDashboard() {
   const nextWeek = currentWeek ? currentWeek + 1 : null;
   const nextWeekMode = nextWeek && nextWeek <= term.totalWeeks ? getWeekMode(term, nextWeek) : null;
 
-  const navItems: { key: Tab; label: string; count?: number; icon: React.ReactNode }[] = [
-    {
-      key: 'home' as Tab,
-      label: 'Home',
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
-    },
-    {
-      key: 'consultations',
-      label: 'Consultations',
-      count: loading ? undefined : (stats.total || undefined),
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" /></svg>,
-    },
-    {
-      key: 'accounts',
-      label: 'Accounts',
-      count: loading ? undefined : (pendingUsers.length || undefined),
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /></svg>,
-    },
-    {
-      key: 'schedules',
-      label: 'Schedules',
-      count: loading ? undefined : (schedules.length || undefined),
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>,
-    },
-    {
-      key: 'reports',
-      label: 'Reports',
-      count: loading ? undefined : (professors.length || undefined),
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>,
-    },
-    {
-      key: 'history',
-      label: 'History',
-      count: loading ? undefined : (consultations.filter(c => c.status === 'completed').length || undefined),
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>,
-    },
-    {
-      key: 'calendar' as Tab,
-      label: 'Calendar',
-      count: loading ? undefined : (calOverrides.length || undefined),
-      icon: <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>,
-    },
+  const adminNavItems: NavItem[] = [
+    { key: 'home',          label: 'Home' },
+    { key: 'consultations', label: 'Consultations' },
+    { key: 'accounts',      label: 'Accounts' },
+    { key: 'schedules',     label: 'Schedules' },
+    { key: 'reports',       label: 'Reports' },
+    { key: 'history',       label: 'History' },
+    { key: 'calendar',      label: 'Calendar' },
   ];
 
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
   return (
-    <div className={`flex h-screen ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'} overflow-hidden`}>
+    <div className={`min-h-screen flex ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
 
-      {/* Mobile hamburger button */}
-      <button
-        onClick={() => setSidebarOpen(v => !v)}
-        className={`fixed top-3 left-3 z-[70] md:hidden w-9 h-9 flex items-center justify-center rounded-lg border transition-colors ${isDark ? 'bg-[#111] border-white/10 text-gray-400 hover:text-white' : 'bg-white border-black/10 text-gray-500 hover:text-gray-900'}`}
-        aria-label="Toggle menu"
-      >
-        {sidebarOpen ? (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        )}
-      </button>
+      <LeftSidebar
+        role="admin"
+        navItems={adminNavItems}
+        activeTab={tab}
+        onTabChange={(t) => setTab(t as Tab)}
+        profileName={adminName}
+        profileAvatar={null}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+      />
 
-      {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[59] md:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`flex flex-col bg-[#111] border-r border-white/5 w-60 flex-shrink-0 fixed md:static inset-y-0 left-0 z-[60] transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="px-5 py-5 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#CC0000] flex items-center justify-center shadow-lg shadow-red-900/40">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-white font-bold text-sm leading-none">Consulta</p>
-              <p className="text-gray-600 text-xs mt-0.5">Mapúa SOIT</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-5 py-3 border-b border-white/5">
-          <span className="text-[10px] font-semibold text-[#CC0000] uppercase tracking-widest">Administrator</span>
-        </div>
-
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map(item => (
-            <button key={item.key} onClick={() => { setTab(item.key); setSidebarOpen(false); }}
-              className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                tab === item.key
-                  ? 'bg-[#CC0000] text-white shadow-lg shadow-red-900/30'
-                  : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
-              }`}>
-              <span className="flex items-center gap-3">{item.icon}{item.label}</span>
-              {item.count !== undefined && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-md ${
-                  tab === item.key ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-600'
-                }`}>
-                  {item.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        <div className="px-3 py-4 border-t border-white/5 space-y-1">
-          <button onClick={toggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
-            {isDark ? (
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /></svg>
-            ) : (
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 0 1 8.646 3.646 9.003 9.003 0 0 0 12 21a9.003 9.003 0 0 0 8.354-5.646z" /></svg>
-            )}
-            {isDark ? 'Light Mode' : 'Dark Mode'}
-          </button>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-all">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" />
-            </svg>
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <div className="lg:hidden h-14 flex-shrink-0" />
+        <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
@@ -1440,10 +1340,10 @@ export default function AdminDashboard() {
                       {currentMode && (
                         <span className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
                           currentMode === 'Online'
-                            ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30'
-                            : 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30'
+                            ? `bg-blue-500/20 ring-1 ring-blue-500/30 ${isDark ? 'text-blue-300' : 'text-blue-700'}`
+                            : `bg-emerald-500/20 ring-1 ring-emerald-500/30 ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${currentMode === 'Online' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${currentMode === 'Online' ? (isDark ? 'bg-blue-400' : 'bg-blue-600') : (isDark ? 'bg-emerald-400' : 'bg-emerald-600')}`} />
                           {currentMode}
                         </span>
                       )}
@@ -2508,7 +2408,8 @@ export default function AdminDashboard() {
 
           </div>
         )}
-      </main>
+        </main>
+      </div>
 
       {profileCard && token && (
         <UserProfileCard
