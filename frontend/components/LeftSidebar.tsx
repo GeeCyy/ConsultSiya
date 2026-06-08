@@ -247,9 +247,13 @@ export default function LeftSidebar({
         </button>
 
         {notifOpen && (
-          <div className="fixed top-[72px] left-[248px] z-50 w-80 rounded-xl shadow-2xl overflow-hidden border border-white/10 bg-[#252525]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#1e1e1e]">
-              <p className="text-sm font-semibold text-white">
+          <div className={`fixed top-[72px] left-[248px] z-50 w-80 rounded-xl shadow-2xl overflow-hidden border ${
+            isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'
+          }`}>
+            <div className={`flex items-center justify-between px-4 py-3 border-b ${
+              isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'
+            }`}>
+              <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 Notifications
                 {unreadCount > 0 && (
                   <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">
@@ -266,31 +270,35 @@ export default function LeftSidebar({
             <div className="overflow-y-auto max-h-72">
               {notifications.length === 0 ? (
                 <div className="px-4 py-8 text-center">
-                  <p className="text-sm text-gray-500">No notifications</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No notifications</p>
                 </div>
               ) : notifications.map(n => {
                 const isUnread = !readIds.has(n.key);
-                const unreadBg = isUnread ? 'bg-white/[0.03]' : '';
+                const unreadBg = isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/60') : '';
+                const dividerCls = isDark ? 'border-white/5' : 'border-gray-100';
+                const hoverCls = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50';
+                const titleCls = isDark ? 'text-gray-200' : 'text-gray-800';
+                const subCls = isDark ? 'text-gray-500' : 'text-gray-400';
                 const dismissBtn = (
                   <button
                     onClick={(e) => dismissNotif(e, n.key)}
                     title="Dismiss"
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                    className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded hover:text-red-400 hover:bg-red-500/10 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
                   >×</button>
                 );
                 if (n.kind === 'consultation') {
                   return (
-                    <div key={n.key} className={`relative group border-b border-white/5 ${unreadBg}`}>
+                    <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
                       <button
                         onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange('consultations'); }}
-                        className="w-full flex items-start gap-3 px-4 py-3 pr-8 text-left hover:bg-white/5 transition-colors"
+                        className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
                       >
                         <span className="text-base flex-shrink-0 mt-0.5">📅</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-200 leading-snug">
+                          <p className={`text-xs font-medium leading-snug ${titleCls}`}>
                             <span className="font-semibold">{n.consult.student_name}</span> booked a consultation
                           </p>
-                          <p className="text-[11px] mt-0.5 text-gray-500">
+                          <p className={`text-[11px] mt-0.5 ${subCls}`}>
                             {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
                           </p>
                         </div>
@@ -302,25 +310,25 @@ export default function LeftSidebar({
                 }
                 const expanded = expandedAnn === n.ann.id;
                 return (
-                  <div key={n.key} className={`relative group border-b border-white/5 ${unreadBg}`}>
+                  <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
                     <button
                       onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setExpandedAnn(expanded ? null : n.ann.id); }}
-                      className="w-full flex items-start gap-3 px-4 py-3 pr-8 text-left hover:bg-white/5 transition-colors"
+                      className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
                     >
                       <span className="text-base flex-shrink-0 mt-0.5">{n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-200 leading-snug">{n.ann.title || n.ann.body.slice(0, 60)}</p>
-                        <p className="text-[11px] mt-0.5 text-gray-500">{relTime(n.ann.created_at)}</p>
+                        <p className={`text-xs font-medium leading-snug ${titleCls}`}>{n.ann.title || n.ann.body.slice(0, 60)}</p>
+                        <p className={`text-[11px] mt-0.5 ${subCls}`}>{relTime(n.ann.created_at)}</p>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
                         {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000]" />}
-                        <svg className={`w-3 h-3 transition-transform text-gray-500 ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <svg className={`w-3 h-3 transition-transform ${isDark ? 'text-gray-500' : 'text-gray-400'} ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
                       </div>
                     </button>
                     {expanded && (
-                      <div className="px-4 pb-3 text-[11px] leading-relaxed text-gray-400">{n.ann.body}</div>
+                      <div className={`px-4 pb-3 text-[11px] leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{n.ann.body}</div>
                     )}
                     {dismissBtn}
                   </div>
