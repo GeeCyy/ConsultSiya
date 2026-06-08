@@ -951,7 +951,7 @@ export default function StudentDashboard() {
                     <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#CC0000]/30" style={{ background: 'linear-gradient(135deg, #7a0000, #CC0000)' }}>
                       {profile.avatar && !profile.avatar.startsWith('/uploads/')
                         ? <img src={profile.avatar} alt={profile.full_name} className="w-full h-full object-cover" />
-                        : <span className="text-white text-lg font-bold">{studentInitials}</span>}
+                        : <span className="text-lg font-bold" style={{ color: '#fff' }}>{studentInitials}</span>}
                     </div>
                     <div className="min-w-0">
                       <p className={`text-sm font-bold truncate ${tp}`}>{profile.full_name}</p>
