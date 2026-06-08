@@ -1513,7 +1513,7 @@ export default function AdminDashboard() {
                         type="date"
                         value={termForm.term_start}
                         onChange={e => setTermForm(f => ({ ...f, term_start: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 [color-scheme:dark]"
+                        className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-[#CC0000]/50 ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 [color-scheme:dark]' : 'text-gray-900 bg-white border-gray-300 [color-scheme:light]'}`}
                       />
                     </div>
                     <div>
