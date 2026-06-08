@@ -60,6 +60,7 @@ function LoginContent() {
   const [isDark, setIsDark] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [annLoading, setAnnLoading] = useState(true);
+  const [expandedAnn, setExpandedAnn] = useState<number | null>(null);
 
   useEffect(() => {
     if (!localStorage.getItem('consulta-theme-v2')) {
@@ -292,26 +293,43 @@ function LoginContent() {
             ) : announcements.length === 0 ? (
               <p className={`text-sm text-center py-8 ${muteText}`}>No announcements at this time.</p>
             ) : (
-              announcements.map(ann => (
-                <div key={ann.id} style={{ borderBottom: `1px solid ${dividerClr}`, paddingBottom: '1rem' }}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className={`text-sm font-semibold leading-snug ${updateTitle}`}>{ann.title}</p>
-                    {ann.type === 'warning' && (
-                      <span
-                        className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
-                        style={{ backgroundColor: '#7f1d1d', color: '#fca5a5' }}
+              announcements.map(ann => {
+                const isExpanded = expandedAnn === ann.id;
+                return (
+                  <div key={ann.id} style={{ borderBottom: `1px solid ${dividerClr}`, paddingBottom: '1rem' }}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className={`text-sm font-semibold leading-snug ${updateTitle}`}>{ann.title}</p>
+                      {ann.type === 'warning' && (
+                        <span
+                          className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+                          style={{ backgroundColor: '#7f1d1d', color: '#fca5a5' }}
+                        >
+                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 5a1 1 0 011 1v5a1 1 0 11-2 0V8a1 1 0 011-1zm0 10a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 17z"/>
+                          </svg>
+                          Important
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-sm ${isExpanded ? '' : 'line-clamp-3'} ${itemText}`}>{ann.body}</p>
+                    {ann.body.length > 120 && (
+                      <button
+                        onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
+                        className={`text-[11px] font-medium mt-1 flex items-center gap-0.5 transition-opacity hover:opacity-70 ${muteText}`}
                       >
-                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 5a1 1 0 011 1v5a1 1 0 11-2 0V8a1 1 0 011-1zm0 10a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 17z"/>
+                        {isExpanded ? 'Show less' : 'Show more'}
+                        <svg
+                          className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
-                        Important
-                      </span>
+                      </button>
                     )}
+                    <p className={`text-[11px] mt-1.5 ${muteText}`}>{timeAgo(ann.created_at)}</p>
                   </div>
-                  <p className={`text-sm line-clamp-3 ${itemText}`}>{ann.body}</p>
-                  <p className={`text-[11px] mt-1.5 ${muteText}`}>{timeAgo(ann.created_at)}</p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
