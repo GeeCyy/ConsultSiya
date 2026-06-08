@@ -64,6 +64,8 @@ type UserAccount = {
   role: 'student' | 'professor';
   is_approved: boolean;
   is_active: boolean;
+  locked_until?: string | null;
+  failed_attempts?: number;
   created_at: string;
   full_name: string;
   student_number?: string;
@@ -418,6 +420,12 @@ export default function AdminDashboard() {
 
   const handleActivate = async (id: number) => {
     const data = await api.patch(`/api/admin/users/${id}/activate`, {}, token!);
+    if (data.error) { alert(data.error); return; }
+    fetchAll();
+  };
+
+  const handleUnlock = async (id: number) => {
+    const data = await api.patch(`/api/admin/users/${id}/unlock`, {}, token!);
     if (data.error) { alert(data.error); return; }
     fetchAll();
   };
@@ -1059,6 +1067,11 @@ export default function AdminDashboard() {
                                   deactivated
                                 </span>
                               )}
+                              {u.locked_until && new Date(u.locked_until) > new Date() && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400">
+                                  locked
+                                </span>
+                              )}
                             </div>
                             <p className="text-gray-500 text-xs">{u.email}</p>
                             {u.role === 'student' && u.student_number && (
@@ -1088,6 +1101,12 @@ export default function AdminDashboard() {
                             <button onClick={() => handleApprove(u.id)}
                               className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 transition-colors">
                               Approve
+                            </button>
+                          )}
+                          {u.locked_until && new Date(u.locked_until) > new Date() && (
+                            <button onClick={() => handleUnlock(u.id)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-orange-400 hover:bg-orange-500/10 transition-colors">
+                              Unlock
                             </button>
                           )}
                           {u.is_active ? (

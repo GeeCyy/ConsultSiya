@@ -9,10 +9,10 @@ const pool = require('../db/db');
 const { authenticate } = require('../middleware/auth.middleware');
 
 
-// ── Auth-specific rate limiter: max 10 requests per 15 min per IP ─────────────
+// ── Auth-specific rate limiter: max 100 requests per 15 min per IP ────────────
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many auth requests from this IP. Please try again in 15 minutes.' },
