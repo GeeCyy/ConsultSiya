@@ -80,13 +80,18 @@ aside.w-60 * {
    ─────────────────────────────────────────────────────────────────────────── */
 
 [data-theme="light"] body {
-  background-color: #f2f3f5;
+  background-color: #d8e3f0;
+  background-image: radial-gradient(rgba(90, 120, 170, 0.13) 1px, transparent 1px);
+  background-size: 22px 22px;
   color: #2e3338;
 }
 
 [data-theme="light"] main {
-  background-color: #f2f3f5;
+  background-color: transparent;
 }
+
+/* ── Card elevation in light mode ──── */
+/* Intentionally left empty — merged into bg-white rule below */
 
 /* ── Card / panel backgrounds ──── */
 [data-theme="light"] main .bg-\[\#1e1f22\],
@@ -95,18 +100,27 @@ aside.w-60 * {
 [data-theme="light"] main .bg-\[\#161616\],
 [data-theme="light"] main .bg-\[\#0c0c0c\],
 [data-theme="light"] main .bg-\[\#111\] {
-  background-color: #ffffff;
+  background-color: #f0f0f0;
 }
 
 [data-theme="light"] main .bg-\[\#2b2d31\] {
-  background-color: #ffffff;
+  background-color: #f0f0f0;
+}
+
+/* White bg in light mode → gray card with raised shadow */
+[data-theme="light"] main .bg-white {
+  background-color: #f0f0f0;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
 }
 
 /* ── Tertiary / input / subtle backgrounds ──── */
 [data-theme="light"] main .bg-\[\#313338\],
 [data-theme="light"] main .bg-\[\#383a40\],
 [data-theme="light"] main .bg-\[\#0f0f0f\] {
-  background-color: #f2f3f5;
+  background-color: #d8e3f0;
 }
 
 /* ── Subtle overlays ──── */

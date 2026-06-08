@@ -275,8 +275,8 @@ function LoginContent() {
               </svg>
             </div>
             <div>
-              <p className={`text-sm font-semibold ${updateTitle}`}>Announcements</p>
-              <p className={`text-[11px] ${muteText}`}>Latest updates from SOIT</p>
+              <p className={`text-base font-bold ${updateTitle}`}>Announcements</p>
+              <p className={`text-xs ${muteText}`}>Latest updates from SOIT</p>
             </div>
             <span
               className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -298,7 +298,7 @@ function LoginContent() {
                 return (
                   <div key={ann.id} style={{ borderBottom: `1px solid ${dividerClr}`, paddingBottom: '1rem' }}>
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className={`text-sm font-semibold leading-snug ${updateTitle}`}>{ann.title}</p>
+                      <p className={`text-base font-bold leading-snug ${updateTitle}`}>{ann.title}</p>
                       {ann.type === 'warning' && (
                         <span
                           className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
@@ -311,7 +311,7 @@ function LoginContent() {
                         </span>
                       )}
                     </div>
-                    <p className={`text-sm whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'} ${itemText}`}>{ann.body}</p>
+                    <p className={`text-base leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-4'} ${itemText}`}>{ann.body}</p>
                     {ann.body.length > 120 && (
                       <button
                         onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
