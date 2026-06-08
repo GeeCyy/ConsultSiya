@@ -398,7 +398,7 @@ export default function LeftSidebar({
       </div>
 
       {/* ── Profile footer ── */}
-      <div className="flex items-center gap-3 px-4 py-3 border-t border-white/5 flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ backgroundColor: '#1e1f22', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="w-8 h-8 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ring-2 ring-[#CC0000]/20">
           {profileAvatar && !profileAvatar.startsWith('/uploads/')
             ? <img src={profileAvatar} alt={profileName} className="w-full h-full object-cover" />
