@@ -3,9 +3,24 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
-import ProfessorNavbar, { type ProfessorTab } from '@/components/ProfessorNavbar';
+import LeftSidebar from '@/components/LeftSidebar';
+import MatrixCalendar from '@/components/MatrixCalendar';
+
+export type ProfessorTab = 'home' | 'schedules' | 'calendar' | 'consultations' | 'export' | 'history';
+
+const PROF_NAV_ITEMS = [
+  { key: 'home',          label: 'Home' },
+  { key: 'schedules',     label: 'Manage Schedules' },
+  { key: 'calendar',      label: 'Booking Calendar' },
+  { key: 'consultations', label: 'My Consultations' },
+  { key: 'export',        label: 'Export Report' },
+  { key: 'history',       label: 'History' },
+];
 import ChatbotWidget from '@/components/ChatbotWidget';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -106,19 +121,21 @@ type ProfProfile = {
   avatar: string | null;
 };
 
-const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
-  pending:     { ring: 'ring-amber-500/30',   text: 'text-amber-400',   dot: 'bg-amber-400',   label: 'Pending' },
-  confirmed:   { ring: 'ring-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    label: 'Confirmed' },
-  completed:   { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
-  cancelled:   { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
-  rescheduled: { ring: 'ring-orange-500/30',  text: 'text-orange-400',  dot: 'bg-orange-400',  label: 'Rescheduled' },
-  missed:      { ring: 'ring-purple-500/30',  text: 'text-purple-400',  dot: 'bg-purple-400',  label: 'Missed' },
+const STATUS_STYLES: Record<string, { darkBg: string; lightBg: string; darkText: string; lightText: string; dot: string; label: string }> = {
+  pending:     { darkBg: 'bg-amber-500/15',   lightBg: 'bg-amber-50',    darkText: 'text-amber-400',    lightText: 'text-amber-700',    dot: 'bg-amber-400',    label: 'Pending' },
+  confirmed:   { darkBg: 'bg-blue-500/15',    lightBg: 'bg-blue-50',     darkText: 'text-blue-400',     lightText: 'text-blue-700',     dot: 'bg-blue-500',     label: 'Confirmed' },
+  completed:   { darkBg: 'bg-emerald-500/15', lightBg: 'bg-emerald-50',  darkText: 'text-emerald-400',  lightText: 'text-emerald-700',  dot: 'bg-emerald-500',  label: 'Completed' },
+  cancelled:   { darkBg: 'bg-red-500/15',     lightBg: 'bg-red-50',      darkText: 'text-red-400',      lightText: 'text-red-700',      dot: 'bg-red-500',      label: 'Cancelled' },
+  rescheduled: { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
+  missed:      { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLES[status] ?? { ring: 'ring-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400', label: status };
+function StatusBadge({ status, isDark }: { status: string; isDark?: boolean }) {
+  const s = STATUS_STYLES[status] ?? { darkBg: 'bg-gray-500/15', lightBg: 'bg-gray-100', darkText: 'text-gray-400', lightText: 'text-gray-600', dot: 'bg-gray-400', label: status };
+  const bg   = isDark ? s.darkBg   : s.lightBg;
+  const text = isDark ? s.darkText : s.lightText;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/5 ring-1 ${s.ring} ${s.text}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${bg} ${text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -457,7 +474,7 @@ function MiniCalendar({
   const card = isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm';
   const tp   = isDark ? 'text-white' : 'text-gray-900';
   const ts   = isDark ? 'text-gray-400' : 'text-gray-500';
-  const tm   = isDark ? 'text-gray-600' : 'text-gray-400';
+  const tm   = isDark ? 'text-gray-400' : 'text-gray-500';
 
   const events = Array.from(augmented.entries())
     .filter(([d]) => d.startsWith(monthPfx))
@@ -652,6 +669,12 @@ export default function ProfessorDashboard() {
   const [reschedulingConsult, setReschedulingConsult] = useState<Consultation | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState({ referral: '', referral_specify: '', remarks: '' });
   const [rescheduleError, setRescheduleError] = useState('');
+
+  // Export filters
+  const [exportDateFrom, setExportDateFrom] = useState('');
+  const [exportDateTo, setExportDateTo] = useState('');
+  const [exportStatus, setExportStatus] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [exportOrientation, setExportOrientation] = useState<'portrait' | 'landscape'>('landscape');
 
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
@@ -964,17 +987,88 @@ export default function ProfessorDashboard() {
     );
   };
 
-  const handleExport = async (format: 'excel' | 'pdf') => {
-    const endpoint = format === 'excel' ? '/api/reports/excel' : '/api/reports/pdf';
-    try {
-      const res = await fetch(`${API_URL}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Export failed.'); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `advising-report.${format === 'excel' ? 'xlsx' : 'pdf'}`; a.click();
-      URL.revokeObjectURL(url);
-    } catch { toast.error('Export failed. Please try again.'); }
+  const getExportRows = () => {
+    return consultations.filter(c => {
+      if (exportStatus !== 'all' && c.status !== exportStatus) return false;
+      if (exportDateFrom && c.date < exportDateFrom) return false;
+      if (exportDateTo && c.date > exportDateTo) return false;
+      return true;
+    });
+  };
+
+  const handleExport = (format: 'excel' | 'pdf') => {
+    const rows = getExportRows();
+    if (rows.length === 0) { toast.error('No records match the selected filters.'); return; }
+
+    const profName = profile.full_name || 'Professor';
+    const dateLabel = exportDateFrom || exportDateTo
+      ? `${exportDateFrom || '—'} to ${exportDateTo || '—'}`
+      : 'All dates';
+
+    const tableData = rows.map(c => [
+      c.student_name,
+      c.student_number,
+      c.program || '—',
+      new Date(c.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }),
+      fmtTime(c),
+      c.mode || '—',
+      natureLabel(c),
+      actionLabel(c.action_taken, c.referral, c.referral_specify),
+      c.status.charAt(0).toUpperCase() + c.status.slice(1),
+    ]);
+
+    const headers = ['Student Name', 'Student No.', 'Program', 'Date', 'Time', 'Mode', 'Nature of Advising', 'Action Taken', 'Status'];
+
+    if (format === 'pdf') {
+      const doc = new jsPDF({ orientation: exportOrientation, unit: 'pt', format: 'letter' });
+      const pageW = doc.internal.pageSize.getWidth();
+
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('MAPUA UNIVERSITY', pageW / 2, 40, { align: 'center' });
+      doc.setFontSize(11);
+      doc.text('School of Information Technology', pageW / 2, 56, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Faculty Academic Advising Record', pageW / 2, 72, { align: 'center' });
+
+      doc.setFontSize(9);
+      doc.text(`Adviser: ${profName}`, 40, 96);
+      doc.text(`Period: ${dateLabel}`, 40, 110);
+      doc.text(`Status: ${exportStatus === 'all' ? 'All' : exportStatus.charAt(0).toUpperCase() + exportStatus.slice(1)}`, 40, 124);
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}`, 40, 138);
+
+      autoTable(doc, {
+        head: [headers],
+        body: tableData,
+        startY: 155,
+        styles: { fontSize: 7.5, cellPadding: 4 },
+        headStyles: { fillColor: [204, 0, 0], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        alternateRowStyles: { fillColor: [248, 248, 248] },
+        columnStyles: {
+          0: { cellWidth: 90 },
+          1: { cellWidth: 68 },
+          2: { cellWidth: 68 },
+          3: { cellWidth: 68 },
+          4: { cellWidth: 68 },
+          5: { cellWidth: 42 },
+          6: { cellWidth: 'auto' },
+          7: { cellWidth: 72 },
+          8: { cellWidth: 60 },
+        },
+        margin: { left: 40, right: 40 },
+      });
+
+      doc.save(`advising-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } else {
+      const wsData = [headers, ...tableData];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [20, 14, 14, 14, 10, 8, 30, 16, 12].map(w => ({ wch: w }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Advising Records');
+      XLSX.writeFile(wb, `advising-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+    toast.success(`${format === 'pdf' ? 'PDF' : 'Excel'} downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
   };
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -1069,10 +1163,10 @@ export default function ProfessorDashboard() {
   );
 
   // Shared style helpers for the home tab
-  const card      = isDark ? 'bg-[#252525] border border-white/5' : 'bg-white border border-gray-200 shadow-sm';
+  const card      = isDark ? 'bg-[#252525] border border-white/5' : 'bg-white border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]';
   const tp        = isDark ? 'text-white'    : 'text-gray-900';
   const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
-  const tm        = isDark ? 'text-gray-600' : 'text-gray-400';
+  const tm        = isDark ? 'text-gray-400' : 'text-gray-500';
   const modePill  = (m: string) => m === 'Online'
     ? isDark ? 'bg-blue-500/20 text-blue-300'      : 'bg-blue-50 text-blue-600'
     : isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700';
@@ -1099,7 +1193,7 @@ export default function ProfessorDashboard() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${isDark ? 'bg-[#2d2d2d]' : 'bg-[#f2f3f5]'}`}>
+    <div className={`min-h-screen flex ${isDark ? 'bg-[#2d2d2d]' : 'bg-[#f2f3f5]'}`}>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <ConfirmModal
@@ -1111,9 +1205,11 @@ export default function ProfessorDashboard() {
         onCancel={closeConfirm}
       />
 
-      <ProfessorNavbar
-        tab={tab === 'profile' ? 'home' : tab}
-        onTabChange={handleTabChange}
+      <LeftSidebar
+        role="professor"
+        navItems={PROF_NAV_ITEMS}
+        activeTab={tab === 'profile' ? 'home' : tab}
+        onTabChange={(t) => handleTabChange(t as ProfessorTab)}
         isDark={isDark}
         onToggleTheme={toggleTheme}
         profileName={profile.full_name}
@@ -1122,6 +1218,10 @@ export default function ProfessorDashboard() {
         announcements={announcements}
         storageKey={`prof_read_notifs_${profile.email || 'default'}`}
       />
+
+      {/* ── Content area ── */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <div className="lg:hidden h-14 flex-shrink-0" />
 
       {/* Confirmation dialogs */}
       {showConfirmSched && pendingSched && (
@@ -1210,7 +1310,6 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
-      {/* Main */}
       <main className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -1218,209 +1317,347 @@ export default function ProfessorDashboard() {
             <p className="text-gray-600 text-sm">Loading...</p>
           </div>
 
-        ) : tab === 'home' ? (
-            <div>
-              {/* ── Hero ── */}
-              <div
-                className="relative overflow-hidden"
-                style={{
-                  backgroundImage: "url('/mapua-banner.jpg')",
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center 40%',
-                  backgroundRepeat: 'no-repeat',
-                }}
-              >
-                {/* Dark overlay so text stays readable over the photo */}
-                <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-[#6b0000]/80" />
-                <div className="relative px-4 sm:px-8 py-5 sm:py-8">
-                  <p style={{ color: 'rgba(255,255,255,0.6)' }} className="text-xs uppercase tracking-[0.18em] font-semibold mb-2 sm:mb-3">
+        ) : tab === 'home' ? (() => {
+            const termStart = term.start instanceof Date ? term.start : new Date(term.start as string);
+            const termConsults = consultations.filter(c => new Date(c.date) >= termStart);
+            const tApproved  = termConsults.filter(c => c.status === 'confirmed').length;
+            const tCompleted = termConsults.filter(c => c.status === 'completed').length;
+            const tPending   = termConsults.filter(c => c.status === 'pending').length;
+            const tTotal     = termConsults.length;
+            const approvedThisWeek = thisWeek.filter(c => c.status === 'confirmed').length;
+
+            // Bar chart data: Mon–Sat
+            const CHART_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const weekMonday = new Date(now);
+            const _dow = now.getDay();
+            weekMonday.setDate(now.getDate() + (_dow === 0 ? -6 : 1 - _dow));
+            weekMonday.setHours(0, 0, 0, 0);
+            const chartBars = CHART_DAYS.map((lbl, i) => {
+              const d = new Date(weekMonday);
+              d.setDate(weekMonday.getDate() + i);
+              const ds = d.toISOString().slice(0, 10);
+              const items = consultations.filter(c => c.date.slice(0, 10) === ds);
+              return {
+                label: lbl,
+                date: ds,
+                isToday: ds === todayStr,
+                confirmed: items.filter(c => c.status === 'confirmed').length,
+                pending:   items.filter(c => c.status === 'pending').length,
+                completed: items.filter(c => c.status === 'completed').length,
+                total: items.filter(c => !['cancelled', 'missed'].includes(c.status)).length,
+              };
+            });
+            const chartMax = Math.max(...chartBars.map(b => b.total), 1);
+
+            const initials = profile.full_name.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
+
+            return (
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+
+              {/* ── Section 1: Welcome header ── */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div>
+                  <p className={`text-[11px] font-bold uppercase tracking-[0.15em] mb-1 ${tm}`}>
                     MAPUA UNIVERSITY · SOIT ADVISING PORTAL
                   </p>
-                  <h1 style={{ color: '#ffffff' }} className="text-2xl sm:text-3xl font-bold mb-1.5">
+                  <h1 className={`text-2xl sm:text-3xl font-extrabold leading-tight ${tp}`}>
                     {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
                   </h1>
-                  <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-sm">
+                  <p className={`text-sm mt-1 ${ts}`}>
                     {visibleConsultations.length > 0
-                      ? `You have ${visibleConsultations.length} upcoming consultation${visibleConsultations.length !== 1 ? 's' : ''} this week.`
+                      ? `You have ${stats.pending} pending and ${stats.confirmed} confirmed this week.`
                       : 'No upcoming consultations this week.'}
                   </p>
                 </div>
+                {/* Quick pills */}
+                <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0 sm:mt-1">
+                  {currentWeek && (
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-[#CC0000]/15 text-[#ff6666]' : 'bg-red-100 text-red-700'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full bg-[#CC0000]`} />
+                      Week {currentWeek} of {term.totalWeeks}
+                    </span>
+                  )}
+                  {pendingCount > 0 && (
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      {pendingCount} pending
+                    </span>
+                  )}
+                  {approvedThisWeek > 0 && (
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                      {approvedThisWeek} approved this week
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="px-3 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+              {/* ── Section 2: Big stat numbers ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {([
+                  { value: tTotal,     label: 'Total Requests',  sub: 'this term',       color: isDark ? 'text-white'          : 'text-gray-900',     bg: isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm' },
+                  { value: tApproved,  label: 'Approved',        sub: 'confirmations',   color: isDark ? 'text-blue-400'       : 'text-blue-600',     bg: isDark ? 'bg-blue-500/10 border-blue-500/15' : 'bg-blue-50 border-blue-100 shadow-sm' },
+                  { value: tCompleted, label: 'Completed',       sub: 'sessions done',   color: isDark ? 'text-emerald-400'    : 'text-emerald-600',  bg: isDark ? 'bg-emerald-500/10 border-emerald-500/15' : 'bg-emerald-50 border-emerald-100 shadow-sm' },
+                  { value: totalStudents, label: 'Students',     sub: 'unique advisees', color: isDark ? 'text-purple-400'     : 'text-purple-600',   bg: isDark ? 'bg-purple-500/10 border-purple-500/15' : 'bg-purple-50 border-purple-100 shadow-sm' },
+                ] as const).map(s => (
+                  <div key={s.label} className={`rounded-2xl p-5 border ${s.bg}`}>
+                    <p className={`text-4xl sm:text-5xl font-black leading-none tracking-tight ${s.color}`}>{s.value}</p>
+                    <p className={`text-sm font-semibold mt-2 ${tp}`}>{s.label}</p>
+                    <p className={`text-xs mt-0.5 ${tm}`}>{s.sub}</p>
+                  </div>
+                ))}
+              </div>
 
-                {/* ── ROW 1: 3 stat cards ── */}
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {([
-                    { icon: '🕐', value: daysToFinals, label: 'Days to Finals',      sub: finalsDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}), color: isDark ? 'text-orange-400' : 'text-orange-500' },
-                    { icon: '📅', value: daysToEnd,    label: 'Days to End of Term', sub: endDate.toLocaleDateString('en-PH',{month:'long',day:'numeric'}),    color: isDark ? 'text-pink-400'   : 'text-pink-500'   },
-                    { icon: '📈', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, label: 'Weeks Remaining', sub: `of ${term.totalWeeks} weeks`, color: isDark ? 'text-blue-400' : 'text-blue-600' },
-                  ] as const).map((s, i) => (
-                    <div key={i} className={`rounded-2xl p-5 ${card}`}>
-                      <span className="text-2xl">{s.icon}</span>
-                      <p className={`text-4xl font-bold mt-2 ${s.color}`}>{s.value}</p>
-                      <p className={`text-sm font-medium mt-1 ${tp}`}>{s.label}</p>
-                      <p className={`text-xs mt-0.5 ${tm}`}>{s.sub}</p>
+              {/* ── Section 3: Widget grid ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+                {/* Profile + term card */}
+                <div className={`lg:col-span-4 rounded-2xl overflow-hidden border ${card}`}>
+                  <div className={`px-5 pt-5 pb-4 ${isDark ? 'bg-gradient-to-br from-[#CC0000]/10 via-[#CC0000]/5 to-transparent' : 'bg-gradient-to-br from-red-50 to-orange-50/30'}`}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#CC0000]/30" style={{ background: 'linear-gradient(135deg, #7a0000, #CC0000)' }}>
+                        {profile.avatar && !profile.avatar.startsWith('/uploads/')
+                          ? <img src={profile.avatar} alt={profile.full_name} className="w-full h-full object-cover" />
+                          : <span className="text-white text-lg font-bold">{initials}</span>}
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-bold truncate ${tp}`}>{profile.full_name}</p>
+                        <p className={`text-xs ${ts}`}>{profile.department || 'Professor'}</p>
+                        <p className={`text-[10px] mt-0.5 font-medium text-[#CC0000]`}>MAPUA SOIT</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* ── ROW 2: Term Progress bar ── */}
-                <div className={`rounded-2xl p-5 ${card}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className={`text-sm font-semibold ${tp}`}>Term Progress</h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-emerald-500">{Math.round(termProgress)}%</span>
-                      <span className={`text-xs ${tm}`}>{term.label}</span>
-                    </div>
-                  </div>
-                  <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}>
-                    <div className="h-full bg-[#CC0000] rounded-full transition-all duration-700" style={{ width: `${Math.round(termProgress)}%` }} />
-                  </div>
-                  <div className="relative h-4 mt-1.5">
-                    <span className={`absolute left-0 text-[10px] ${tm}`}>Start</span>
-                    <span className={`absolute text-[10px] ${tm}`} style={{ left: `${(term.midtermWeek / term.totalWeeks) * 100}%`, transform: 'translateX(-50%)' }}>Midterm (W{term.midtermWeek})</span>
-                    <span className={`absolute text-[10px] ${tm}`} style={{ left: `${(term.finalsWeek / term.totalWeeks) * 100}%`, transform: 'translateX(-50%)' }}>Finals (W{term.finalsWeek})</span>
-                    <span className={`absolute right-0 text-[10px] ${tm}`}>End</span>
-                  </div>
-                  <p className={`text-xs mt-0.5 ${tm}`}>{currentWeek ? `Currently at Week ${currentWeek} of ${term.totalWeeks} weeks` : 'Term not yet started'}</p>
-                </div>
-
-                {/* ── ROW 3: 4 equal columns ── */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-
-                  {/* Col 1: Current Academic Week */}
-                  <div className={`rounded-2xl p-4 sm:p-5 h-full ${card}`}>
-                    <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${tm}`}>Current Academic Week</p>
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-[#CC0000] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-900/30">
                         <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                        <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider">WEEK</span>
+                        <span className="text-red-200 text-[8px] font-bold uppercase tracking-wide">WK</span>
                       </div>
                       <div>
-                        <p className={`text-lg sm:text-xl font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                        <p className={`text-base font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                        <p className={`text-[10px] ${tm}`}>{term.label}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Col 2: Pending Actions */}
-                  <div className={`rounded-2xl p-4 sm:p-5 h-full ${card}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <p className={`text-xs font-semibold uppercase tracking-wider ${tm}`}>Pending Actions</p>
-                      <button onClick={() => handleTabChange('consultations')} className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">View all</button>
+                  <div className={`px-5 pt-4 pb-5 border-t space-y-3 ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                    {/* Term progress bar */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className={`text-xs font-medium ${ts}`}>Term Progress</span>
+                        <span className="text-xs font-bold text-emerald-500">{Math.round(termProgress)}%</span>
+                      </div>
+                      <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
+                        <div className="h-full bg-gradient-to-r from-[#CC0000] to-red-400 rounded-full transition-all duration-700" style={{ width: `${termProgress}%` }} />
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className={`text-[9px] ${tm}`}>Start</span>
+                        <span className={`text-[9px] ${tm}`}>Finals W{term.finalsWeek}</span>
+                        <span className={`text-[9px] ${tm}`}>End</span>
+                      </div>
                     </div>
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between">
+                    {/* Milestone metrics */}
+                    {([
+                      { label: 'Days to Finals',    value: daysToFinals,   color: 'text-orange-400', dot: 'bg-orange-400' },
+                      { label: 'Days to End',        value: daysToEnd,      color: 'text-pink-400',   dot: 'bg-pink-400'   },
+                      { label: 'Weeks Remaining',    value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, color: 'text-blue-400', dot: 'bg-blue-400' },
+                    ] as const).map(m => (
+                      <div key={m.label} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                          <span className={`text-sm ${ts}`}>Pending</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
+                          <span className={`text-xs ${ts}`}>{m.label}</span>
                         </div>
-                        <span className={`text-sm font-semibold text-amber-500`}>{pendingCount}</span>
+                        <span className={`text-sm font-bold ${m.color}`}>{m.value}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                          <span className={`text-sm ${ts}`}>To Complete</span>
-                        </div>
-                        <span className={`text-sm font-semibold text-blue-500`}>{todayConsultations.filter(c => c.status === 'confirmed').length}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Col 3: Academic Calendar */}
-                  <div>
-                    <MiniCalendar
-                      dateLabelMap={dateLabelMap}
-                      dateColorMap={dateColorMap}
-                      isDark={isDark}
-                      token={token}
-                      calOverrides={calOverrides}
-                    />
-                  </div>
-
-                  {/* Col 4: This Week stats */}
-                  <div className={`rounded-2xl p-4 h-full ${card}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-3 ${tm}`}>This Week</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        { label: 'Scheduled', value: scheduledCount, bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
-                        { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
-                        { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
-                        { label: 'Students',  value: totalStudents,  bg: isDark ? 'bg-purple-500/10'  : 'bg-purple-50',  color: isDark ? 'text-purple-400'  : 'text-purple-600'  },
-                      ] as const).map(s => (
-                        <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
-                          <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-                          <p className={`text-[11px] mt-0.5 ${ts}`}>{s.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>{/* /4-col row */}
-
-                {/* ── ROW 4: Upcoming Consultations ── */}
-                <div className={`rounded-2xl p-5 ${card}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
-                    <button onClick={() => handleTabChange('consultations')}
-                      className="text-xs text-[#CC0000] hover:text-red-400 transition-colors font-medium">
-                      View all
+                    ))}
+                    <button
+                      onClick={() => handleTabChange('export')}
+                      className={`w-full mt-1 py-2 rounded-xl text-xs font-semibold transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      Export Records
                     </button>
                   </div>
-                  {visibleConsultations.length === 0 ? (
-                    <p className={`text-sm text-center py-6 ${tm}`}>No upcoming consultations</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {visibleConsultations.slice(0, 6).map(c => (
-                        <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'} transition-colors`}>
-                          <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium truncate ${tp}`}>{c.student_name}</p>
-                            <p className={`text-xs truncate ${tm}`}>{c.program}</p>
+                </div>
+
+                {/* Bar chart: consultations per day */}
+                <div className={`lg:col-span-5 rounded-2xl border p-5 ${card}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className={`text-sm font-semibold ${tp}`}>Consultations This Week</h3>
+                    <button onClick={() => handleTabChange('consultations')} className="text-xs text-[#CC0000] hover:text-red-400 font-medium transition-colors">
+                      View all →
+                    </button>
+                  </div>
+                  <p className={`text-xs ${tm} mb-4`}>{scheduledCount} upcoming · {completedCount} completed · {pendingCount} pending</p>
+
+                  {/* Chart */}
+                  <div className="flex items-end gap-2 h-28">
+                    {chartBars.map(b => {
+                      const pct = chartMax > 0 ? (b.total / chartMax) : 0;
+                      const confirmedPct = b.total > 0 ? (b.confirmed / b.total) : 0;
+                      return (
+                        <div key={b.label} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                          {b.total > 0 && (
+                            <p className={`text-[10px] font-bold ${b.isToday ? 'text-[#CC0000]' : ts}`}>{b.total}</p>
+                          )}
+                          <div className="w-full flex flex-col-reverse rounded-lg overflow-hidden" style={{ height: `${Math.max(pct * 76, b.total > 0 ? 10 : 4)}px`, minHeight: '4px' }}>
+                            <div
+                              className={`w-full rounded-lg transition-all ${b.isToday ? 'bg-[#CC0000]' : (isDark ? 'bg-white/25' : 'bg-blue-200')}`}
+                              style={{ height: `${(1 - confirmedPct) * 100}%` }}
+                            />
+                            {b.confirmed > 0 && (
+                              <div
+                                className={`w-full ${b.isToday ? 'bg-white/40' : (isDark ? 'bg-emerald-400' : 'bg-emerald-400')}`}
+                                style={{ height: `${confirmedPct * 100}%` }}
+                              />
+                            )}
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className={`text-xs font-medium ${ts}`}>{(c.time || c.time_start)?.slice(0,5)}</p>
-                            <p className={`text-xs ${tm}`}>{new Date(c.date).toLocaleDateString('en-PH',{month:'short',day:'numeric'})}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                              c.mode === 'F2F'
-                                ? isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'
-                                : isDark ? 'bg-cyan-500/10 text-cyan-400'     : 'bg-cyan-50 text-cyan-600'
-                            }`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</span>
-                            <StatusBadge status={c.status} />
-                          </div>
+                          <p className={`text-[10px] font-semibold ${b.isToday ? 'text-[#CC0000]' : tm}`}>{b.label}</p>
                         </div>
-                      ))}
+                      );
+                    })}
+                  </div>
+
+                  {/* Bar legend */}
+                  <div className={`flex items-center gap-4 mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2.5 h-2.5 rounded-sm ${isDark ? 'bg-white/25' : 'bg-blue-200'}`} />
+                      <span className={`text-[10px] ${tm}`}>Pending</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />
+                      <span className={`text-[10px] ${tm}`}>Confirmed</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-[#CC0000]" />
+                      <span className={`text-[10px] ${tm}`}>Today</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Approved this week + pending actions */}
+                <div className={`lg:col-span-3 rounded-2xl border p-5 flex flex-col ${card}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`text-sm font-semibold ${tp}`}>This Week</h3>
+                    <button onClick={() => handleTabChange('consultations')} className="text-xs text-[#CC0000] hover:text-red-400 font-medium transition-colors">
+                      Manage →
+                    </button>
+                  </div>
+
+                  {/* 2x2 stat squares */}
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    {([
+                      { label: 'Scheduled', value: scheduledCount, bg: isDark ? 'bg-blue-500/10'    : 'bg-blue-50',    color: isDark ? 'text-blue-400'    : 'text-blue-600'    },
+                      { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
+                      { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
+                      { label: 'Students',  value: totalStudents,  bg: isDark ? 'bg-purple-500/10'  : 'bg-purple-50',  color: isDark ? 'text-purple-400'  : 'text-purple-600'  },
+                    ] as const).map(s => (
+                      <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
+                        <p className={`text-2xl font-black leading-none ${s.color}`}>{s.value}</p>
+                        <p className={`text-[11px] font-medium mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Today's schedule */}
+                  {todayConsultations.length > 0 ? (
+                    <div className={`mt-auto pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                      <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${tm}`}>Today</p>
+                      <div className="space-y-2">
+                        {todayConsultations.slice(0, 3).map(c => (
+                          <div key={c.id} className="flex items-center gap-2">
+                            <span className={`text-[10px] font-mono flex-shrink-0 ${tm}`}>{(c.time || c.time_start)?.slice(0, 5)}</span>
+                            <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
+                              <p className={`text-xs font-medium truncate ${tp}`}>{c.student_name.split(' ').slice(-1)[0]}</p>
+                              <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`mt-auto pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                      <p className={`text-xs text-center py-2 ${tm}`}>No consultations today</p>
                     </div>
                   )}
                 </div>
 
-                {/* Today's Schedule (conditional) */}
-                {todayConsultations.length > 0 && (
-                  <div className={`rounded-2xl p-4 ${card}`}>
-                    <p className={`text-sm font-semibold mb-3 ${tp}`}>Today's Schedule</p>
-                    <div className="space-y-2.5">
-                      {todayConsultations.map(c => {
-                        const t = (c.time || c.time_start)?.slice(0, 5) ?? '';
-                        return (
-                          <div key={c.id} className="flex items-start gap-3">
-                            <span className={`text-[10px] font-mono flex-shrink-0 mt-0.5 ${tm}`}>{t}</span>
-                            <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-blue-400' : 'border-amber-400'}`}>
-                              <p className={`text-xs font-medium truncate ${tp}`}>Consultation – {c.student_name.split(' ').slice(0,2).join(' ')}</p>
-                              <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? c.location || 'In-Person' : 'Online'}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+              </div>{/* /widget grid */}
+
+              {/* ── Section 4: Upcoming + Calendar ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+                {/* Upcoming consultations table */}
+                <div className={`lg:col-span-8 rounded-2xl border overflow-hidden ${card}`}>
+                  <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                    <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
+                    <button onClick={() => handleTabChange('consultations')} className="text-xs text-[#CC0000] hover:text-red-400 font-medium transition-colors">
+                      View all →
+                    </button>
                   </div>
-                )}
+                  {visibleConsultations.length === 0 ? (
+                    <p className={`text-sm text-center py-10 ${tm}`}>No upcoming consultations</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[480px]">
+                        <thead>
+                          <tr className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                            {['Student', 'Date & Time', 'Mode', 'Status'].map(h => (
+                              <th key={h} className={`text-left text-[11px] font-semibold uppercase tracking-wider px-5 py-3 ${tm}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
+                          {visibleConsultations.slice(0, 7).map(c => (
+                            <tr key={c.id} className={`transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/80'}`}>
+                              <td className="px-5 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
+                                  <div className="min-w-0">
+                                    <p className={`text-xs font-semibold truncate ${tp}`}>{c.student_name}</p>
+                                    <p className={`text-[10px] truncate ${tm}`}>{c.program}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3">
+                                <p className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  {new Date(c.date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                                </p>
+                                <p className={`text-[10px] font-mono ${tm}`}>{(c.time || c.time_start)?.slice(0, 5)}</p>
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  c.mode === 'F2F'
+                                    ? isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-700'
+                                    : isDark ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-700'
+                                }`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <StatusBadge status={c.status} isDark={isDark} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
 
-              </div>{/* /px-8 py-6 */}
+                {/* Mini calendar */}
+                <div className="lg:col-span-4">
+                  <MiniCalendar
+                    dateLabelMap={dateLabelMap}
+                    dateColorMap={dateColorMap}
+                    isDark={isDark}
+                    token={token}
+                    calOverrides={calOverrides}
+                  />
+                </div>
+
+              </div>{/* /upcoming + calendar */}
+
             </div>
+            );
+          })()
 
-        ) : tab === 'consultations' ? (
+        : tab === 'consultations' ? (
           <div className="px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
@@ -1468,7 +1705,7 @@ export default function ProfessorDashboard() {
                             >
                               {c.student_name}
                             </button>
-                            <StatusBadge status={c.status} />
+                            <StatusBadge status={c.status} isDark={isDark} />
                           </div>
                           <p className="text-gray-500 text-xs mt-0.5">{c.student_number} · {c.program}</p>
                         </div>
@@ -1476,14 +1713,14 @@ export default function ProfessorDashboard() {
 
                       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
-                          <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Date & Time</p>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Date & Time</p>
                           <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                             {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </p>
                           <p className={`text-xs mt-0.5 ${ts}`}>{c.day} · {fmtTime(c)}</p>
                         </div>
                         <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
-                          <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Meeting</p>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Meeting</p>
                           <div className="flex items-center gap-1.5">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
                             <span className={`text-sm font-medium ${c.mode === 'F2F' ? 'text-purple-300' : 'text-cyan-300'}`}>
@@ -1522,7 +1759,7 @@ export default function ProfessorDashboard() {
                       </div>
 
                       <div className={`mt-3 rounded-lg border px-3 py-2.5 ${innerCard}`}>
-                        <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Nature of Advising</p>
+                        <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Nature of Advising</p>
                         <p className={`text-sm line-clamp-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{natureLabel(c)}</p>
                       </div>
 
@@ -1579,10 +1816,20 @@ export default function ProfessorDashboard() {
           <div className="px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Booking Calendar</h1>
-              <p className="text-gray-500 text-sm mt-1">Overview of student bookings by date</p>
+              <p className="text-gray-500 text-sm mt-1">Matrix view of consultation schedule by time and day</p>
             </div>
+
+            {/* ── Matrix calendar ── */}
+            <div className="mb-6 sm:mb-8">
+              <MatrixCalendar consultations={consultations} isDark={isDark} />
+            </div>
+
+            {/* ── Date-grouped list ── */}
+            <p className={`text-[11px] font-semibold uppercase tracking-widerst mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+              Upcoming Bookings List
+            </p>
             {visibleConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-20 rounded-2xl ${card}`}>
+              <div className={`flex flex-col items-center justify-center py-12 rounded-2xl ${card}`}>
                 <p className={`text-sm ${ts}`}>No upcoming bookings</p>
               </div>
             ) : (
@@ -1616,7 +1863,7 @@ export default function ProfessorDashboard() {
                                   <p className={`text-xs ${tm}`}>{fmtTime(c)} · {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
                                 </div>
                               </div>
-                              <StatusBadge status={c.status} />
+                              <StatusBadge status={c.status} isDark={isDark} />
                             </div>
                           ))}
                         </div>
@@ -1634,7 +1881,7 @@ export default function ProfessorDashboard() {
                 .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || a.time_start.localeCompare(b.time_start));
               return (
                 <div className="mt-8">
-                  <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${tm}`}>Your Slots ({upcomingSlots.length})</p>
+                  <p className={`text-[11px] font-semibold uppercase tracking-widerst mb-3 ${tm}`}>Your Slots ({upcomingSlots.length})</p>
                   {upcomingSlots.length === 0 ? (
                     <div className={`text-center py-10 rounded-2xl ${card}`}>
                       <p className={`text-sm ${ts}`}>No slots created yet.</p>
@@ -1794,7 +2041,7 @@ export default function ProfessorDashboard() {
                   return (
                     <>
                       {/* ── Active slots ── */}
-                      <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${tm}`}>
+                      <p className={`text-[11px] font-semibold uppercase tracking-widerst mb-3 ${tm}`}>
                         Your Slots ({activeSlots.length})
                       </p>
                       {activeSlots.length === 0 ? (
@@ -1810,7 +2057,7 @@ export default function ProfessorDashboard() {
                         <div className="mt-4">
                           <button
                             onClick={() => setPastSlotsOpen(o => !o)}
-                            className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-gray-700 hover:text-gray-500 transition-colors mb-2"
+                            className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widerst text-gray-700 hover:text-gray-500 transition-colors mb-2"
                           >
                             <svg
                               className={`w-3 h-3 transition-transform duration-200 ${pastSlotsOpen ? 'rotate-90' : ''}`}
@@ -1853,7 +2100,7 @@ export default function ProfessorDashboard() {
                   {groupByQuarter(historyItems).map(([quarter, items]) => (
                     <div key={quarter}>
                       <div className="flex items-center gap-3 mb-3">
-                        <p className={`text-[10px] font-semibold uppercase tracking-widest ${ts}`}>{quarter}</p>
+                        <p className={`text-[11px] font-semibold uppercase tracking-widerst ${ts}`}>{quarter}</p>
                         <span className={`text-xs ${tm}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className={`rounded-2xl overflow-hidden ${card}`}>
@@ -1861,11 +2108,11 @@ export default function ProfessorDashboard() {
                           <table className="w-full min-w-[600px] table-fixed">
                             <thead>
                               <tr className={`border-b ${borderSoft}`}>
-                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[110px] ${tm}`}>Date</th>
-                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[160px] ${tm}`}>Student</th>
-                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm}`}>Purpose</th>
-                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[170px] ${tm}`}>Action Taken</th>
-                                <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[130px] ${tm}`}>Status</th>
+                                <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 w-[110px] ${tm}`}>Date</th>
+                                <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 w-[160px] ${tm}`}>Student</th>
+                                <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 ${tm}`}>Purpose</th>
+                                <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 w-[170px] ${tm}`}>Action Taken</th>
+                                <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 w-[130px] ${tm}`}>Status</th>
                               </tr>
                             </thead>
                             <tbody className={`divide-y ${dividerCls}`}>
@@ -1884,7 +2131,7 @@ export default function ProfessorDashboard() {
                                   <td className={`px-4 py-3 text-xs ${ts}`}>
                                     <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
                                   </td>
-                                  <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                                  <td className="px-4 py-3"><StatusBadge status={c.status} isDark={isDark} /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2024,36 +2271,97 @@ export default function ProfessorDashboard() {
             </div>
           </div>
 
-        ) : (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
-            <div className="mb-5 sm:mb-7">
-              <h1 className={`text-2xl font-bold ${tp}`}>Export Report</h1>
-              <p className="text-gray-500 text-sm mt-1">Download your faculty academic advising report</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button onClick={() => handleExport('excel')}
-                className={`rounded-2xl p-6 text-left transition-all group hover:border-emerald-500/20 hover:bg-emerald-500/5 ${card}`}>
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
-                  <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z" />
-                  </svg>
+        ) : (() => {
+          const exportRows = getExportRows();
+          const inputCls = `w-full rounded-xl px-3 py-2 text-sm border ${isDark ? 'bg-[#2b2d31] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-800'} focus:outline-none focus:ring-2 focus:ring-[#CC0000]/40`;
+          const labelCls = `block text-xs font-semibold uppercase tracking-wider mb-1.5 ${tm}`;
+          return (
+            <div className="px-3 sm:px-8 py-5 sm:py-8 max-w-3xl">
+              <div className="mb-6">
+                <h1 className={`text-2xl font-bold ${tp}`}>Export Report</h1>
+                <p className={`text-sm mt-1 ${tm}`}>Generate a downloadable advising record with custom filters</p>
+              </div>
+
+              {/* Filters card */}
+              <div className={`rounded-2xl p-5 mb-5 ${card}`}>
+                <p className={`text-sm font-semibold mb-4 ${tp}`}>Filter Records</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className={labelCls}>Date From</label>
+                    <input type="date" value={exportDateFrom} onChange={e => setExportDateFrom(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Date To</label>
+                    <input type="date" value={exportDateTo} onChange={e => setExportDateTo(e.target.value)} className={inputCls} />
+                  </div>
                 </div>
-                <p className={`font-semibold text-sm ${tp}`}>Excel Spreadsheet</p>
-                <p className={`text-xs mt-1 ${tm}`}>Download full data as .xlsx</p>
-              </button>
-              <button onClick={() => handleExport('pdf')}
-                className={`rounded-2xl p-6 text-left transition-all group hover:border-blue-500/20 hover:bg-blue-500/5 ${card}`}>
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
-                  <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
-                  </svg>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Status</label>
+                    <select value={exportStatus} onChange={e => setExportStatus(e.target.value as typeof exportStatus)} className={inputCls}>
+                      <option value="all">All Statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>PDF Orientation</label>
+                    <div className="flex gap-2">
+                      {(['portrait', 'landscape'] as const).map(o => (
+                        <button key={o} onClick={() => setExportOrientation(o)}
+                          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors border ${
+                            exportOrientation === o
+                              ? 'bg-[#CC0000]/10 border-[#CC0000]/40 text-[#CC0000]'
+                              : isDark ? 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
+                          }`}>
+                          {o.charAt(0).toUpperCase() + o.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <p className={`font-semibold text-sm ${tp}`}>PDF Document</p>
-                <p className={`text-xs mt-1 ${tm}`}>Download formatted report as .pdf</p>
-              </button>
+              </div>
+
+              {/* Record count preview */}
+              <div className={`rounded-xl px-4 py-3 mb-5 flex items-center gap-2 ${isDark ? 'bg-white/5 border border-white/10' : 'bg-blue-50 border border-blue-100'}`}>
+                <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-blue-800'}`}>
+                  <span className="font-semibold">{exportRows.length}</span> record{exportRows.length !== 1 ? 's' : ''} will be exported
+                  {(exportDateFrom || exportDateTo) && ` · ${exportDateFrom || '—'} to ${exportDateTo || '—'}`}
+                  {exportStatus !== 'all' && ` · ${exportStatus}`}
+                </p>
+              </div>
+
+              {/* Download buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button onClick={() => handleExport('excel')}
+                  className={`rounded-2xl p-5 text-left transition-all group hover:border-emerald-500/20 hover:bg-emerald-500/5 ${card}`}>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3 group-hover:bg-emerald-500/20 transition-colors">
+                    <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z" />
+                    </svg>
+                  </div>
+                  <p className={`font-semibold text-sm ${tp}`}>Excel Spreadsheet</p>
+                  <p className={`text-xs mt-1 ${tm}`}>Download as .xlsx — open in Excel or Sheets</p>
+                </button>
+                <button onClick={() => handleExport('pdf')}
+                  className={`rounded-2xl p-5 text-left transition-all group hover:border-blue-500/20 hover:bg-blue-500/5 ${card}`}>
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:bg-blue-500/20 transition-colors">
+                    <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
+                    </svg>
+                  </div>
+                  <p className={`font-semibold text-sm ${tp}`}>PDF Document</p>
+                  <p className={`text-xs mt-1 ${tm}`}>Download as .pdf — {exportOrientation} layout, MAPUA header</p>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* Complete modal */}
@@ -2286,6 +2594,7 @@ export default function ProfessorDashboard() {
       )}
 
       <ChatbotWidget token={token} role="professor" />
+      </div>{/* /content area */}
     </div>
   );
 }

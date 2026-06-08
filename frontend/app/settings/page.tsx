@@ -339,12 +339,10 @@ export default function SettingsPage() {
   const [role, setRole] = useState<string>('');
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [loading, setLoading] = useState(true);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('consulta-theme') !== 'light';
-    return true;
-  });
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
+    setIsDark(localStorage.getItem('consulta-theme') === 'dark');
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
     window.addEventListener('consulta-theme-change', handler);
     return () => window.removeEventListener('consulta-theme-change', handler);
