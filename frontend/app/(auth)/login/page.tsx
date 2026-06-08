@@ -311,7 +311,7 @@ function LoginContent() {
                         </span>
                       )}
                     </div>
-                    <p className={`text-sm ${isExpanded ? '' : 'line-clamp-3'} ${itemText}`}>{ann.body}</p>
+                    <p className={`text-sm whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'} ${itemText}`}>{ann.body}</p>
                     {ann.body.length > 120 && (
                       <button
                         onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
