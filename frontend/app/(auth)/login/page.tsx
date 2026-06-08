@@ -8,38 +8,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const UPDATES = [
-  {
-    version: 'v1.2.0',
-    date: 'May 2026',
-    items: [
-      'Account approval flow for new registrations',
-      'Login lockout after 5 failed attempts',
-      'Multiple time ranges per schedule slot',
-      'Rescheduled consultation status added',
-    ],
-  },
-  {
-    version: 'v1.1.0',
-    date: 'Apr 2026',
-    items: [
-      'Digital advising slip generation (PDF)',
-      'File upload for signed consultation forms',
-      'Professor report exports (Excel & PDF)',
-      'Online meeting link support for OL sessions',
-    ],
-  },
-  {
-    version: 'v1.0.0',
-    date: 'Mar 2026',
-    items: [
-      'Initial release of Consulta',
-      'Student, Professor, and Admin dashboards',
-      'Booking, confirmation, and completion flow',
-      'Role-based access control',
-    ],
-  },
-];
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+type Announcement = {
+  id: number;
+  title: string;
+  body: string;
+  type: 'info' | 'warning';
+  created_at: string;
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  const hours = Math.floor(mins / 60);
+  const days = Math.floor(hours / 24);
+  if (mins < 2) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
@@ -68,6 +58,8 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [annLoading, setAnnLoading] = useState(true);
 
   useEffect(() => {
     if (!localStorage.getItem('consulta-theme-v2')) {
@@ -90,6 +82,13 @@ function LoginContent() {
     const timer = setTimeout(() => setError(''), 5000);
     return () => clearTimeout(timer);
   }, [error]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/announcements`)
+      .then(r => r.ok ? r.json() : [])
+      .catch(() => [])
+      .then((data: Announcement[]) => { setAnnouncements(Array.isArray(data) ? data : []); setAnnLoading(false); });
+  }, []);
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -275,8 +274,8 @@ function LoginContent() {
               </svg>
             </div>
             <div>
-              <p className={`text-sm font-semibold ${updateTitle}`}>System Updates</p>
-              <p className={`text-[11px] ${muteText}`}>Patch notes & release history</p>
+              <p className={`text-sm font-semibold ${updateTitle}`}>Announcements</p>
+              <p className={`text-[11px] ${muteText}`}>Latest updates from SOIT</p>
             </div>
             <span
               className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -287,29 +286,33 @@ function LoginContent() {
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-            {UPDATES.map((release) => (
-              <div key={release.version}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-md"
-                    style={{ backgroundColor: badgeBg, color: '#CC0000' }}
-                  >
-                    {release.version}
-                  </span>
-                  <span className={`text-[11px] ${muteText}`}>{release.date}</span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: dividerClr }} />
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            {annLoading ? (
+              <p className={`text-sm text-center py-8 ${muteText}`}>Loading…</p>
+            ) : announcements.length === 0 ? (
+              <p className={`text-sm text-center py-8 ${muteText}`}>No announcements at this time.</p>
+            ) : (
+              announcements.map(ann => (
+                <div key={ann.id} style={{ borderBottom: `1px solid ${dividerClr}`, paddingBottom: '1rem' }}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className={`text-sm font-semibold leading-snug ${updateTitle}`}>{ann.title}</p>
+                    {ann.type === 'warning' && (
+                      <span
+                        className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+                        style={{ backgroundColor: '#7f1d1d', color: '#fca5a5' }}
+                      >
+                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 5a1 1 0 011 1v5a1 1 0 11-2 0V8a1 1 0 011-1zm0 10a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 17z"/>
+                        </svg>
+                        Important
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-sm line-clamp-3 ${itemText}`}>{ann.body}</p>
+                  <p className={`text-[11px] mt-1.5 ${muteText}`}>{timeAgo(ann.created_at)}</p>
                 </div>
-                <ul className="space-y-1.5">
-                  {release.items.map((item, i) => (
-                    <li key={i} className={`flex items-start gap-2 text-sm ${itemText}`}>
-                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#CC0000' }} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Footer */}
