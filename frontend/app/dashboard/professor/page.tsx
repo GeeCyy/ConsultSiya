@@ -113,6 +113,7 @@ type Schedule = {
   upcoming_count?: number;
 };
 
+
 type ProfProfile = {
   full_name: string;
   department: string;
@@ -173,6 +174,12 @@ function groupByQuarter<T extends { date: string }>(items: T[]): Array<[string, 
     map.get(key)!.push(item);
   }
   return Array.from(map.entries());
+}
+
+function fmtDate(dateStr: string | null | undefined, options: Intl.DateTimeFormatOptions): string {
+  if (!dateStr) return '—';
+  const d = new Date(String(dateStr).slice(0, 10) + 'T12:00:00');
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-PH', options);
 }
 
 function actionLabel(action_taken: string | null, referral: string | null, referral_specify: string | null): string {
@@ -1009,7 +1016,7 @@ export default function ProfessorDashboard() {
       c.student_name,
       c.student_number,
       c.program || '—',
-      new Date(c.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }),
+      fmtDate(c.date, { year: 'numeric', month: 'short', day: 'numeric' }),
       fmtTime(c),
       c.mode || '—',
       natureLabel(c),
@@ -1135,8 +1142,9 @@ export default function ProfessorDashboard() {
   monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const mondayStr = monday.toISOString().slice(0, 10);
-  const sundayStr = sunday.toISOString().slice(0, 10);
+  const toLocalDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mondayStr = toLocalDateStr(monday);
+  const sundayStr = toLocalDateStr(sunday);
 
   const thisWeek  = consultations.filter(c => c.date >= mondayStr && c.date <= sundayStr);
   const scheduledCount = thisWeek.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
@@ -1335,7 +1343,7 @@ export default function ProfessorDashboard() {
             const chartBars = CHART_DAYS.map((lbl, i) => {
               const d = new Date(weekMonday);
               d.setDate(weekMonday.getDate() + i);
-              const ds = d.toISOString().slice(0, 10);
+              const ds = toLocalDateStr(d);
               const items = consultations.filter(c => c.date.slice(0, 10) === ds);
               return {
                 label: lbl,
@@ -1478,7 +1486,7 @@ export default function ProfessorDashboard() {
                 </div>
 
                 {/* Bar chart: consultations per day */}
-                <div className={`lg:col-span-5 rounded-2xl border p-5 ${card}`}>
+                <div className={`lg:col-span-5 rounded-2xl border p-5 flex flex-col ${card}`}>
                   <div className="flex items-center justify-between mb-1">
                     <h3 className={`text-sm font-semibold ${tp}`}>Consultations This Week</h3>
                     <button onClick={() => handleTabChange('consultations')} className="text-xs text-[#CC0000] hover:text-red-400 font-medium transition-colors">
@@ -1487,47 +1495,49 @@ export default function ProfessorDashboard() {
                   </div>
                   <p className={`text-xs ${tm} mb-4`}>{scheduledCount} upcoming · {completedCount} completed · {pendingCount} pending</p>
 
-                  {/* Chart */}
-                  <div className="flex items-end gap-2 h-28">
-                    {chartBars.map(b => {
-                      const pct = chartMax > 0 ? (b.total / chartMax) : 0;
-                      const confirmedPct = b.total > 0 ? (b.confirmed / b.total) : 0;
-                      return (
-                        <div key={b.label} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-                          {b.total > 0 && (
-                            <p className={`text-[10px] font-bold ${b.isToday ? 'text-[#CC0000]' : ts}`}>{b.total}</p>
-                          )}
-                          <div className="w-full flex flex-col-reverse rounded-lg overflow-hidden" style={{ height: `${Math.max(pct * 76, b.total > 0 ? 10 : 4)}px`, minHeight: '4px' }}>
-                            <div
-                              className={`w-full rounded-lg transition-all ${b.isToday ? 'bg-[#CC0000]' : (isDark ? 'bg-white/25' : 'bg-blue-200')}`}
-                              style={{ height: `${(1 - confirmedPct) * 100}%` }}
-                            />
-                            {b.confirmed > 0 && (
-                              <div
-                                className={`w-full ${b.isToday ? 'bg-white/40' : (isDark ? 'bg-emerald-400' : 'bg-emerald-400')}`}
-                                style={{ height: `${confirmedPct * 100}%` }}
-                              />
+                  {/* Chart + legend pushed to bottom */}
+                  <div className="mt-auto flex flex-col gap-0">
+                    <div className="flex items-end gap-2 h-28">
+                      {chartBars.map(b => {
+                        const pct = chartMax > 0 ? (b.total / chartMax) : 0;
+                        const confirmedPct = b.total > 0 ? (b.confirmed / b.total) : 0;
+                        return (
+                          <div key={b.label} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                            {b.total > 0 && (
+                              <p className={`text-[10px] font-bold ${b.isToday ? 'text-[#CC0000]' : ts}`}>{b.total}</p>
                             )}
+                            <div className="w-full flex flex-col-reverse rounded-lg overflow-hidden" style={{ height: `${Math.max(pct * 76, b.total > 0 ? 10 : 4)}px`, minHeight: '4px' }}>
+                              <div
+                                className={`w-full rounded-lg transition-all ${b.isToday ? 'bg-[#CC0000]' : (isDark ? 'bg-white/25' : 'bg-blue-200')}`}
+                                style={{ height: `${(1 - confirmedPct) * 100}%` }}
+                              />
+                              {b.confirmed > 0 && (
+                                <div
+                                  className={`w-full ${b.isToday ? 'bg-white/40' : (isDark ? 'bg-emerald-400' : 'bg-emerald-400')}`}
+                                  style={{ height: `${confirmedPct * 100}%` }}
+                                />
+                              )}
+                            </div>
+                            <p className={`text-[10px] font-semibold ${b.isToday ? 'text-[#CC0000]' : tm}`}>{b.label}</p>
                           </div>
-                          <p className={`text-[10px] font-semibold ${b.isToday ? 'text-[#CC0000]' : tm}`}>{b.label}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
 
-                  {/* Bar legend */}
-                  <div className={`flex items-center gap-4 mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2.5 h-2.5 rounded-sm ${isDark ? 'bg-white/25' : 'bg-blue-200'}`} />
-                      <span className={`text-[10px] ${tm}`}>Pending</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />
-                      <span className={`text-[10px] ${tm}`}>Confirmed</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-[#CC0000]" />
-                      <span className={`text-[10px] ${tm}`}>Today</span>
+                    {/* Bar legend */}
+                    <div className={`flex items-center justify-center gap-4 mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2.5 h-2.5 rounded-sm ${isDark ? 'bg-white/25' : 'bg-blue-200'}`} />
+                        <span className={`text-[10px] ${tm}`}>Pending</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />
+                        <span className={`text-[10px] ${tm}`}>Confirmed</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-[#CC0000]" />
+                        <span className={`text-[10px] ${tm}`}>Today</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1618,7 +1628,7 @@ export default function ProfessorDashboard() {
                               </td>
                               <td className="px-5 py-3">
                                 <p className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  {new Date(c.date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                                  {fmtDate(c.date, { month: 'short', day: 'numeric' })}
                                 </p>
                                 <p className={`text-[10px] font-mono ${tm}`}>{(c.time || c.time_start)?.slice(0, 5)}</p>
                               </td>
@@ -1715,7 +1725,7 @@ export default function ProfessorDashboard() {
                         <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                           <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Date & Time</p>
                           <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
-                            {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {fmtDate(c.date, { month: 'short', day: 'numeric', year: 'numeric' })}
                           </p>
                           <p className={`text-xs mt-0.5 ${ts}`}>{c.day} · {fmtTime(c)}</p>
                         </div>
@@ -2077,6 +2087,7 @@ export default function ProfessorDashboard() {
                 })()}
               </div>
             </div>
+
           </div>
 
         ) : tab === 'history' ? (
@@ -2119,7 +2130,7 @@ export default function ProfessorDashboard() {
                               {items.map(c => (
                                 <tr key={c.id} className={`transition-colors ${hoverBg}`}>
                                   <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                    {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {fmtDate(c.date, { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </td>
                                   <td className={`px-4 py-3 text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                                     <p className="truncate font-medium">{c.student_name}</p>
@@ -2372,7 +2383,7 @@ export default function ProfessorDashboard() {
               <Avatar name={completingConsult.student_name} avatarUrl={completingConsult.student_avatar} size="sm" />
               <div>
                 <p className="text-white text-sm font-semibold">{completingConsult.student_name}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{completingConsult.student_number} · {new Date(completingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{completingConsult.student_number} · {fmtDate(completingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
             <div>
@@ -2436,7 +2447,7 @@ export default function ProfessorDashboard() {
               <Avatar name={reschedulingConsult.student_name} avatarUrl={reschedulingConsult.student_avatar} size="sm" />
               <div>
                 <p className="text-white text-sm font-semibold">{reschedulingConsult.student_name}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{reschedulingConsult.student_number} · {new Date(reschedulingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{reschedulingConsult.student_number} · {fmtDate(reschedulingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
             <p className="text-gray-500 text-xs">This marks the consultation as rescheduled (referred/moved to another session).</p>
@@ -2557,7 +2568,7 @@ export default function ProfessorDashboard() {
               <Avatar name={cancellingConsult.student_name} avatarUrl={cancellingConsult.student_avatar} size="sm" />
               <div>
                 <p className="text-white text-sm font-semibold">{cancellingConsult.student_name}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{cancellingConsult.student_number} · {new Date(cancellingConsult.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{cancellingConsult.student_number} · {fmtDate(cancellingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
             <div>

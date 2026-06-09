@@ -218,8 +218,15 @@ export default function LeftSidebar({
 
   // ── Sidebar body (reused for desktop + mobile overlay) ──────────────────────
 
+  const sbBg    = isDark ? 'bg-[#1e1f22]'  : 'bg-white';
+  const sbBdr   = isDark ? 'border-white/5' : 'border-gray-200';
+  const sbText  = isDark ? 'text-gray-400'  : 'text-gray-600';
+  const sbHover = isDark ? 'hover:text-gray-200 hover:bg-white/5' : 'hover:text-gray-900 hover:bg-gray-100';
+  const sbName  = isDark ? 'text-white'     : 'text-gray-900';
+  const sbSub   = isDark ? 'text-gray-500'  : 'text-gray-400';
+
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-[#1e1f22]">
+    <div className={`flex flex-col h-full ${sbBg}`}>
 
       {/* ── Logo ── */}
       <div className="flex items-center gap-3 px-4 py-4 flex-shrink-0" style={{ backgroundColor: '#CC0000', borderBottom: '1px solid rgba(0,0,0,0.15)' }}>
@@ -239,7 +246,7 @@ export default function LeftSidebar({
       <div ref={notifRef} className="relative px-2 pt-2 pb-1">
         <button
           onClick={() => setNotifOpen(o => !o)}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
         >
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
@@ -357,7 +364,7 @@ export default function LeftSidebar({
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left group ${
                 isActive
                   ? 'bg-[#CC0000] text-white shadow-sm shadow-red-900/30'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                  : `${sbText} ${sbHover}`
               }`}
             >
               <NavIcon tabKey={item.key} />
@@ -375,10 +382,10 @@ export default function LeftSidebar({
       </nav>
 
       {/* ── Bottom actions ── */}
-      <div className="border-t border-white/5 px-2 py-3 space-y-0.5 flex-shrink-0">
+      <div className={`border-t ${sbBdr} px-2 py-3 space-y-0.5 flex-shrink-0`}>
         <button
           onClick={onToggleTheme}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
         >
           {isDark ? (
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" /></svg>
@@ -389,7 +396,7 @@ export default function LeftSidebar({
         </button>
         <button
           onClick={() => { router.push('/settings'); setMobileOpen(false); }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
         >
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
           Settings
@@ -404,15 +411,15 @@ export default function LeftSidebar({
       </div>
 
       {/* ── Profile footer ── */}
-      <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ backgroundColor: '#1e1f22', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className={`flex items-center gap-3 px-4 py-3 flex-shrink-0 border-t ${sbBdr} ${sbBg}`}>
         <div className="w-8 h-8 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ring-2 ring-[#CC0000]/20">
           {profileAvatar && !profileAvatar.startsWith('/uploads/')
             ? <img src={profileAvatar} alt={profileName} className="w-full h-full object-cover" />
             : initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold truncate" style={{ color: '#fff' }}>{profileName || roleLabel}</p>
-          <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.55)' }}>{roleLabel}</p>
+          <p className={`text-xs font-semibold truncate ${sbName}`}>{profileName || roleLabel}</p>
+          <p className={`text-[10px] ${sbSub}`}>{roleLabel}</p>
         </div>
       </div>
     </div>
@@ -426,10 +433,10 @@ export default function LeftSidebar({
       </aside>
 
       {/* ── Mobile top bar ── */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center gap-3 px-4 h-14 bg-[#1e1f22] border-b border-white/5 shadow-lg">
+      <div className={`lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center gap-3 px-4 h-14 border-b shadow-lg ${sbBg} ${sbBdr}`}>
         <button
           onClick={() => setMobileOpen(o => !o)}
-          className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+          className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${sbText} ${sbHover}`}
           aria-label="Toggle navigation"
         >
           {mobileOpen ? (
@@ -439,7 +446,7 @@ export default function LeftSidebar({
           )}
         </button>
         <img src="/consulta-logo.png" alt="Consulta" className="h-9 w-auto object-contain" />
-        <p className="font-bold text-sm text-white">Consulta</p>
+        <p className={`font-bold text-sm ${sbName}`}>Consulta</p>
         <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold border border-[#CC0000]/40 text-[#CC0000]">
           {role.toUpperCase()}
         </span>
@@ -447,7 +454,7 @@ export default function LeftSidebar({
         {/* Notification badge in mobile header */}
         <button
           onClick={() => { setNotifOpen(o => !o); setMobileOpen(false); }}
-          className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+          className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${sbText} ${sbHover}`}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
@@ -475,28 +482,28 @@ export default function LeftSidebar({
 
       {/* ── Mobile notification panel (when opened from header) ── */}
       {notifOpen && (
-        <div ref={notifRef} className="lg:hidden fixed top-14 right-3 z-50 w-[calc(100vw-24px)] max-w-sm rounded-xl shadow-2xl overflow-hidden border border-white/10 bg-[#252525]">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#1e1e1e]">
-            <p className="text-sm font-semibold text-white">
+        <div ref={notifRef} className={`lg:hidden fixed top-14 right-3 z-50 w-[calc(100vw-24px)] max-w-sm rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+            <p className={`text-sm font-semibold ${sbName}`}>
               Notifications
               {unreadCount > 0 && (
                 <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">{unreadCount} new</span>
               )}
             </p>
-            <button onClick={() => setNotifOpen(false)} className="text-gray-500 hover:text-white">
+            <button onClick={() => setNotifOpen(false)} className={`${sbText} hover:${isDark ? 'text-white' : 'text-gray-900'}`}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
           <div className="overflow-y-auto max-h-64">
             {notifications.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-gray-500">No notifications</p>
+              <p className={`px-4 py-8 text-center text-sm ${sbSub}`}>No notifications</p>
             ) : notifications.slice(0, 8).map(n => {
               const isUnread = !readIds.has(n.key);
               return (
-                <div key={n.key} className={`border-b border-white/5 ${
+                <div key={n.key} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'} ${
                   isUnread && n.kind === 'consultation' && n.consult.status === 'confirmed'
                     ? 'bg-blue-500/5'
-                    : isUnread ? 'bg-white/[0.03]' : ''
+                    : isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/40') : ''
                 }`}>
                   <button
                     onClick={() => {
@@ -504,20 +511,20 @@ export default function LeftSidebar({
                       setNotifOpen(false);
                       if (n.kind === 'consultation') onTabChange('consultations');
                     }}
-                    className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                    className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
                   >
                     <span className="text-sm flex-shrink-0 mt-0.5">{n.kind === 'consultation' ? '📅' : n.kind === 'announcement' && n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium leading-snug line-clamp-2 ${
                         n.kind === 'consultation' && n.consult.status === 'confirmed'
-                          ? 'text-blue-300'
-                          : 'text-gray-200'
+                          ? (isDark ? 'text-blue-300' : 'text-blue-600')
+                          : sbName
                       }`}>
                         {n.kind === 'consultation'
                           ? <><span className="font-semibold">{n.consult.student_name}</span>{n.consult.status === 'confirmed' ? ' — consultation approved' : ' booked a consultation'}</>
                           : n.ann.title || n.ann.body.slice(0, 60)}
                       </p>
-                      <p className="text-[10px] mt-0.5 text-gray-500">
+                      <p className={`text-[10px] mt-0.5 ${sbSub}`}>
                         {n.kind === 'consultation'
                           ? fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)
                           : relTime(n.ann.created_at)}
