@@ -142,27 +142,53 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       }
     }
 
-    const conflictCheck = await pool.query(
-      `SELECT id FROM consultations
-       WHERE professor_id = $1 AND date = $2 AND time = $3 AND status IN ('pending', 'confirmed')`,
-      [professor_id, date, time || null]
-    );
-    if (conflictCheck.rows.length > 0) {
-      return res.status(400).json({ error: 'This time slot is already booked. Please choose a different time.' });
-    }
-
     const natureValue = Array.isArray(nature_of_advising)
       ? JSON.stringify(nature_of_advising)
       : (nature_of_advising || null);
 
-    const result = await pool.query(
-      `INSERT INTO consultations
-       (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    res.status(201).json(result.rows[0]);
+      // Prevent same student from double-booking same professor/date/time
+      const dupCheck = await client.query(
+        `SELECT id FROM consultations
+         WHERE student_id = $1 AND professor_id = $2 AND date = $3 AND time IS NOT DISTINCT FROM $4
+           AND status IN ('pending', 'confirmed', 'rescheduled')`,
+        [student_id, professor_id, date, time || null]
+      );
+      if (dupCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'You already have a booking with this professor at this time.' });
+      }
+
+      // Prevent two different students from taking the same professor time slot
+      const conflictCheck = await client.query(
+        `SELECT id FROM consultations
+         WHERE professor_id = $1 AND date = $2 AND time IS NOT DISTINCT FROM $3
+           AND status IN ('pending', 'confirmed')`,
+        [professor_id, date, time || null]
+      );
+      if (conflictCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'This time slot is already booked. Please choose a different time.' });
+      }
+
+      const result = await client.query(
+        `INSERT INTO consultations
+         (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null]
+      );
+
+      await client.query('COMMIT');
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -190,7 +216,12 @@ router.get('/', authenticate, async (req, res) => {
          JOIN students s ON c.student_id = s.id
          JOIN users u ON s.user_id = u.id
          JOIN schedules sch ON c.schedule_id = sch.id
-         LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
+         LEFT JOIN LATERAL (
+           SELECT action_taken, referral, referral_specify, remarks
+           FROM consultation_details
+           WHERE consultation_id = c.id
+           ORDER BY id DESC LIMIT 1
+         ) cd ON true
          WHERE c.professor_id = $1 AND c.status != 'cancelled'
          ORDER BY c.date DESC`,
         [prof.rows[0].id]
@@ -206,7 +237,12 @@ router.get('/', authenticate, async (req, res) => {
          FROM consultations c
          JOIN professors p ON c.professor_id = p.id
          JOIN schedules sch ON c.schedule_id = sch.id
-         LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
+         LEFT JOIN LATERAL (
+           SELECT action_taken, referral, referral_specify, remarks
+           FROM consultation_details
+           WHERE consultation_id = c.id
+           ORDER BY id DESC LIMIT 1
+         ) cd ON true
          WHERE c.student_id = $1
          ORDER BY c.date DESC`,
         [student.rows[0].id]
@@ -223,8 +259,12 @@ router.get('/', authenticate, async (req, res) => {
         JOIN students s ON c.student_id = s.id
         JOIN professors p ON c.professor_id = p.id
         JOIN schedules sch ON c.schedule_id = sch.id
-        LEFT JOIN consultation_details cd ON c.id = cd.consultation_id
-        WHERE c.status != 'cancelled'
+        LEFT JOIN LATERAL (
+          SELECT action_taken, referral, referral_specify, remarks
+          FROM consultation_details
+          WHERE consultation_id = c.id
+          ORDER BY id DESC LIMIT 1
+        ) cd ON true
         ORDER BY c.date DESC
       `;
       result = await pool.query(adminQuery);
