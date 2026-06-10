@@ -123,8 +123,10 @@ export default function LeftSidebar({
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
-  const notifRef = useRef<HTMLDivElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const notifRef       = useRef<HTMLDivElement>(null); // desktop bell button area
+  const notifPanelRef  = useRef<HTMLDivElement>(null); // desktop dropdown panel
+  const notifMobileRef = useRef<HTMLDivElement>(null); // mobile dropdown panel
+  const overlayRef     = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -175,7 +177,10 @@ export default function LeftSidebar({
   useEffect(() => {
     if (!notifOpen) return;
     const h = (e: MouseEvent) => {
-      if (!notifRef.current?.contains(e.target as Node)) setNotifOpen(false);
+      const inBtn    = notifRef.current?.contains(e.target as Node);
+      const inPanel  = notifPanelRef.current?.contains(e.target as Node);
+      const inMobile = notifMobileRef.current?.contains(e.target as Node);
+      if (!inBtn && !inPanel && !inMobile) setNotifOpen(false);
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -237,13 +242,16 @@ export default function LeftSidebar({
           <p className="font-bold text-sm leading-none" style={{ color: '#fff' }}>Consulta</p>
           <p className="text-[10px] mt-0.5 leading-none" style={{ color: 'rgba(255,255,255,0.75)' }}>MAPUA SOIT</p>
         </div>
-        <span className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
+        <span
+          className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0 text-white ${role === 'student' ? 'bg-gradient-to-r from-blue-500 to-cyan-400' : ''}`}
+          style={role !== 'student' ? { border: '1px solid rgba(255,255,255,0.45)' } : undefined}
+        >
           {role.toUpperCase()}
         </span>
       </div>
 
       {/* ── Notification bell ── */}
-      <div ref={notifRef} className="relative px-2 pt-2 pb-1">
+      <div ref={notifRef} className="px-2 pt-2 pb-1">
         <button
           onClick={() => setNotifOpen(o => !o)}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
@@ -258,98 +266,6 @@ export default function LeftSidebar({
             </span>
           )}
         </button>
-
-        {notifOpen && (
-          <div className={`fixed top-[72px] left-[248px] z-50 w-80 rounded-xl shadow-2xl overflow-hidden border ${
-            isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'
-          }`}>
-            <div className={`flex items-center justify-between px-4 py-3 border-b ${
-              isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Notifications
-                {unreadCount > 0 && (
-                  <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">
-                    {unreadCount} new
-                  </span>
-                )}
-              </p>
-              {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-[11px] text-[#CC0000] hover:underline">
-                  Mark all read
-                </button>
-              )}
-            </div>
-            <div className="overflow-y-auto max-h-72">
-              {notifications.length === 0 ? (
-                <div className="px-4 py-8 text-center">
-                  <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No notifications</p>
-                </div>
-              ) : notifications.map(n => {
-                const isUnread = !readIds.has(n.key);
-                const unreadBg = isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/60') : '';
-                const dividerCls = isDark ? 'border-white/5' : 'border-gray-100';
-                const hoverCls = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50';
-                const titleCls = isDark ? 'text-gray-200' : 'text-gray-800';
-                const subCls = isDark ? 'text-gray-500' : 'text-gray-400';
-                const dismissBtn = (
-                  <button
-                    onClick={(e) => dismissNotif(e, n.key)}
-                    title="Dismiss"
-                    className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded hover:text-red-400 hover:bg-red-500/10 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
-                  >×</button>
-                );
-                if (n.kind === 'consultation') {
-                  return (
-                    <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
-                      <button
-                        onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange('consultations'); }}
-                        className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
-                      >
-                        <span className="text-base flex-shrink-0 mt-0.5">📅</span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium leading-snug ${titleCls}`}>
-                            <span className="font-semibold">{n.consult.student_name}</span> booked a consultation
-                          </p>
-                          <p className={`text-[11px] mt-0.5 ${subCls}`}>
-                            {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
-                          </p>
-                        </div>
-                        {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000] flex-shrink-0 mt-1.5" />}
-                      </button>
-                      {dismissBtn}
-                    </div>
-                  );
-                }
-                const expanded = expandedAnn === n.ann.id;
-                return (
-                  <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
-                    <button
-                      onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setExpandedAnn(expanded ? null : n.ann.id); }}
-                      className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
-                    >
-                      <span className="text-base flex-shrink-0 mt-0.5">{n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium leading-snug ${titleCls}`}>{n.ann.title || n.ann.body.slice(0, 60)}</p>
-                        <p className={`text-[11px] mt-0.5 ${subCls}`}>{relTime(n.ann.created_at)}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-                        {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000]" />}
-                        <svg className={`w-3 h-3 transition-transform ${isDark ? 'text-gray-500' : 'text-gray-400'} ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </button>
-                    {expanded && (
-                      <div className={`px-4 pb-3 text-[11px] leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{n.ann.body}</div>
-                    )}
-                    {dismissBtn}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Nav items ── */}
@@ -363,7 +279,9 @@ export default function LeftSidebar({
               onClick={() => handleTabChange(item.key)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left group ${
                 isActive
-                  ? 'bg-[#CC0000] text-white shadow-sm shadow-red-900/30'
+                  ? (role === 'student'
+                      ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                      : 'bg-[#CC0000] text-white shadow-sm shadow-red-900/30')
                   : `${sbText} ${sbHover}`
               }`}
             >
@@ -480,9 +398,112 @@ export default function LeftSidebar({
         </div>
       )}
 
+      {/* ── Desktop notification panel ── */}
+      {notifOpen && (
+        <div ref={notifPanelRef} className={`hidden lg:block fixed top-[72px] left-60 z-50 w-80 rounded-xl shadow-2xl overflow-hidden border ${
+          isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'
+        }`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${
+            isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'
+          }`}>
+            <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Notifications
+              {unreadCount > 0 && (
+                <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">
+                  {unreadCount} new
+                </span>
+              )}
+            </p>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button onClick={markAllRead} className="text-[11px] text-[#CC0000] hover:underline">
+                  Mark all read
+                </button>
+              )}
+              <button
+                onClick={() => setNotifOpen(false)}
+                className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div className="overflow-y-auto max-h-72">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No notifications</p>
+              </div>
+            ) : notifications.map(n => {
+              const isUnread = !readIds.has(n.key);
+              const unreadBg  = isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/60') : '';
+              const dividerCls = isDark ? 'border-white/5' : 'border-gray-100';
+              const hoverCls   = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50';
+              const titleCls   = isDark ? 'text-gray-200' : 'text-gray-800';
+              const subCls     = isDark ? 'text-gray-500' : 'text-gray-400';
+              const dismissBtn = (
+                <button
+                  onClick={(e) => dismissNotif(e, n.key)}
+                  title="Dismiss"
+                  className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded hover:text-red-400 hover:bg-red-500/10 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
+                >×</button>
+              );
+              if (n.kind === 'consultation') {
+                return (
+                  <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
+                    <button
+                      onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange('consultations'); }}
+                      className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
+                    >
+                      <span className="text-base flex-shrink-0 mt-0.5">📅</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-medium leading-snug ${titleCls}`}>
+                          <span className="font-semibold">{n.consult.student_name}</span> booked a consultation
+                        </p>
+                        <p className={`text-[11px] mt-0.5 ${subCls}`}>
+                          {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
+                        </p>
+                      </div>
+                      {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000] flex-shrink-0 mt-1.5" />}
+                    </button>
+                    {dismissBtn}
+                  </div>
+                );
+              }
+              const expanded = expandedAnn === n.ann.id;
+              return (
+                <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
+                  <button
+                    onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setExpandedAnn(expanded ? null : n.ann.id); }}
+                    className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
+                  >
+                    <span className="text-base flex-shrink-0 mt-0.5">{n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium leading-snug ${titleCls}`}>{n.ann.title || n.ann.body.slice(0, 60)}</p>
+                      <p className={`text-[11px] mt-0.5 ${subCls}`}>{relTime(n.ann.created_at)}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                      {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000]" />}
+                      <svg className={`w-3 h-3 transition-transform ${isDark ? 'text-gray-500' : 'text-gray-400'} ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+                  {expanded && (
+                    <div className={`px-4 pb-3 text-[11px] leading-relaxed whitespace-pre-line ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{n.ann.body}</div>
+                  )}
+                  {dismissBtn}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile notification panel (when opened from header) ── */}
       {notifOpen && (
-        <div ref={notifRef} className={`lg:hidden fixed top-14 right-3 z-50 w-[calc(100vw-24px)] max-w-sm rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+        <div ref={notifMobileRef} className={`lg:hidden fixed top-14 right-3 z-50 w-[calc(100vw-24px)] max-w-sm rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
             <p className={`text-sm font-semibold ${sbName}`}>
               Notifications
