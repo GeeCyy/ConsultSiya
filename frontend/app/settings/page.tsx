@@ -24,9 +24,6 @@ type Profile = {
 };
 
 type NotifSettings = {
-  email_booking_confirmed: boolean;
-  email_booking_cancelled: boolean;
-  email_upcoming_reminder: boolean;
   inapp_booking_confirmed: boolean;
   inapp_booking_cancelled: boolean;
   inapp_upcoming_reminder: boolean;
@@ -364,9 +361,6 @@ export default function SettingsPage() {
 
   // Notification state
   const [notif, setNotif] = useState<NotifSettings>({
-    email_booking_confirmed: true,
-    email_booking_cancelled: true,
-    email_upcoming_reminder: true,
     inapp_booking_confirmed: true,
     inapp_booking_cancelled: true,
     inapp_upcoming_reminder: true,
@@ -675,10 +669,10 @@ export default function SettingsPage() {
     : profile.email?.[0]?.toUpperCase() || '?';
 
   return (
-    <DashboardShell weekBadge={false}>
-      <div className={`min-h-full ${isDark ? 'bg-[#1e1f22]' : 'bg-[#f2f3f5]'}`}>
+    <DashboardShell weekBadge={false} hideTopBar={true}>
+      <div className={`min-h-full ${isDark ? 'bg-[#1e2235]' : 'bg-[#f2f3f5]'}`}>
         {/* ── Page header ──────────────────────────────────────────────────── */}
-        <div className={`flex items-center gap-3 px-6 py-4 border-b ${isDark ? 'bg-[#1a1b1e] border-white/5' : 'bg-white border-black/10'}`}>
+        <div className={`flex items-center gap-3 px-6 py-4 border-b ${isDark ? 'bg-[#1e2235] border-white/5' : 'bg-white border-black/10'}`}>
           <button
             onClick={() => router.back()}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-200 transition-colors"
@@ -917,7 +911,7 @@ export default function SettingsPage() {
                   <div className="px-6 py-4 border-b border-white/5">
                     <h2 className="text-sm font-semibold text-white">Notification Preferences</h2>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Choose which events trigger email and in-app notifications.
+                      Choose which events trigger in-app notifications.
                     </p>
                   </div>
 
@@ -930,48 +924,8 @@ export default function SettingsPage() {
                       />
                     )}
 
-                    {/* Email notifications */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <svg className="w-4 h-4 text-[#CC0000]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                          Email Notifications
-                        </h3>
-                      </div>
-                      <div className="rounded-xl bg-[#1e1f22] border border-white/5 px-4 divide-y divide-white/5">
-                        <ToggleRow
-                          label="Booking Confirmed"
-                          sublabel="When a professor confirms your consultation"
-                          checked={notif.email_booking_confirmed}
-                          onChange={(v) => setNotif((n) => ({ ...n, email_booking_confirmed: v }))}
-                        />
-                        <ToggleRow
-                          label="Booking Cancelled or Rescheduled"
-                          sublabel="When a consultation is cancelled or rescheduled"
-                          checked={notif.email_booking_cancelled}
-                          onChange={(v) => setNotif((n) => ({ ...n, email_booking_cancelled: v }))}
-                        />
-                        <ToggleRow
-                          label="Upcoming Reminder"
-                          sublabel="Reminder before a scheduled consultation"
-                          checked={notif.email_upcoming_reminder}
-                          onChange={(v) => setNotif((n) => ({ ...n, email_upcoming_reminder: v }))}
-                        />
-                      </div>
-                    </div>
-
                     {/* In-app notifications */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <svg className="w-4 h-4 text-[#CC0000]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                        </svg>
-                        <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                          In-App Notifications
-                        </h3>
-                      </div>
                       <div className="rounded-xl bg-[#1e1f22] border border-white/5 px-4 divide-y divide-white/5">
                         <ToggleRow
                           label="Booking Confirmed"

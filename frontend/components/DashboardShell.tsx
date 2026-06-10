@@ -306,10 +306,12 @@ function roleLabel(role: string): string {
 export default function DashboardShell({
   children,
   weekBadge = true,
+  hideTopBar = false,
   onMenuToggle,
 }: {
   children: React.ReactNode;
   weekBadge?: boolean;
+  hideTopBar?: boolean;
   onMenuToggle?: () => void;
 }) {
   const router = useRouter();
@@ -388,7 +390,7 @@ export default function DashboardShell({
   return (
     <div className={`flex flex-col h-screen overflow-hidden ${isDark ? 'bg-[#0c0c0c]' : 'bg-[#f2f3f5]'}`}>
       {/* ── Global top bar ─────────────────────────────────────────────────── */}
-      <div className={`flex-shrink-0 flex items-center justify-between px-4 py-2.5 z-30 border-b ${isDark ? 'bg-[#111] border-white/5' : 'bg-white border-black/10'}`}>
+      {!hideTopBar && <div className={`flex-shrink-0 flex items-center justify-between px-4 py-2.5 z-30 border-b ${isDark ? 'bg-[#111] border-white/5' : 'bg-white border-black/10'}`}>
         <div className="flex items-center gap-2">
           {onMenuToggle && (
             <button
@@ -490,7 +492,7 @@ export default function DashboardShell({
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* ── Page content ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
