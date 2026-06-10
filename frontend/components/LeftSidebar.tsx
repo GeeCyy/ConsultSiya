@@ -8,6 +8,7 @@ export type NavItem = { key: string; label: string };
 type PendingConsult = {
   id: number;
   student_name: string;
+  professor_name?: string;
   date: string;
   time: string | null;
   time_start: string;
@@ -160,7 +161,8 @@ export default function LeftSidebar({
   ].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
     .filter(n => !dismissedIds.has(n.key));
 
-  const unreadCount = notifications.filter(n => !readIds.has(n.key)).length;
+  const unreadCount = notifications.filter(n => n.kind === 'consultation' && !readIds.has(n.key)).length;
+  const unreadConsultCount = unreadCount;
 
   const markAllRead = () => {
     const next = new Set(readIds);
@@ -169,10 +171,14 @@ export default function LeftSidebar({
   };
 
   useEffect(() => {
-    if (!notifOpen || unreadCount === 0) return;
-    const t = setTimeout(markAllRead, 3000);
-    return () => clearTimeout(t);
-  }, [notifOpen, unreadCount]);
+    if (!notifOpen) return;
+    const next = new Set(readIds);
+    let changed = false;
+    notifications.forEach(n => {
+      if (n.kind === 'consultation' && !next.has(n.key)) { next.add(n.key); changed = true; }
+    });
+    if (changed) persistRead(next);
+  }, [notifOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -256,7 +262,7 @@ export default function LeftSidebar({
           onClick={() => setNotifOpen(o => !o)}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
         >
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+          <svg className={`w-4 h-4 flex-shrink-0 ${unreadConsultCount > 0 ? 'bell-ringing' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
           <span className="flex-1">Notifications</span>
@@ -374,7 +380,7 @@ export default function LeftSidebar({
           onClick={() => { setNotifOpen(o => !o); setMobileOpen(false); }}
           className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${sbText} ${sbHover}`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+          <svg className={`w-4 h-4 ${unreadConsultCount > 0 ? 'bell-ringing' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
           </svg>
           {unreadCount > 0 && (
@@ -400,7 +406,7 @@ export default function LeftSidebar({
 
       {/* ── Desktop notification panel ── */}
       {notifOpen && (
-        <div ref={notifPanelRef} className={`hidden lg:block fixed top-[72px] left-60 z-50 w-80 rounded-xl shadow-2xl overflow-hidden border ${
+        <div ref={notifPanelRef} className={`hidden lg:block fixed top-[72px] left-60 z-50 w-80 rounded-xl shadow-2xl overflow-hidden border notif-dropdown ${
           isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'
         }`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b ${
@@ -450,22 +456,37 @@ export default function LeftSidebar({
                 >×</button>
               );
               if (n.kind === 'consultation') {
+                const isStudentNotif = !!n.consult.professor_name;
+                const consultEmoji = !isStudentNotif ? '📅'
+                  : n.consult.status === 'confirmed' ? '✅'
+                  : n.consult.status === 'rescheduled' ? '🔄'
+                  : n.consult.status === 'cancelled' ? '❌' : '📅';
+                const consultDot = !isStudentNotif ? 'bg-[#CC0000]'
+                  : n.consult.status === 'confirmed' ? 'bg-blue-500'
+                  : n.consult.status === 'rescheduled' ? 'bg-orange-400'
+                  : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]';
+                const displayName = isStudentNotif ? n.consult.professor_name! : n.consult.student_name;
+                const actionText = !isStudentNotif ? 'booked a consultation'
+                  : n.consult.status === 'confirmed' ? 'confirmed your consultation'
+                  : n.consult.status === 'rescheduled' ? 'rescheduled your consultation'
+                  : n.consult.status === 'cancelled' ? 'cancelled your consultation'
+                  : 'updated your consultation';
                 return (
                   <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
                     <button
-                      onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange('consultations'); }}
+                      onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange(isStudentNotif ? 'my' : 'consultations'); }}
                       className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
                     >
-                      <span className="text-base flex-shrink-0 mt-0.5">📅</span>
+                      <span className="text-base flex-shrink-0 mt-0.5">{consultEmoji}</span>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-medium leading-snug ${titleCls}`}>
-                          <span className="font-semibold">{n.consult.student_name}</span> booked a consultation
+                          <span className="font-semibold">{displayName}</span> {actionText}
                         </p>
                         <p className={`text-[11px] mt-0.5 ${subCls}`}>
                           {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
                         </p>
                       </div>
-                      {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000] flex-shrink-0 mt-1.5" />}
+                      {isUnread && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${consultDot}`} />}
                     </button>
                     {dismissBtn}
                   </div>
@@ -473,9 +494,9 @@ export default function LeftSidebar({
               }
               const expanded = expandedAnn === n.ann.id;
               return (
-                <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
+                <div key={n.key} className={`relative group border-b ${dividerCls}`}>
                   <button
-                    onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setExpandedAnn(expanded ? null : n.ann.id); }}
+                    onClick={() => setExpandedAnn(expanded ? null : n.ann.id)}
                     className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
                   >
                     <span className="text-base flex-shrink-0 mt-0.5">{n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
@@ -484,7 +505,6 @@ export default function LeftSidebar({
                       <p className={`text-[11px] mt-0.5 ${subCls}`}>{relTime(n.ann.created_at)}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-                      {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000]" />}
                       <svg className={`w-3 h-3 transition-transform ${isDark ? 'text-gray-500' : 'text-gray-400'} ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
@@ -503,7 +523,7 @@ export default function LeftSidebar({
 
       {/* ── Mobile notification panel (when opened from header) ── */}
       {notifOpen && (
-        <div ref={notifMobileRef} className={`lg:hidden fixed top-14 right-3 z-50 w-[calc(100vw-24px)] max-w-sm rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+        <div ref={notifMobileRef} className={`lg:hidden fixed top-14 left-3 right-3 z-50 sm:left-auto sm:right-3 sm:w-80 rounded-xl shadow-2xl overflow-hidden border notif-dropdown ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
             <p className={`text-sm font-semibold ${sbName}`}>
               Notifications
@@ -520,30 +540,52 @@ export default function LeftSidebar({
               <p className={`px-4 py-8 text-center text-sm ${sbSub}`}>No notifications</p>
             ) : notifications.slice(0, 8).map(n => {
               const isUnread = !readIds.has(n.key);
+              const isStudentNotif = n.kind === 'consultation' && !!n.consult.professor_name;
+              const mobileEmoji = n.kind !== 'consultation'
+                ? (n.ann.type === 'warning' ? '⚠️' : '📢')
+                : !isStudentNotif ? '📅'
+                : n.consult.status === 'confirmed' ? '✅'
+                : n.consult.status === 'rescheduled' ? '🔄'
+                : n.consult.status === 'cancelled' ? '❌' : '📅';
+              const mobileDot = n.kind === 'consultation'
+                ? (!isStudentNotif ? 'bg-[#CC0000]'
+                  : n.consult.status === 'confirmed' ? 'bg-blue-500'
+                  : n.consult.status === 'rescheduled' ? 'bg-orange-400'
+                  : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]')
+                : '';
               return (
                 <div key={n.key} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'} ${
-                  isUnread && n.kind === 'consultation' && n.consult.status === 'confirmed'
-                    ? 'bg-blue-500/5'
-                    : isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/40') : ''
+                  n.kind === 'consultation' && isUnread
+                    ? (isStudentNotif && n.consult.status === 'confirmed' ? 'bg-blue-500/5' : isDark ? 'bg-white/[0.03]' : 'bg-blue-50/40')
+                    : ''
                 }`}>
                   <button
                     onClick={() => {
-                      const nx = new Set(readIds); nx.add(n.key); persistRead(nx);
+                      if (n.kind === 'consultation') {
+                        const nx = new Set(readIds); nx.add(n.key); persistRead(nx);
+                        onTabChange(isStudentNotif ? 'my' : 'consultations');
+                      }
                       setNotifOpen(false);
-                      if (n.kind === 'consultation') onTabChange('consultations');
                     }}
                     className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
                   >
-                    <span className="text-sm flex-shrink-0 mt-0.5">{n.kind === 'consultation' ? '📅' : n.kind === 'announcement' && n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
+                    <span className="text-sm flex-shrink-0 mt-0.5">{mobileEmoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium leading-snug line-clamp-2 ${
-                        n.kind === 'consultation' && n.consult.status === 'confirmed'
+                        isStudentNotif && n.kind === 'consultation' && n.consult.status === 'confirmed'
                           ? (isDark ? 'text-blue-300' : 'text-blue-600')
                           : sbName
                       }`}>
-                        {n.kind === 'consultation'
-                          ? <><span className="font-semibold">{n.consult.student_name}</span>{n.consult.status === 'confirmed' ? ' — consultation approved' : ' booked a consultation'}</>
-                          : n.ann.title || n.ann.body.slice(0, 60)}
+                        {n.kind === 'consultation' ? (() => {
+                          const dn = isStudentNotif ? n.consult.professor_name! : n.consult.student_name;
+                          const at = !isStudentNotif
+                            ? (n.consult.status === 'confirmed' ? ' — approved' : ' booked a consultation')
+                            : n.consult.status === 'confirmed' ? ' confirmed your consultation'
+                            : n.consult.status === 'rescheduled' ? ' rescheduled your consultation'
+                            : n.consult.status === 'cancelled' ? ' cancelled your consultation'
+                            : ' updated your consultation';
+                          return <><span className="font-semibold">{dn}</span>{at}</>;
+                        })() : n.ann.title || n.ann.body.slice(0, 60)}
                       </p>
                       <p className={`text-[10px] mt-0.5 ${sbSub}`}>
                         {n.kind === 'consultation'
@@ -551,12 +593,8 @@ export default function LeftSidebar({
                           : relTime(n.ann.created_at)}
                       </p>
                     </div>
-                    {isUnread && (
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
-                        n.kind === 'consultation' && n.consult.status === 'confirmed'
-                          ? 'bg-blue-500'
-                          : 'bg-[#CC0000]'
-                      }`} />
+                    {n.kind === 'consultation' && isUnread && (
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${mobileDot}`} />
                     )}
                   </button>
                 </div>

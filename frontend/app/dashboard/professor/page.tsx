@@ -810,7 +810,24 @@ export default function ProfessorDashboard() {
       api.get('/api/leaderboard/professors', token!),
       api.get('/api/leaderboard/topics', token!),
     ]);
-    setConsultations(Array.isArray(c) ? c : []);
+    const freshConsults: Consultation[] = Array.isArray(c) ? c : [];
+    const profEmail = !prof.error ? (prof.email || 'default') : 'default';
+    const profSeenKey = `consulta-prof-seen-ids-${profEmail}`;
+    try {
+      const prevRaw = localStorage.getItem(profSeenKey);
+      const prevIds: number[] | null = prevRaw ? JSON.parse(prevRaw) : null;
+      if (prevIds !== null) {
+        const prevIdSet = new Set(prevIds);
+        for (const fc of freshConsults) {
+          if (!prevIdSet.has(fc.id) && fc.status === 'pending') {
+            const dateStr = fc.date ? new Date(fc.date.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
+            toast.info(`New booking: ${fc.student_name} scheduled a consultation${dateStr ? ` on ${dateStr}` : ''}.`);
+          }
+        }
+      }
+      localStorage.setItem(profSeenKey, JSON.stringify(freshConsults.map(fc => fc.id)));
+    } catch { /* */ }
+    setConsultations(freshConsults);
     setSchedules(Array.isArray(s) ? s : []);
     if (Array.isArray(ann)) setAnnouncements(ann);
     if (Array.isArray(cal)) setCalOverrides(cal);
