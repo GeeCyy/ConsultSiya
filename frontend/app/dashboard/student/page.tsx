@@ -488,7 +488,7 @@ export default function StudentDashboard() {
   }, [authReady]);
 
   const fetchData = async () => {
-    const [sched, consult, prof, ann, cal, termData, lbS, lbP] = await Promise.all([
+    const [sched, consult, prof, ann, cal, termData, lbS, lbP, notifSettings] = await Promise.all([
       api.get('/api/schedules', token!),
       api.get('/api/consultations', token!),
       api.get('/api/auth/profile', token!),
@@ -497,10 +497,54 @@ export default function StudentDashboard() {
       fetch(`${API_URL}/api/settings/term`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
       api.get('/api/leaderboard/students', token!),
       api.get('/api/leaderboard/professors', token!),
+      fetch(`${API_URL}/api/settings/notifications`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
     const today = new Date().toISOString().slice(0, 10);
     setSchedules((Array.isArray(sched) ? sched : []).filter(s => !s.date || s.date >= today));
-    setConsultations(Array.isArray(consult) ? consult : []);
+    const freshConsults: Consultation[] = Array.isArray(consult) ? consult : [];
+    setConsultations(freshConsults);
+
+    // In-app notification toasts based on user preferences
+    const prefs = {
+      inapp_booking_confirmed: true, inapp_booking_cancelled: true, inapp_upcoming_reminder: true,
+      ...(notifSettings && !notifSettings.error ? notifSettings : {}),
+    };
+    const userEmail = !prof.error ? (prof.email || 'default') : 'default';
+    const statusKey = `consulta-seen-statuses-${userEmail}`;
+    try {
+      const prevRaw = localStorage.getItem(statusKey);
+      const prevMap: Record<string, string> | null = prevRaw ? JSON.parse(prevRaw) : null;
+      if (prevMap) {
+        for (const c of freshConsults) {
+          const prev = prevMap[String(c.id)];
+          if (!prev || prev === c.status) continue;
+          const dateStr = c.date ? new Date(c.date.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
+          if (c.status === 'confirmed' && prefs.inapp_booking_confirmed)
+            toast.success(`Consultation confirmed! Your session with ${c.professor_name}${dateStr ? ` on ${dateStr}` : ''} is confirmed.`);
+          else if (c.status === 'cancelled' && prefs.inapp_booking_cancelled)
+            toast.error(`Consultation cancelled. Your session with ${c.professor_name} has been cancelled.`);
+          else if (c.status === 'rescheduled' && prefs.inapp_booking_cancelled)
+            toast.warning(`Consultation rescheduled. Your session with ${c.professor_name} was rescheduled.`);
+        }
+      }
+      const newMap: Record<string, string> = {};
+      freshConsults.forEach(c => { newMap[String(c.id)] = c.status; });
+      localStorage.setItem(statusKey, JSON.stringify(newMap));
+    } catch { /* */ }
+    // Upcoming reminder — once per day
+    if (prefs.inapp_upcoming_reminder) {
+      const reminderKey = `consulta-reminder-${today}-${userEmail}`;
+      if (!localStorage.getItem(reminderKey)) {
+        const todayConfirmed = freshConsults.filter(c => c.date === today && c.status === 'confirmed');
+        if (todayConfirmed.length > 0) {
+          todayConfirmed.forEach(c => {
+            const t = (c.time || c.time_start || '').slice(0, 5);
+            toast.info(`Reminder: Consultation with ${c.professor_name} today${t ? ` at ${t}` : ''}.`);
+          });
+          localStorage.setItem(reminderKey, '1');
+        }
+      }
+    }
     if (Array.isArray(ann)) setAnnouncements(ann);
     if (Array.isArray(cal)) setCalOverrides(cal);
     if (termData && !termData.error) setTerm(buildTermFromConfig(termData as RawTermConfig));
@@ -627,17 +671,18 @@ export default function StudentDashboard() {
   const activeTabConsultations = consultations.filter(c => ['pending', 'confirmed', 'rescheduled'].includes(c.status));
   const pastTabConsultations   = consultations.filter(c => ['completed', 'cancelled'].includes(c.status));
 
-  // Notification bell: status-change notifications + announcements
-  const statusNotifs: AnnItem[] = consultations
-    .filter(c => ['confirmed', 'completed', 'rescheduled'].includes(c.status) && !!c.date)
+  // Notification bell: consultations with status updates shown as proper bell notifications
+  const statusNotifConsults = consultations
+    .filter(c => ['confirmed', 'rescheduled', 'cancelled'].includes(c.status) && !!c.date)
     .map(c => ({
-      id: 200000 + c.id,
-      title: `Consultation ${c.status.charAt(0).toUpperCase() + c.status.slice(1)}`,
-      body: `Your consultation with ${c.professor_name} on ${new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })} is ${c.status}.`,
-      type: 'info' as const,
-      created_at: (c.date || '').slice(0, 10) + 'T12:00:00',
+      id: c.id,
+      student_name: '',
+      professor_name: c.professor_name,
+      date: c.date,
+      time: c.time || null,
+      time_start: c.time_start,
+      status: c.status,
     }));
-  const allNotifications = [...statusNotifs, ...announcements];
 
   // Calendar event maps
   const dateLabelMap = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date && o.value).map(o => [o.date!, o.value!]));
@@ -700,8 +745,8 @@ export default function StudentDashboard() {
         profileAvatar={profile.avatar}
         isDark={isDark}
         onToggleTheme={toggleTheme}
-        announcements={allNotifications}
-        pendingConsultations={[]}
+        announcements={announcements}
+        pendingConsultations={statusNotifConsults}
         storageKey={`student_notifs_${profile.email || 'default'}`}
       />
 

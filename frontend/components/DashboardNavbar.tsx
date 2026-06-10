@@ -8,9 +8,11 @@ export type NavItem = { key: string; label: string };
 type PendingConsult = {
   id: number;
   student_name: string;
+  professor_name?: string;
   date: string;
   time: string | null;
   time_start: string;
+  status?: string;
 };
 
 type AnnItem = {
@@ -142,7 +144,8 @@ export default function DashboardNavbar({
   ].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
     .filter(n => !dismissedIds.has(n.key));
 
-  const unreadCount = notifications.filter(n => !readIds.has(n.key)).length;
+  const unreadCount = notifications.filter(n => n.kind === 'consultation' && !readIds.has(n.key)).length;
+  const unreadConsultCount = unreadCount;
   const badgeCount  = unreadCount > 0 ? unreadCount : (notificationCount ?? 0);
   const hasFullData = pendingProp !== undefined && annProp !== undefined;
 
@@ -153,10 +156,14 @@ export default function DashboardNavbar({
   };
 
   useEffect(() => {
-    if (!notifOpen || unreadCount === 0) return;
-    const t = setTimeout(markAllRead, 3000);
-    return () => clearTimeout(t);
-  }, [notifOpen, unreadCount]);
+    if (!notifOpen) return;
+    const next = new Set(readIds);
+    let changed = false;
+    notifications.forEach(n => {
+      if (n.kind === 'consultation' && !next.has(n.key)) { next.add(n.key); changed = true; }
+    });
+    if (changed) persistRead(next);
+  }, [notifOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -263,7 +270,7 @@ export default function DashboardNavbar({
               className={`${iconBtn} relative`}
               title="Notifications"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <svg className={`w-4 h-4 ${unreadConsultCount > 0 ? 'bell-ringing' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
               </svg>
               {badgeCount > 0 && (
@@ -275,8 +282,7 @@ export default function DashboardNavbar({
 
             {/* Notification dropdown */}
             {notifOpen && (
-              <div className={`fixed top-14 right-3 sm:right-4 rounded-xl shadow-2xl overflow-hidden z-[60] border ${dropBg}
-                w-[calc(100vw-24px)] sm:w-80 max-w-sm`}
+              <div className={`fixed top-14 left-3 right-3 sm:left-auto sm:right-4 sm:w-80 rounded-xl shadow-2xl overflow-hidden z-[60] border notif-dropdown ${dropBg}`}
               >
                 {/* Header */}
                 <div className={`flex items-center justify-between px-4 py-3 border-b ${dropHeader}`}>
@@ -320,6 +326,21 @@ export default function DashboardNavbar({
                     );
 
                     if (n.kind === 'consultation') {
+                      const isStudentNotif = !!n.consult.professor_name;
+                      const cEmoji = !isStudentNotif ? '📅'
+                        : n.consult.status === 'confirmed' ? '✅'
+                        : n.consult.status === 'rescheduled' ? '🔄'
+                        : n.consult.status === 'cancelled' ? '❌' : '📅';
+                      const cDot = !isStudentNotif ? 'bg-[#CC0000]'
+                        : n.consult.status === 'confirmed' ? 'bg-blue-500'
+                        : n.consult.status === 'rescheduled' ? 'bg-orange-400'
+                        : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]';
+                      const cName = isStudentNotif ? n.consult.professor_name! : n.consult.student_name;
+                      const cText = !isStudentNotif ? 'booked a consultation'
+                        : n.consult.status === 'confirmed' ? 'confirmed your consultation'
+                        : n.consult.status === 'rescheduled' ? 'rescheduled your consultation'
+                        : n.consult.status === 'cancelled' ? 'cancelled your consultation'
+                        : 'updated your consultation';
                       return (
                         <div
                           key={n.key}
@@ -329,22 +350,22 @@ export default function DashboardNavbar({
                             onClick={() => {
                               const next = new Set(readIds); next.add(n.key); persistRead(next);
                               setNotifOpen(false);
-                              onTabChange('consultations');
+                              onTabChange(isStudentNotif ? 'my' : 'consultations');
                             }}
                             className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left transition-colors ${
                               isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'
                             }`}
                           >
-                            <span className="text-base flex-shrink-0 mt-0.5">📅</span>
+                            <span className="text-base flex-shrink-0 mt-0.5">{cEmoji}</span>
                             <div className="flex-1 min-w-0">
                               <p className={`text-xs font-medium leading-snug ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
-                                <span className="font-semibold">{n.consult.student_name}</span> booked a consultation
+                                <span className="font-semibold">{cName}</span> {cText}
                               </p>
                               <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                 {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
                               </p>
                             </div>
-                            {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000] flex-shrink-0 mt-1.5" />}
+                            {isUnread && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${cDot}`} />}
                           </button>
                           {dismissBtn}
                         </div>
@@ -358,13 +379,10 @@ export default function DashboardNavbar({
                         key={n.key}
                         className={`relative group border-b transition-colors ${
                           isDark ? 'border-white/5' : 'border-gray-100'
-                        } ${unreadBg}`}
+                        }`}
                       >
                         <button
-                          onClick={() => {
-                            const next = new Set(readIds); next.add(n.key); persistRead(next);
-                            setExpandedAnn(expanded ? null : n.ann.id);
-                          }}
+                          onClick={() => setExpandedAnn(expanded ? null : n.ann.id)}
                           className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left transition-colors ${
                             isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'
                           }`}
@@ -381,7 +399,6 @@ export default function DashboardNavbar({
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-                            {isUnread && <span className="w-2 h-2 rounded-full bg-[#CC0000]" />}
                             <svg
                               className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''} ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
                               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
