@@ -176,8 +176,19 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] system_settings table ready'))
     .catch(err => console.error('[startup] system_settings migration failed:', err.message));
 
-  // Ensure calendar_overrides supports ON CONFLICT (date) and (week_number) used in admin routes
+  // Ensure calendar_overrides exists and supports ON CONFLICT (date) and (week_number) used in admin routes
   pool.query(`
+    CREATE TABLE IF NOT EXISTS calendar_overrides (
+      id          SERIAL PRIMARY KEY,
+      type        VARCHAR(20) NOT NULL,
+      date        DATE,
+      week_number INTEGER,
+      value       VARCHAR(50),
+      label       TEXT,
+      color       VARCHAR(20),
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
     ALTER TABLE calendar_overrides DROP CONSTRAINT IF EXISTS calendar_overrides_type_check;
     ALTER TABLE calendar_overrides ADD CONSTRAINT calendar_overrides_type_check
       CHECK (type IN ('exam_week','mode_override','blocked_date','date_label'));
