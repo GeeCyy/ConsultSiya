@@ -49,6 +49,7 @@ app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/leaderboard', require('./routes/leaderboard'));
 
 // ── Health checks ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {

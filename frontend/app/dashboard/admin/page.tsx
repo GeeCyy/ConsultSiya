@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@/lib/academicCalendar';
 import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar, { type NavItem } from '@/components/LeftSidebar';
+import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -266,6 +267,11 @@ export default function AdminDashboard() {
   const [calLabelEditing, setCalLabelEditing] = useState(false);
   const [calPendingBlockReason, setCalPendingBlockReason] = useState('');
 
+  // Leaderboards
+  const [lbProfs, setLbProfs]       = useState<LeaderboardItem[]>([]);
+  const [lbStudents, setLbStudents] = useState<LeaderboardItem[]>([]);
+  const [lbTopics, setLbTopics]     = useState<LeaderboardItem[]>([]);
+
   // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [annSaving, setAnnSaving] = useState(false);
@@ -341,7 +347,7 @@ export default function AdminDashboard() {
   }, [calSelectedDates]);
 
   const fetchAll = async () => {
-    const [consultData, schedData, profData, usersData, adminsData, calData, annData, termData] = await Promise.all([
+    const [consultData, schedData, profData, usersData, adminsData, calData, annData, termData, lbP, lbS, lbT] = await Promise.all([
       api.get('/api/consultations', token!),
       api.get('/api/schedules/all', token!),
       api.get('/api/reports/professors', token!),
@@ -350,6 +356,9 @@ export default function AdminDashboard() {
       api.get('/api/calendar', token!),
       fetch(`${API_URL}/api/announcements`).then(r => r.ok ? r.json() : []).catch(() => []),
       api.get('/api/settings/term', token!),
+      api.get('/api/leaderboard/professors', token!),
+      api.get('/api/leaderboard/students', token!),
+      api.get('/api/leaderboard/topics', token!),
     ]);
 
     const list: Consultation[] = Array.isArray(consultData) ? consultData : [];
@@ -365,6 +374,9 @@ export default function AdminDashboard() {
       setTerm(built);
       setTermForm(termData as RawTermConfig);
     }
+    setLbProfs(Array.isArray(lbP) ? lbP.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
+    setLbStudents(Array.isArray(lbS) ? lbS.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
+    setLbTopics(Array.isArray(lbT) ? lbT : []);
     setLoading(false);
   };
 
@@ -459,20 +471,23 @@ export default function AdminDashboard() {
   };
 
   // Tab counts for consultations
-  const consultTabCounts = {
+  const consultTabCounts = useMemo(() => ({
     all: consultations.length,
-    pending: consultations.filter(c => ['pending', 'confirmed', 'rescheduled'].includes(c.status)).length,
-    missed: consultations.filter(c => ['cancelled', 'missed'].includes(c.status)).length,
-    completed: consultations.filter(c => c.status === 'completed').length,
-  };
+    pending: consultations.filter(c => ['pending', 'confirmed', 'rescheduled'].includes((c.status ?? '').toLowerCase().trim())).length,
+    missed: consultations.filter(c => (c.status ?? '').toLowerCase().trim() === 'missed').length,
+    completed: consultations.filter(c => (c.status ?? '').toLowerCase().trim() === 'completed').length,
+    cancelled: consultations.filter(c => (c.status ?? '').toLowerCase().trim() === 'cancelled').length,
+  }), [consultations]);
 
   // Filtered consultations
-  const filteredConsultations = consultations.filter(c => {
+  const filteredConsultations = useMemo(() => consultations.filter(c => {
+    const status = (c.status ?? '').toLowerCase().trim();
     const tabMatch =
       statusFilter === 'all' ? true :
-      statusFilter === 'pending' ? ['pending', 'confirmed', 'rescheduled'].includes(c.status) :
-      statusFilter === 'missed' ? ['cancelled', 'missed'].includes(c.status) :
-      statusFilter === 'completed' ? c.status === 'completed' :
+      statusFilter === 'pending' ? ['pending', 'confirmed', 'rescheduled'].includes(status) :
+      statusFilter === 'missed' ? status === 'missed' :
+      statusFilter === 'completed' ? status === 'completed' :
+      statusFilter === 'cancelled' ? status === 'cancelled' :
       true;
     if (!tabMatch) return false;
     if (search) {
@@ -485,7 +500,7 @@ export default function AdminDashboard() {
       ) return false;
     }
     return true;
-  });
+  }), [consultations, statusFilter, search]);
 
   const filteredUsers = users
     .filter(u => {
@@ -717,6 +732,11 @@ export default function AdminDashboard() {
 
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
 
+  const btnPrimary = 'bg-[linear-gradient(135deg,#C8102E,#9B0E24)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(200,16,46,0.4)] shadow-[0_2px_8px_rgba(200,16,46,0.2)]';
+  const btnSecondary = 'border-2 border-[#C8102E] text-[#C8102E] bg-transparent font-medium rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#C8102E,#9B0E24)] hover:text-white hover:border-transparent';
+  const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]';
+  const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
+
   return (
     <div className={`min-h-screen flex ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
 
@@ -757,6 +777,7 @@ export default function AdminDashboard() {
                     { key: 'pending',   label: 'Pending',   color: 'text-amber-400'   },
                     { key: 'missed',    label: 'Missed',    color: 'text-red-400'     },
                     { key: 'completed', label: 'Completed', color: 'text-emerald-400' },
+                    { key: 'cancelled', label: 'Cancelled', color: 'text-rose-400'    },
                   ] as const).map(t => (
                     <button key={t.key} onClick={() => setStatusFilter(t.key)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -848,7 +869,7 @@ export default function AdminDashboard() {
                     <p className="text-gray-500 text-sm mt-1">Approve registrations, add or remove accounts</p>
                   </div>
                   <button onClick={() => setShowAddUser(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20 sm:flex-shrink-0 min-h-[44px] sm:min-h-0">
+                    className={`flex items-center justify-center gap-2 px-4 py-2 text-sm sm:flex-shrink-0 min-h-[44px] sm:min-h-0 ${btnPrimary}`}>
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                     Add Account
                   </button>
@@ -908,11 +929,11 @@ export default function AdminDashboard() {
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <button onClick={() => handleApprove(u.id)}
-                              className="px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors min-h-[40px] sm:min-h-0">
+                              className={`px-3 py-2 sm:py-1.5 text-xs min-h-[40px] sm:min-h-0 ${btnSuccess}`}>
                               Approve
                             </button>
                             <button onClick={() => handleReject(u.id)}
-                              className="px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors min-h-[40px] sm:min-h-0">
+                              className={`px-3 py-2 sm:py-1.5 text-xs min-h-[40px] sm:min-h-0 ${btnDanger}`}>
                               Reject
                             </button>
                           </div>
@@ -999,29 +1020,29 @@ export default function AdminDashboard() {
                           )}
                           {!u.is_approved && u.is_active && (
                             <button onClick={() => handleApprove(u.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                              className={`px-2.5 py-1 text-xs ${btnSuccess}`}>
                               Approve
                             </button>
                           )}
                           {u.locked_until && new Date(u.locked_until) > new Date() && (
                             <button onClick={() => handleUnlock(u.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-orange-400 hover:bg-orange-500/10 transition-colors">
+                              className={`px-2.5 py-1 text-xs ${btnSuccess}`}>
                               Unlock
                             </button>
                           )}
                           {u.is_active ? (
                             <button onClick={() => handleDeactivate(u.id, u.full_name)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-500/10 transition-colors">
+                              className={`px-2.5 py-1 text-xs ${btnDanger}`}>
                               Deactivate
                             </button>
                           ) : (
                             <button onClick={() => handleActivate(u.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                              className={`px-2.5 py-1 text-xs ${btnSuccess}`}>
                               Activate
                             </button>
                           )}
                           <button onClick={() => handleDeleteUser(u.id, u.full_name)}
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors">
+                            className={`px-2.5 py-1 text-xs ${btnDanger}`}>
                             Delete
                           </button>
                         </div>
@@ -1067,9 +1088,9 @@ export default function AdminDashboard() {
                         {addError && <p className="text-red-400 text-xs">{addError}</p>}
                         <div className="flex gap-2 pt-1">
                           <button onClick={() => { setShowAddUser(false); setAddError(''); }}
-                            className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+                            className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
                           <button onClick={handleAddUser} disabled={addLoading}
-                            className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50">
+                            className={`flex-1 py-2 text-sm disabled:opacity-50 ${btnPrimary}`}>
                             {addLoading ? 'Creating…' : 'Create Account'}
                           </button>
                         </div>
@@ -1102,9 +1123,9 @@ export default function AdminDashboard() {
                       {transferError && <p className="text-red-400 text-xs mb-3">{transferError}</p>}
                       <div className="flex gap-2">
                         <button onClick={() => { setShowTransfer(false); setTransferError(''); }}
-                          className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
+                          className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
                         <button onClick={handleTransferAdmin}
-                          className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors">
+                          className={`flex-1 py-2 text-sm ${btnPrimary}`}>
                           Promote
                         </button>
                       </div>
@@ -1484,7 +1505,7 @@ export default function AdminDashboard() {
                         setTimeout(() => setTermSuccess(false), 3000);
                       }}
                       disabled={termSaving}
-                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-50"
+                      className={`px-4 py-2 text-sm disabled:opacity-50 ${btnPrimary}`}
                     >
                       {termSaving ? 'Saving…' : 'Save Term Settings'}
                     </button>
@@ -1586,10 +1607,10 @@ export default function AdminDashboard() {
                           setAnnError(null);
                           setAnnFormOpen(f => !f);
                         }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium ${
                           annFormOpen
-                            ? 'bg-white/10 text-gray-300 hover:bg-white/15'
-                            : 'bg-[#CC0000] text-white hover:bg-[#aa0000]'
+                            ? 'rounded-[10px] bg-white/10 text-gray-300 hover:bg-white/15 transition-all duration-200'
+                            : btnPrimary
                         }`}
                       >
                         {annFormOpen ? (
@@ -1654,7 +1675,7 @@ export default function AdminDashboard() {
                         <button
                           onClick={handleSaveAnn}
                           disabled={annSaving || !annForm.title.trim() || !annForm.body.trim()}
-                          className="w-full py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-40"
+                          className={`w-full py-2 text-xs disabled:opacity-40 ${btnPrimary}`}
                         >
                           {annSaving ? 'Saving…' : annEditId ? 'Update Announcement' : 'Post Announcement'}
                         </button>
@@ -1740,13 +1761,13 @@ export default function AdminDashboard() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => { setAnnDeleteId(null); setAnnError(null); }}
-                          className="flex-1 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-300 hover:bg-white/10 transition-colors"
+                          className={`flex-1 py-2 text-xs ${btnSecondary}`}
                         >
                           Cancel
                         </button>
                         <button
                           onClick={handleDeleteAnn}
-                          className="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          className={`flex-1 py-2 text-xs ${btnDanger}`}
                         >
                           Delete
                         </button>
@@ -1755,6 +1776,17 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* ── Leaderboards ── */}
+            {tab === 'home' && (
+              <div className="px-4 sm:px-6 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <LeaderboardCard title="Top Professors" items={lbProfs} isDark={isDark} />
+                  <LeaderboardCard title="Top Students"   items={lbStudents} isDark={isDark} />
+                  <LeaderboardCard title="Top Topics"     items={lbTopics} isDark={isDark} />
+                </div>
+              </div>
             )}
 
             {/* ── Calendar ── */}
@@ -2258,7 +2290,7 @@ export default function AdminDashboard() {
                                 <button
                                   onClick={() => handleSaveDate(calSingle!, detailWeek)}
                                   disabled={isSaving || !hasPendingChanges}
-                                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors disabled:opacity-30"
+                                  className={`w-full py-2.5 text-sm disabled:opacity-30 ${btnPrimary}`}
                                 >
                                   {isSaving ? 'Saving…' : hasPendingChanges ? 'Save Changes' : 'No Changes'}
                                 </button>

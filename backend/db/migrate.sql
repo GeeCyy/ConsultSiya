@@ -5,10 +5,10 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS nature_of_advising_specify TE
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS uploaded_form_path VARCHAR(255);
 ALTER TABLE consultation_details ADD COLUMN IF NOT EXISTS referral_specify TEXT;
 
--- Add rescheduled status to consultations
+-- Add rescheduled + missed status to consultations
 ALTER TABLE consultations DROP CONSTRAINT IF EXISTS consultations_status_check;
 ALTER TABLE consultations ADD CONSTRAINT consultations_status_check
-  CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'rescheduled'));
+  CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'rescheduled', 'missed'));
 
 -- Add location to schedules (for F2F meeting rooms)
 ALTER TABLE schedules ADD COLUMN IF NOT EXISTS location TEXT;
@@ -80,6 +80,33 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TR
 
 -- Professor cancel reason (why the professor cancelled the consultation)
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+
+-- Remove duplicate active bookings, keeping the earliest per (student, professor, date, time)
+DELETE FROM consultations a
+USING consultations b
+WHERE a.id > b.id
+  AND a.student_id = b.student_id
+  AND a.professor_id = b.professor_id
+  AND a.date = b.date
+  AND a.time IS NOT DISTINCT FROM b.time
+  AND a.status IN ('pending', 'confirmed', 'rescheduled');
+
+-- Prevent a student from submitting the same booking twice (race condition / double-click)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_consultation_active
+  ON consultations (student_id, professor_id, date, time)
+  WHERE status IN ('pending', 'confirmed', 'rescheduled');
+
+-- Professor class schedule blocker: times the professor is unavailable (e.g. class schedule)
+CREATE TABLE IF NOT EXISTS professor_blocked_times (
+  id           SERIAL PRIMARY KEY,
+  professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE,
+  day_of_week  VARCHAR(10),   -- 'Monday'..'Saturday' for recurring blocks
+  specific_date DATE,         -- for one-time blocks
+  start_time   TIME NOT NULL,
+  end_time     TIME NOT NULL,
+  label        TEXT DEFAULT 'Class',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
