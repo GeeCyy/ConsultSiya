@@ -10,6 +10,7 @@ router.get('/users', authenticate, authorize('admin'), async (req, res) => {
   try {
     let query = `
       SELECT u.id, u.email, u.role, u.is_approved, u.is_active, u.created_at, u.avatar,
+        u.locked_until, u.failed_attempts,
         COALESCE(s.full_name, p.full_name) AS full_name,
         s.student_number, s.program, s.year_level,
         p.department,
@@ -142,6 +143,22 @@ router.patch('/users/:id/activate', authenticate, authorize('admin'), async (req
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
     res.json({ message: 'Account activated.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Unlock a locked account — resets failed_attempts and clears locked_until
+router.patch('/users/:id/unlock', authenticate, authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = $1 AND role != 'admin' RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    res.json({ message: 'Account unlocked.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

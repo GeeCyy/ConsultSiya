@@ -41,7 +41,7 @@ router.get('/booked-dates', authenticate, async (req, res) => {
         `SELECT date::text FROM consultations
          WHERE schedule_id = $1 AND status IN ('pending', 'confirmed') AND date >= CURRENT_DATE
          GROUP BY date
-         HAVING COUNT(*) >= $2`,
+         HAVING COUNT(DISTINCT time) >= $2`,
         [schedule_id, totalSlots]
       );
       return res.json(result.rows.map(r => r.date));
@@ -162,18 +162,6 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
         return res.status(409).json({ error: 'You already have a booking with this professor at this time.' });
       }
 
-      // Prevent two different students from taking the same professor time slot
-      const conflictCheck = await client.query(
-        `SELECT id FROM consultations
-         WHERE professor_id = $1 AND date = $2 AND time IS NOT DISTINCT FROM $3
-           AND status IN ('pending', 'confirmed')`,
-        [professor_id, date, time || null]
-      );
-      if (conflictCheck.rows.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'This time slot is already booked. Please choose a different time.' });
-      }
-
       const result = await client.query(
         `INSERT INTO consultations
          (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
@@ -208,7 +196,7 @@ router.get('/', authenticate, async (req, res) => {
         return res.status(404).json({ error: 'Professor profile not found' });
       }
       result = await pool.query(
-        `SELECT c.*, s.full_name AS student_name, s.student_number,
+        `SELECT c.*, c.date::text AS date, s.full_name AS student_name, s.student_number,
                 s.program, sch.day, sch.time_start, sch.time_end, sch.location,
                 cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
                 u.avatar AS student_avatar
@@ -231,7 +219,7 @@ router.get('/', authenticate, async (req, res) => {
         `SELECT id FROM students WHERE user_id = $1`, [req.user.id]
       );
       result = await pool.query(
-        `SELECT c.*, p.full_name AS professor_name,
+        `SELECT c.*, c.date::text AS date, p.full_name AS professor_name,
                 sch.day, sch.time_start, sch.time_end, sch.location,
                 cd.action_taken, cd.referral, cd.referral_specify, cd.remarks
          FROM consultations c
@@ -251,7 +239,7 @@ router.get('/', authenticate, async (req, res) => {
       // Admin — optional role filter via ?role=student|professor
       const { role } = req.query;
       let adminQuery = `
-        SELECT c.*, s.full_name AS student_name, p.full_name AS professor_name,
+        SELECT c.*, c.date::text AS date, s.full_name AS student_name, p.full_name AS professor_name,
                s.student_number, s.program,
                sch.day, sch.time_start, sch.time_end, sch.location,
                cd.action_taken, cd.referral, cd.referral_specify, cd.remarks

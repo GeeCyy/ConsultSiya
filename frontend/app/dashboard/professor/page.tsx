@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar from '@/components/LeftSidebar';
 import MatrixCalendar from '@/components/MatrixCalendar';
+import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 
 export type ProfessorTab = 'home' | 'schedules' | 'calendar' | 'consultations' | 'export' | 'history';
 
@@ -721,6 +722,10 @@ export default function ProfessorDashboard() {
   const [calOverrides, setCalOverrides] = useState<CalendarOverride[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
+  // Leaderboards
+  const [lbProfs, setLbProfs]   = useState<LeaderboardItem[]>([]);
+  const [lbTopics, setLbTopics] = useState<LeaderboardItem[]>([]);
+
   // Theme — mounted guard prevents server/client mismatch
   const [mounted, setMounted] = useState(false);
   const [_isDark, setIsDark] = useState(false);
@@ -795,19 +800,23 @@ export default function ProfessorDashboard() {
   const fetchAll = async () => {
     // Mark overdue consultations before loading so the list is already accurate
     await api.post('/api/consultations/mark-missed', {}, token!);
-    const [c, s, prof, ann, cal, termData] = await Promise.all([
+    const [c, s, prof, ann, cal, termData, lbP, lbT] = await Promise.all([
       api.get('/api/consultations', token!),
       api.get('/api/schedules/mine', token!),
       api.get('/api/auth/profile', token!),
       fetch(`${API_URL}/api/announcements`).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(`${API_URL}/api/calendar`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(`${API_URL}/api/settings/term`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
+      api.get('/api/leaderboard/professors', token!),
+      api.get('/api/leaderboard/topics', token!),
     ]);
     setConsultations(Array.isArray(c) ? c : []);
     setSchedules(Array.isArray(s) ? s : []);
     if (Array.isArray(ann)) setAnnouncements(ann);
     if (Array.isArray(cal)) setCalOverrides(cal);
     if (termData && !termData.error) setTerm(buildTermFromConfig(termData as RawTermConfig));
+    setLbProfs(Array.isArray(lbP) ? lbP.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
+    setLbTopics(Array.isArray(lbT) ? lbT : []);
     if (!prof.error) {
       const avatarVal = prof.avatar || null;
       setProfile({
@@ -1186,6 +1195,11 @@ export default function ProfessorDashboard() {
   const borderMid  = isDark ? 'border-white/10' : 'border-gray-200';
   const hoverBg    = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/80';
 
+  const btnPrimary = 'bg-[linear-gradient(135deg,#C8102E,#9B0E24)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(200,16,46,0.4)] shadow-[0_2px_8px_rgba(200,16,46,0.2)]';
+  const btnSecondary = 'border-2 border-[#C8102E] text-[#C8102E] bg-transparent font-medium rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#C8102E,#9B0E24)] hover:text-white hover:border-transparent';
+  const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]';
+  const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
+
   const handleTabChange = (next: ProfessorTab) => {
     setTab(next);
     router.replace(`?view=${next}`, { scroll: false });
@@ -1244,8 +1258,8 @@ export default function ProfessorDashboard() {
               {pendingSched.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingSched.location}</p>}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setShowConfirmSched(false)} className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
-              <button onClick={handleConfirmAddSchedule} className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors">Save Schedule</button>
+              <button onClick={() => setShowConfirmSched(false)} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button onClick={handleConfirmAddSchedule} className={`flex-1 py-2 text-sm ${btnPrimary}`}>Save Schedule</button>
             </div>
           </div>
         </div>
@@ -1268,8 +1282,8 @@ export default function ProfessorDashboard() {
               />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setEditLinkConsult(null); setEditLinkInput(''); }} className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
-              <button onClick={handleSaveMeetingLink} className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors">Save</button>
+              <button onClick={() => { setEditLinkConsult(null); setEditLinkInput(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button onClick={handleSaveMeetingLink} className={`flex-1 py-2 text-sm ${btnPrimary}`}>Save</button>
             </div>
           </div>
         </div>
@@ -1292,8 +1306,8 @@ export default function ProfessorDashboard() {
               />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setMeetingLinkConsult(null); setMeetingLinkInput(''); }} className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
-              <button onClick={handleConfirmWithLink} className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors">Confirm</button>
+              <button onClick={() => { setMeetingLinkConsult(null); setMeetingLinkInput(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button onClick={handleConfirmWithLink} className={`flex-1 py-2 text-sm ${btnSuccess}`}>Confirm</button>
             </div>
           </div>
         </div>
@@ -1311,8 +1325,8 @@ export default function ProfessorDashboard() {
               {pendingEdit.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingEdit.location}</p>}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setShowConfirmEdit(false)} className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">Cancel</button>
-              <button onClick={handleConfirmEditSchedule} className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors">Save Changes</button>
+              <button onClick={() => setShowConfirmEdit(false)} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button onClick={handleConfirmEditSchedule} className={`flex-1 py-2 text-sm ${btnPrimary}`}>Save Changes</button>
             </div>
           </div>
         </div>
@@ -1663,6 +1677,21 @@ export default function ProfessorDashboard() {
 
               </div>{/* /upcoming + calendar */}
 
+              {/* ── Leaderboards ── */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <LeaderboardCard
+                  title="Top Professors"
+                  items={lbProfs}
+                  highlight={profile.full_name}
+                  isDark={isDark}
+                />
+                <LeaderboardCard
+                  title="Top Topics"
+                  items={lbTopics}
+                  isDark={isDark}
+                />
+              </div>
+
             </div>
             );
           })()
@@ -1796,20 +1825,20 @@ export default function ProfessorDashboard() {
                                 onClick={() => c.mode === 'OL'
                                   ? (setMeetingLinkConsult(c), setMeetingLinkInput(''))
                                   : handleConfirm(c.id)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                                className={`px-3 py-1.5 text-xs ${btnSuccess}`}>
                                 Confirm
                               </button>
                             )}
                             <button onClick={() => openCancelModal(c)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-red-500/10 text-red-400 hover:bg-red-500/20">
+                              className={`px-3 py-1.5 text-xs ${btnDanger}`}>
                               Cancel
                             </button>
                             <button onClick={() => openRescheduleModal(c)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-orange-500/10 text-orange-400 hover:bg-orange-500/20">
+                              className={`px-3 py-1.5 text-xs ${btnPrimary}`}>
                               Reschedule
                             </button>
                             <button onClick={() => openCompleteModal(c)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#CC0000]/10 text-[#ff5555] hover:bg-[#CC0000]/20">
+                              className={`px-3 py-1.5 text-xs ${btnSuccess}`}>
                               Mark Completed
                             </button>
                           </div>
@@ -1995,7 +2024,7 @@ export default function ProfessorDashboard() {
                 </div>
                 {schedError && <p className="text-red-400 text-xs mt-2">{schedError}</p>}
                 <button onClick={handleRequestAddSchedule}
-                  className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-[#CC0000] text-white hover:bg-[#aa0000] transition-colors shadow-lg shadow-red-900/20">
+                  className={`mt-4 px-4 py-2 text-sm ${btnPrimary}`}>
                   Add Slot
                 </button>
               </div>
@@ -2035,11 +2064,11 @@ export default function ProfessorDashboard() {
                               </span>
                             )}
                             <button onClick={() => openEditModal(s)}
-                              className="px-2.5 py-1 rounded-lg text-xs text-blue-400 hover:bg-blue-500/10 transition-colors">
+                              className={`px-2.5 py-1 text-xs ${btnSecondary}`}>
                               Edit
                             </button>
                             <button onClick={() => handleDeleteSchedule(s.id)}
-                              className="px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                              className={`px-2.5 py-1 text-xs ${btnDanger}`}>
                               Remove
                             </button>
                           </div>
@@ -2164,7 +2193,7 @@ export default function ProfessorDashboard() {
               <div className={`relative flex flex-col items-center pb-8 mb-8 border-b ${borderMid}`}>
                 <button
                   onClick={() => router.push('/settings')}
-                  className="absolute top-0 right-0 px-4 py-2 rounded-lg text-xs font-semibold bg-[#CC0000] text-white hover:opacity-90 transition-opacity">
+                  className={`absolute top-0 right-0 px-4 py-2 text-xs ${btnPrimary}`}>
                   Edit Profile
                 </button>
 
@@ -2428,10 +2457,10 @@ export default function ProfessorDashboard() {
             </div>
             {completeError && <p className="text-red-400 text-xs">{completeError}</p>}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setCompletingConsult(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+              <button onClick={() => setCompletingConsult(null)} className={`flex-1 py-2.5 text-sm ${btnSecondary}`}>
                 Cancel
               </button>
-              <button onClick={handleComplete} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+              <button onClick={handleComplete} className={`flex-1 py-2.5 text-sm ${btnSuccess}`}>
                 Submit & Mark Completed
               </button>
             </div>
@@ -2478,10 +2507,10 @@ export default function ProfessorDashboard() {
             </div>
             {rescheduleError && <p className="text-red-400 text-xs">{rescheduleError}</p>}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setReschedulingConsult(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+              <button onClick={() => setReschedulingConsult(null)} className={`flex-1 py-2.5 text-sm ${btnSecondary}`}>
                 Cancel
               </button>
-              <button onClick={handleReschedule} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
+              <button onClick={handleReschedule} className={`flex-1 py-2.5 text-sm ${btnPrimary}`}>
                 Mark as Rescheduled
               </button>
             </div>
@@ -2549,10 +2578,10 @@ export default function ProfessorDashboard() {
             </div>
             {editSchedError && <p className="text-red-400 text-xs">{editSchedError}</p>}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setEditingScheduleSlot(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+              <button onClick={() => setEditingScheduleSlot(null)} className={`flex-1 py-2.5 text-sm ${btnSecondary}`}>
                 Cancel
               </button>
-              <button onClick={handleRequestEditSchedule} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+              <button onClick={handleRequestEditSchedule} className={`flex-1 py-2.5 text-sm ${btnPrimary}`}>
                 Save Changes
               </button>
             </div>
@@ -2584,10 +2613,10 @@ export default function ProfessorDashboard() {
             </div>
             {cancelError && <p className="text-red-400 text-xs">{cancelError}</p>}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setCancellingConsult(null)} className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/5 transition-colors">
+              <button onClick={() => setCancellingConsult(null)} className={`flex-1 py-2.5 text-sm ${btnSecondary}`}>
                 Back
               </button>
-              <button onClick={handleCancel} className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+              <button onClick={handleCancel} className={`flex-1 py-2.5 text-sm ${btnDanger}`}>
                 Confirm Cancellation
               </button>
             </div>
