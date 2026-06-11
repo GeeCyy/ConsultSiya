@@ -837,6 +837,7 @@ export default function ProfessorDashboard() {
   const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string } & typeof editSched | null>(null);
 
   const [downloadingForm, setDownloadingForm] = useState<number | null>(null);
+  const [viewingProof, setViewingProof]       = useState<number | null>(null);
 
   // Meeting link modal (for confirming OL consultations)
   const [meetingLinkConsult, setMeetingLinkConsult] = useState<Consultation | null>(null);
@@ -1118,6 +1119,20 @@ export default function ProfessorDashboard() {
     } finally {
       setDownloadingForm(null);
     }
+  };
+
+  const handleViewProof = async (id: number) => {
+    setViewingProof(id);
+    try {
+      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Could not open proof file.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } finally { setViewingProof(null); }
   };
 
   // Schedule add — show confirmation dialog first
@@ -2322,16 +2337,17 @@ export default function ProfessorDashboard() {
                                   View Proof
                                 </a>
                               ) : (
-                                <a
-                                  href={`${API_URL}/api/consultations/${c.id}/proof`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors">
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
+                                <button
+                                  onClick={() => handleViewProof(c.id)}
+                                  disabled={viewingProof === c.id}
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors disabled:opacity-50">
+                                  {viewingProof === c.id
+                                    ? <span className="w-3.5 h-3.5 border border-violet-400 border-t-transparent rounded-full animate-spin" />
+                                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                      </svg>}
                                   View Proof
-                                </a>
+                                </button>
                               )
                             )}
                           </div>
