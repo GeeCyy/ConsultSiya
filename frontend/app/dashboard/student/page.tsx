@@ -612,6 +612,7 @@ export default function StudentDashboard() {
   const [proofMode, setProofMode]               = useState<'file' | 'link'>('file');
   const [proofLinkValue, setProofLinkValue]     = useState('');
   const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
+  const [viewingFile, setViewingFile]           = useState<number | null>(null);
   const proofFileRef   = useRef<HTMLInputElement>(null);
   const proofUploadForId = useRef<number | null>(null);
 
@@ -850,6 +851,20 @@ export default function StudentDashboard() {
       setProofLinkValue('');
       await fetchData();
     } finally { setSubmittingProofId(null); }
+  };
+
+  const handleViewFile = async (id: number) => {
+    setViewingFile(id);
+    try {
+      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Could not open file.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } finally { setViewingFile(null); }
   };
 
   // ── Theme ──
@@ -1931,11 +1946,14 @@ export default function StudentDashboard() {
                                 View Link →
                               </a>
                             ) : (
-                              <a href={`${API_URL}/api/consultations/${c.id}/proof`}
-                                target="_blank" rel="noopener noreferrer"
-                                className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
-                                View File →
-                              </a>
+                              <button
+                                onClick={() => handleViewFile(c.id)}
+                                disabled={viewingFile === c.id}
+                                className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                {viewingFile === c.id
+                                  ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                  : 'View File →'}
+                              </button>
                             )}
                             <button
                               onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); }}
