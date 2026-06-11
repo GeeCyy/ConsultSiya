@@ -141,6 +141,7 @@ const STATUS_STYLES: Record<string, { darkBg: string; lightBg: string; darkText:
   completed:   { darkBg: 'bg-emerald-500/15', lightBg: 'bg-emerald-50',  darkText: 'text-emerald-400',  lightText: 'text-emerald-700',  dot: 'bg-emerald-500',  label: 'Completed' },
   cancelled:   { darkBg: 'bg-red-500/15',     lightBg: 'bg-red-50',      darkText: 'text-red-400',      lightText: 'text-red-700',      dot: 'bg-red-500',      label: 'Cancelled' },
   rescheduled: { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
+  missed:      { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
 };
 
 function StatusBadge({ status, isDark }: { status: string; isDark?: boolean }) {
@@ -166,238 +167,406 @@ function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: st
   );
 }
 
-// ── Academic mini-calendar (reused from professor dashboard) ──────────────────
+const MONTH_NAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const MONTH_NAMES_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+// ── Full-width Academic Calendar ─────────────────────────────────────────────
 
-const NOTE_COLORS = [
-  { id: 'indigo', dot: 'bg-indigo-400', ring: 'ring-indigo-400' },
-  { id: 'sky',    dot: 'bg-sky-400',    ring: 'ring-sky-400'    },
-  { id: 'teal',   dot: 'bg-teal-400',   ring: 'ring-teal-400'   },
-  { id: 'rose',   dot: 'bg-rose-400',   ring: 'ring-rose-400'   },
-  { id: 'amber',  dot: 'bg-amber-400',  ring: 'ring-amber-400'  },
-  { id: 'violet', dot: 'bg-violet-400', ring: 'ring-violet-400' },
-] as const;
-
-type UserNote = { id: number; date: string; note: string; color: string };
-
-function MiniCalendar({ dateLabelMap, dateColorMap, isDark, token, calOverrides }: {
+function FullCalendar({
+  consultations, schedules, dateLabelMap, dateColorMap, isDark, calOverrides, onBook, studentKey,
+}: {
+  consultations: Consultation[];
+  schedules:    Schedule[];
   dateLabelMap: Map<string, string>;
   dateColorMap: Map<string, string>;
-  isDark: boolean;
-  token: string | null;
+  isDark:       boolean;
   calOverrides: CalendarOverride[];
+  onBook:       () => void;
+  studentKey:   string;
 }) {
-  const [viewYear, setViewYear]       = useState(() => new Date().getFullYear());
-  const [viewMonth, setViewMonth]     = useState(() => new Date().getMonth());
-  const [todayStr, setTodayStr]       = useState('');
-  const [selected, setSelected]       = useState<string | null>(null);
-  const [userNotes, setUserNotes]     = useState<UserNote[]>([]);
-  const [noteDraft, setNoteDraft]     = useState('');
-  const [noteDraftColor, setNoteDraftColor] = useState('indigo');
-  const [noteSaving, setNoteSaving]   = useState(false);
-  const noteRef = useRef<HTMLDivElement>(null);
+  const [viewYear, setViewYear]   = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  const [selected, setSelected]   = useState<string | null>(null);
+  const [todayStr]                = useState(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  });
+  const detailRef   = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
+  const calColRef   = useRef<HTMLDivElement>(null);
+  const [panelMaxH, setPanelMaxH] = useState(0);
 
   useEffect(() => {
-    if (selected) {
-      requestAnimationFrame(() => {
-        noteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-    }
-  }, [selected]);
-
-  useEffect(() => {
-    const t = new Date(); t.setHours(0,0,0,0);
-    setTodayStr(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`);
+    const el = calColRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPanelMaxH(el.offsetHeight));
+    ro.observe(el);
+    setPanelMaxH(el.offsetHeight);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
-    if (!token) return;
-    fetch(`${API_URL}/api/calendar/notes`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : [])
-      .then(data => { if (Array.isArray(data)) setUserNotes(data); })
-      .catch(() => {});
-  }, [token]);
+    if (selected) {
+      requestAnimationFrame(() =>
+        calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      );
+    }
+  }, [selected]);
+
+  const storageKey = `consulta_notes_${studentKey}`;
+  const [notes, setNotes]           = useState<Record<string, string>>({});
+  const [noteDraft, setNoteDraft]   = useState('');
+  const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
-    if (!selected) { setNoteDraft(''); setNoteDraftColor('indigo'); return; }
-    const existing = userNotes.find(n => n.date === selected);
-    setNoteDraft(existing?.note ?? '');
-    setNoteDraftColor(existing?.color ?? 'indigo');
-  }, [selected, userNotes]);
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setNotes(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, [storageKey]);
+
+  useEffect(() => {
+    setNoteDraft(selected ? (notes[selected] ?? '') : '');
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveNote = () => {
+    if (!selected) return;
+    const updated = { ...notes, [selected]: noteDraft };
+    if (!noteDraft.trim()) delete updated[selected];
+    setNotes(updated);
+    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1800);
+  };
 
   const prevMonth = () => viewMonth === 0 ? (setViewMonth(11), setViewYear(y => y-1)) : setViewMonth(m => m-1);
-  const nextMonth = () => viewMonth === 11 ? (setViewMonth(0),  setViewYear(y => y+1)) : setViewMonth(m => m+1);
-
-  const handleSaveNote = async () => {
-    if (!token || !selected || !noteDraft.trim()) return;
-    setNoteSaving(true);
-    try {
-      const res = await fetch(`${API_URL}/api/calendar/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date: selected, note: noteDraft.trim(), color: noteDraftColor }),
-      });
-      if (res.ok) {
-        const saved: UserNote = await res.json();
-        setUserNotes(prev => [...prev.filter(n => n.date !== selected), saved]);
-      }
-    } finally { setNoteSaving(false); }
-  };
-
-  const handleDeleteNote = async (noteId: number) => {
-    if (!token) return;
-    const res = await fetch(`${API_URL}/api/calendar/notes/${noteId}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) setUserNotes(prev => prev.filter(n => n.id !== noteId));
-  };
+  const nextMonth = () => viewMonth === 11 ? (setViewMonth(0), setViewYear(y => y+1)) : setViewMonth(m => m+1);
+  const goToday   = () => { const n = new Date(); setViewYear(n.getFullYear()); setViewMonth(n.getMonth()); setSelected(todayStr); };
 
   const firstDow    = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const monthPfx    = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
 
-  const augmented  = new Map(dateLabelMap);
-  const augColors  = new Map(dateColorMap);
+  const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  const consultByDate = new Map<string, Consultation[]>();
+  for (const c of consultations) {
+    const d = c.date?.slice(0,10);
+    if (!d) continue;
+    if (!consultByDate.has(d)) consultByDate.set(d, []);
+    consultByDate.get(d)!.push(c);
+  }
+
+  const schedulesForDate = (dateStr: string): Schedule[] => {
+    const dow = DOW_NAMES[new Date(dateStr + 'T12:00:00').getDay()];
+    return schedules.filter(s => {
+      if (!s.is_available) return false;
+      if (s.date) return s.date.slice(0,10) === dateStr;
+      return s.day === dow;
+    });
+  };
+
   const blockedMap = new Map(
     calOverrides.filter(o => o.type === 'blocked_date' && o.date)
       .map(o => [o.date!, o.label ?? o.value ?? 'No Class'])
   );
-  const noteMap = new Map(userNotes.map(n => [n.date, n]));
 
-  const dotCls: Record<string, string> = {
-    red: 'bg-red-500', orange: 'bg-orange-400', blue: 'bg-blue-500',
-    green: 'bg-emerald-500', yellow: 'bg-yellow-400', purple: 'bg-purple-500',
+  const statusDotCls: Record<string, string> = {
+    pending:     'bg-amber-400',
+    confirmed:   'bg-blue-400',
+    completed:   'bg-emerald-400',
+    cancelled:   'bg-red-400',
+    rescheduled: 'bg-orange-400',
+  };
+  const evDotCls: Record<string, string> = {
+    red: 'bg-red-400', orange: 'bg-orange-400', blue: 'bg-blue-400',
+    green: 'bg-emerald-400', yellow: 'bg-yellow-400', purple: 'bg-purple-400',
   };
 
-  const card = isDark ? 'bg-[#252525] border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white border-gray-200 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
-  const tp   = isDark ? 'text-white' : 'text-gray-900';
-  const ts   = isDark ? 'text-gray-400' : 'text-gray-500';
-  const tm   = isDark ? 'text-gray-400' : 'text-gray-500';
+  const cardCls = isDark
+    ? 'bg-[#1e1f22] border-white/[0.06] shadow-[0_24px_80px_rgba(0,0,0,0.90),0_8px_32px_rgba(0,0,0,0.70),0_2px_8px_rgba(0,0,0,0.50)]'
+    : 'bg-white border-gray-200/80 shadow-[0_24px_80px_rgba(0,0,0,0.22),0_8px_32px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.08)]';
+  const tp = isDark ? 'text-white'    : 'text-gray-900';
+  const tm = isDark ? 'text-gray-400' : 'text-gray-500';
 
-  const events = Array.from(augmented.entries()).filter(([d]) => d.startsWith(monthPfx)).sort(([a],[b]) => a.localeCompare(b));
-  const blockedEvents = Array.from(blockedMap.entries()).filter(([d]) => d.startsWith(monthPfx) && !augmented.has(d)).sort(([a],[b]) => a.localeCompare(b));
-  const existingNote = selected ? noteMap.get(selected) : undefined;
-  const noteChanged  = selected ? (noteDraft.trim() !== (existingNote?.note ?? '') || noteDraftColor !== (existingNote?.color ?? 'indigo')) : false;
+  const selConsults     = selected ? (consultByDate.get(selected) ?? []) : [];
+  const selSlots        = selected ? schedulesForDate(selected) : [];
+  const selLabel        = selected ? dateLabelMap.get(selected) : undefined;
+  const selIsBlocked    = selected ? blockedMap.has(selected) : false;
+  const selBlockedLabel = selected ? blockedMap.get(selected) : undefined;
+  const selDateObj      = selected ? new Date(selected + 'T12:00:00') : null;
 
   return (
-    <div className={`rounded-2xl border p-5 ${card}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <span className={`text-base font-bold ${tp}`}>{MONTH_NAMES_FULL[viewMonth]} {viewYear}</span>
-        <div className="flex gap-1">
-          <button onClick={prevMonth} className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'hover:bg-white/8 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          </button>
-          <button onClick={nextMonth} className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'hover:bg-white/8 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
-          </button>
+    <div ref={calendarRef} className={`rounded-2xl border overflow-hidden ${cardCls}`}>
+
+      {/* ── Header ── */}
+      <div className={`flex items-center justify-between px-5 py-3.5 border-b
+        ${isDark
+          ? 'border-white/[0.06] bg-gradient-to-r from-[#252628] to-[#1e1f22]'
+          : 'border-gray-200/70 bg-gradient-to-r from-white to-gray-50/80'
+        }`}>
+        <div className="flex items-center gap-3">
+          <div>
+            <span className={`text-lg font-bold tracking-tight ${tp}`}>{MONTH_NAMES_FULL[viewMonth]}</span>
+            <span className={`text-lg font-light ml-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{viewYear}</span>
+          </div>
+          <button onClick={goToday} className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors ${
+            isDark
+              ? 'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20'
+              : 'bg-sky-50 text-sky-600 border-sky-200 hover:bg-sky-100'
+          }`}>Today</button>
         </div>
-      </div>
-
-      {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 mb-1.5">
-        {['SUN','MON','TUE','WED','THU','FRI','SAT'].map(d => (
-          <div key={d} className={`text-center text-[10px] font-semibold tracking-wide ${tm} py-1`}>{d}</div>
-        ))}
-      </div>
-
-      {/* Day grid — larger cells */}
-      <div className="grid grid-cols-7 gap-1">
-        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
-        {Array.from({ length: daysInMonth }, (_, i) => {
-          const day = i + 1;
-          const ds  = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-          const isT   = ds === todayStr;
-          const isSel = ds === selected;
-          const isBlocked = blockedMap.has(ds);
-          const evColor   = augColors.get(ds);
-          const userNote  = noteMap.get(ds);
-          const nc = userNote ? (NOTE_COLORS.find(c => c.id === userNote.color) ?? NOTE_COLORS[0]) : null;
-          return (
-            <button key={ds} onClick={() => setSelected(isSel ? null : ds)}
-              className={`relative flex flex-col items-center py-1 rounded-lg transition-colors ${
-                isBlocked ? 'bg-red-500/15' :
-                isSel && !isT ? (isDark ? 'bg-white/10' : 'bg-gray-100') :
-                !isT ? (isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50') : ''
-              }`}>
-              <div className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium ${
-                isT ? 'bg-[#0EA5E9] text-white font-bold shadow-md shadow-sky-500/30' :
-                isBlocked ? 'text-red-400' :
-                isDark ? 'text-gray-300' : 'text-gray-700'
-              }`}>{day}</div>
-              <div className="flex gap-0.5 mt-0.5 h-1.5">
-                {evColor && <div className={`w-1 h-1 rounded-full ${dotCls[evColor] ?? 'bg-red-500'}`} />}
-                {!evColor && isBlocked && <div className="w-1 h-1 rounded-full bg-red-400" />}
-                {nc && <div className={`w-1 h-1 rounded-full ${nc.dot}`} />}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Events this month */}
-      {(events.length > 0 || blockedEvents.length > 0) && (
-        <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} space-y-2`}>
-          <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>This Month</p>
-          {events.slice(0, 5).map(([date, label]) => {
-            const d = new Date(date + 'T12:00:00');
-            const c = augColors.get(date) ?? 'red';
-            return (
-              <div key={date} className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls[c] ?? 'bg-red-500'}`} />
-                <span className={`text-xs ${tm}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
-                <span className={`text-xs font-medium truncate ${date === todayStr ? 'text-[#0EA5E9]' : ts}`}>{date === todayStr ? 'Today' : label}</span>
-              </div>
-            );
-          })}
-          {blockedEvents.map(([date, label]) => {
-            const d = new Date(date + 'T12:00:00');
-            return (
-              <div key={date} className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-400" />
-                <span className={`text-xs ${tm}`}>{MONTH_NAMES_SHORT[d.getMonth()]} {d.getDate()}</span>
-                <span className="text-xs font-medium text-red-400 truncate">{label}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Note editor */}
-      {selected && token && (
-        <div ref={noteRef} className={`mt-4 pt-4 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-          <p className={`text-xs font-bold mb-2 ${tp}`}>
-            Note — {MONTH_NAMES_SHORT[parseInt(selected.slice(5,7))-1]} {parseInt(selected.slice(8,10))}
-          </p>
-          <textarea rows={3} value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
-            placeholder="Add a personal note for this date…"
-            className={`w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none resize-none placeholder-gray-400 ${
-              isDark ? 'bg-[#1e1f22] border-white/10 text-white focus:border-indigo-500/50' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-indigo-400'
-            }`} />
-          <div className="flex items-center gap-2 mt-2.5">
-            {NOTE_COLORS.map(c => (
-              <button key={c.id} type="button" onClick={() => setNoteDraftColor(c.id)}
-                className={`w-4 h-4 rounded-full ${c.dot} transition-transform ${
-                  noteDraftColor === c.id ? `scale-125 ring-2 ${c.ring} ring-offset-1 ${isDark ? 'ring-offset-[#252525]' : 'ring-offset-white'}` : 'hover:scale-110'
-                }`} />
+        <div className="flex items-center gap-4">
+          <div className={`hidden md:flex items-center gap-3 text-[10px] font-medium ${tm}`}>
+            {([
+              { label: 'Pending',   cls: 'bg-amber-400',   shadow: 'shadow-amber-400/60'   },
+              { label: 'Confirmed', cls: 'bg-blue-400',    shadow: 'shadow-blue-400/60'    },
+              { label: 'Completed', cls: 'bg-emerald-400', shadow: 'shadow-emerald-400/60' },
+              { label: 'Cancelled', cls: 'bg-red-400',     shadow: 'shadow-red-400/60'     },
+              { label: 'Available', cls: 'bg-sky-400',     shadow: 'shadow-sky-400/60'     },
+              { label: 'Note',      cls: 'bg-violet-400',  shadow: 'shadow-violet-400/60'  },
+            ] as const).map(l => (
+              <span key={l.label} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full shadow-sm ${l.cls} ${l.shadow}`} />
+                {l.label}
+              </span>
             ))}
           </div>
-          <div className="flex gap-2 mt-3">
-            {existingNote && (
-              <button onClick={() => handleDeleteNote(existingNote.id)}
-                className={`flex-1 py-2 rounded-xl text-xs border transition-colors text-red-400 border-red-500/20 ${isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-50'}`}>
-                Delete
-              </button>
-            )}
-            <button onClick={handleSaveNote} disabled={noteSaving || !noteDraft.trim() || !noteChanged}
-              className="flex-1 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {noteSaving ? 'Saving…' : existingNote ? 'Update Note' : 'Save Note'}
+          <div className={`flex gap-0.5 p-0.5 rounded-lg ${isDark ? 'bg-white/[0.05]' : 'bg-gray-100'}`}>
+            <button onClick={prevMonth} className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-white' : 'hover:bg-white text-gray-500 hover:text-gray-800 hover:shadow-sm'}`}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button onClick={nextMonth} className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-white' : 'hover:bg-white text-gray-500 hover:text-gray-800 hover:shadow-sm'}`}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
             </button>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Body ── */}
+      <div className="flex flex-col lg:flex-row">
+
+        {/* Calendar grid */}
+        <div ref={calColRef} className="flex-1 min-w-0">
+          <div className={`grid grid-cols-7 border-b-2 ${isDark ? 'border-white/[0.08] bg-[#17181a]' : 'border-gray-300 bg-gray-50/70'}`}>
+            {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+              <div key={d} className={`text-center text-[10px] font-bold tracking-widest uppercase py-2.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{d}</div>
+            ))}
+          </div>
+
+          <div className={`grid grid-cols-7 divide-x divide-y ${isDark ? 'divide-white/[0.08]' : 'divide-gray-300'}`}>
+            {Array.from({ length: firstDow }, (_, i) => (
+              <div key={`e${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1;
+              const ds  = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+              const isT            = ds === todayStr;
+              const isSel          = ds === selected;
+              const isBlocked      = blockedMap.has(ds);
+              const dayConsults    = consultByDate.get(ds) ?? [];
+              const hasSlots       = schedulesForDate(ds).length > 0;
+              const evColor        = dateColorMap.get(ds);
+              const evLabel        = dateLabelMap.get(ds);
+              const uniqueStatuses = [...new Set(dayConsults.map(c => c.status))];
+              const hasNote        = !!notes[ds];
+
+              return (
+                <button key={ds} onClick={() => setSelected(isSel ? null : ds)}
+                  className={`min-h-[88px] p-2 text-left flex flex-col transition-all duration-150 focus:outline-none group ${
+                    isBlocked
+                      ? isDark ? 'bg-red-950/30 hover:bg-red-950/40' : 'bg-red-50/70 hover:bg-red-50'
+                      : isSel
+                      ? isDark ? 'bg-sky-500/[0.15] ring-1 ring-inset ring-sky-500/40' : 'bg-sky-50/90 ring-1 ring-inset ring-sky-300/60'
+                      : isT
+                      ? isDark ? 'bg-sky-500/[0.07] hover:bg-sky-500/[0.12]' : 'bg-sky-50/60 hover:bg-sky-50/90'
+                      : isDark ? 'hover:bg-white/[0.025]' : 'hover:bg-blue-50/30'
+                  }`}>
+                  <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold transition-all ${
+                    isT
+                      ? 'bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-lg shadow-sky-500/40'
+                      : isBlocked
+                      ? isDark ? 'text-red-400' : 'text-red-500'
+                      : isSel
+                      ? isDark ? 'text-sky-300' : 'text-sky-700'
+                      : isDark ? 'text-gray-300 group-hover:text-white' : 'text-gray-600 group-hover:text-gray-900'
+                  }`}>{day}</div>
+
+                  {(evLabel || (isBlocked && !evLabel)) && (
+                    <p className={`text-[9px] font-semibold leading-tight truncate w-full mt-1 ${
+                      isBlocked ? isDark ? 'text-red-400' : 'text-red-500'
+                      : evColor === 'blue'   ? 'text-blue-400'
+                      : evColor === 'green'  ? 'text-emerald-400'
+                      : evColor === 'yellow' ? 'text-amber-400'
+                      : isDark ? 'text-red-400' : 'text-red-500'
+                    }`}>{evLabel ?? blockedMap.get(ds)}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-[3px] mt-auto pt-1">
+                    {uniqueStatuses.map(st => (
+                      <span key={st} title={st} className={`w-[7px] h-[7px] rounded-full shadow-sm ${statusDotCls[st] ?? 'bg-gray-400'}`} />
+                    ))}
+                    {hasSlots  && <span title="Professor available" className="w-[7px] h-[7px] rounded-full shadow-sm bg-sky-400 shadow-sky-400/50" />}
+                    {!isBlocked && evColor && <span className={`w-[7px] h-[7px] rounded-full shadow-sm ${evDotCls[evColor] ?? 'bg-red-400'}`} />}
+                    {hasNote   && <span title="Has note" className="w-[7px] h-[7px] rounded-full shadow-sm bg-violet-400 shadow-violet-400/50" />}
+                  </div>
+                </button>
+              );
+            })}
+            {Array.from({ length: (7 - ((firstDow + daysInMonth) % 7)) % 7 }, (_, i) => (
+              <div key={`t${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Detail panel ── */}
+        {selected && (
+          <div ref={detailRef}
+            style={panelMaxH > 0 ? { height: `${panelMaxH}px` } : undefined}
+            className={`w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 border-t lg:border-t-0 lg:border-l flex flex-col overflow-y-auto scroll-smooth
+            ${isDark
+              ? 'border-white/[0.06] bg-[#17181a]'
+              : 'border-gray-100 bg-gray-50/60'
+            }`}>
+
+              <div className={`sticky top-0 z-10 relative px-4 pt-4 pb-3 border-b
+                ${isDark ? 'border-white/[0.06] bg-[#17181a]' : 'border-gray-100/80 bg-gray-50 backdrop-blur-sm'}`}>
+                <div className={`absolute top-0 left-0 right-0 h-[3px] ${
+                  selIsBlocked
+                    ? 'bg-gradient-to-r from-red-500 to-red-400'
+                    : 'bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500'
+                }`} />
+                <div className="flex items-start justify-between gap-2 mt-1">
+                  <div className="min-w-0">
+                    <p className={`text-[11px] font-bold uppercase tracking-widest ${isDark ? 'text-sky-400' : 'text-sky-600'} ${selIsBlocked ? (isDark ? '!text-red-400' : '!text-red-500') : ''}`}>
+                      {selDateObj?.toLocaleDateString('en-PH', { weekday: 'long' })}
+                    </p>
+                    <p className={`text-xl font-extrabold leading-tight mt-0.5 ${tp}`}>
+                      {selDateObj?.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                      <span className={`text-sm font-normal ml-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {selDateObj?.getFullYear()}
+                      </span>
+                    </p>
+                    {(selLabel || selBlockedLabel) && (
+                      <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        selIsBlocked
+                          ? isDark ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-200'
+                          : isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {selIsBlocked ? '🚫' : '🗓'} {selLabel ?? selBlockedLabel}
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={() => setSelected(null)}
+                    className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg transition-colors text-[11px] font-bold ${isDark ? 'hover:bg-white/10 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-600'}`}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-4 pt-3.5 pb-2">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <span className="w-1.5 h-3.5 rounded-full bg-blue-500 flex-shrink-0" />
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    My Consultations{selConsults.length > 0 ? <span className={`ml-1.5 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>{selConsults.length}</span> : ''}
+                  </p>
+                </div>
+                {selConsults.length === 0 ? (
+                  <p className={`text-[11px] ${tm} py-1 pl-3.5`}>No consultations.</p>
+                ) : (
+                  <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/[0.05] bg-white/[0.03] border border-white/[0.05]' : 'divide-gray-100 bg-white border border-gray-200/80 shadow-sm'}`}>
+                    {selConsults.map(c => (
+                      <div key={c.id} className={`flex items-center gap-2.5 px-3 py-2.5 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}>
+                        <Avatar name={c.professor_name} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.professor_name}</p>
+                          <p className={`text-[10px] ${tm}`}>
+                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {c.mode === 'F2F' ? 'In-Person' : 'Online'}
+                          </p>
+                        </div>
+                        <StatusBadge status={c.status} isDark={isDark} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="px-4 pt-2 pb-3">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <span className="w-1.5 h-3.5 rounded-full bg-sky-400 flex-shrink-0" />
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Prof. Availability{selSlots.length > 0 ? <span className={`ml-1.5 font-bold px-1.5 py-0.5 rounded-full text-[9px] ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-100 text-sky-600'}`}>{selSlots.length}</span> : ''}
+                  </p>
+                </div>
+                {selSlots.length === 0 ? (
+                  <p className={`text-[11px] ${tm} py-1 pl-3.5`}>No available slots.</p>
+                ) : (
+                  <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/[0.05] bg-white/[0.03] border border-white/[0.05]' : 'divide-gray-100 bg-white border border-gray-200/80 shadow-sm'}`}>
+                    {selSlots.map(s => {
+                      const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
+                        .map(r => `${formatTime12(r.time_start.slice(0,5))} – ${formatTime12(r.time_end.slice(0,5))}`)
+                        .join(', ');
+                      return (
+                        <div key={s.id} className={`flex items-center gap-2.5 px-3 py-2.5 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}>
+                          <Avatar name={s.professor_name} avatarUrl={s.professor_avatar} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[11px] font-semibold truncate ${tp}`}>{s.professor_name}</p>
+                            <p className={`text-[10px] ${tm} truncate`}>{times}{s.location ? ` · ${s.location}` : ''}</p>
+                          </div>
+                          <button onClick={onBook}
+                            className="flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 text-white hover:from-sky-500 hover:to-blue-600 transition-all shadow-md shadow-sky-500/30 hover:shadow-sky-500/50">
+                            Book
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className={`px-4 pt-3 pb-4 mt-auto border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-3.5 rounded-full bg-violet-500 flex-shrink-0" />
+                    <p className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Notes</p>
+                  </div>
+                  {savedFlash && (
+                    <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1 animate-pulse">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                      Saved
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={noteDraft}
+                  onChange={e => setNoteDraft(e.target.value)}
+                  onBlur={saveNote}
+                  placeholder="Add a note for this date…"
+                  rows={4}
+                  className={`w-full resize-none text-[11px] rounded-xl px-3 py-2.5 outline-none transition-all leading-relaxed
+                    ${isDark
+                      ? 'bg-white/[0.04] border border-white/[0.08] text-gray-200 placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.12)]'
+                      : 'bg-white border border-gray-200 text-gray-700 placeholder-gray-300 shadow-sm focus:border-violet-400 focus:shadow-[0_0_0_3px_rgba(139,92,246,0.10)]'
+                    }`}
+                />
+                <div className="flex justify-end mt-2">
+                  <button
+                    onMouseDown={e => { e.preventDefault(); saveNote(); }}
+                    className={`text-[11px] font-bold px-4 py-1.5 rounded-lg transition-all flex items-center gap-1.5
+                      ${isDark
+                        ? 'bg-gradient-to-br from-violet-500/20 to-purple-500/20 text-violet-300 hover:from-violet-500/30 hover:to-purple-500/30 border border-violet-500/25 shadow-md shadow-violet-900/30'
+                        : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 shadow-md shadow-violet-500/30 hover:shadow-violet-500/50'
+                      }`}>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+                    </svg>
+                    Save Note
+                  </button>
+                </div>
+              </div>
+
+          </div>
+        )}
+
+      </div>{/* /body */}
     </div>
   );
 }
@@ -414,6 +583,12 @@ export default function StudentDashboard() {
   // Navigation
   const [tab, setTab]             = useState<StudentTab>('home');
   const [consultTab, setConsultTab] = useState<'active' | 'past'>('active');
+
+  // Book tab filters
+  const [bookSearch, setBookSearch]       = useState('');
+  const [bookDeptFilter, setBookDeptFilter] = useState<'all' | 'IT' | 'CS' | 'Other'>('all');
+  const [bookSortBy, setBookSortBy]       = useState<'slots' | 'date'>('slots');
+  const [bookExpandedId, setBookExpandedId] = useState<number | null>(null);
 
   // Data
   const [schedules, setSchedules]         = useState<Schedule[]>([]);
@@ -441,6 +616,8 @@ export default function StudentDashboard() {
   // Leaderboards
   const [lbStudents, setLbStudents] = useState<LeaderboardItem[]>([]);
   const [lbProfs, setLbProfs]       = useState<LeaderboardItem[]>([]);
+  const [lbView, setLbView]         = useState<'rankings' | 'consulted'>('rankings');
+  const [myTopics, setMyTopics]     = useState<{ label: string; count: number }[]>([]);
 
   // Theme — mounted guard prevents server/client mismatch
   const [mounted, setMounted] = useState(false);
@@ -488,7 +665,7 @@ export default function StudentDashboard() {
   }, [authReady]);
 
   const fetchData = async () => {
-    const [sched, consult, prof, ann, cal, termData, lbS, lbP, notifSettings] = await Promise.all([
+    const [sched, consult, prof, ann, cal, termData, lbS, lbP, notifSettings, topicsData] = await Promise.all([
       api.get('/api/schedules', token!),
       api.get('/api/consultations', token!),
       api.get('/api/auth/profile', token!),
@@ -498,6 +675,7 @@ export default function StudentDashboard() {
       api.get('/api/leaderboard/students', token!),
       api.get('/api/leaderboard/professors', token!),
       fetch(`${API_URL}/api/settings/notifications`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
+      api.get('/api/consultations/my-topics', token!),
     ]);
     const today = new Date().toISOString().slice(0, 10);
     setSchedules((Array.isArray(sched) ? sched : []).filter(s => !s.date || s.date >= today));
@@ -569,6 +747,7 @@ export default function StudentDashboard() {
     }
     setLbStudents(Array.isArray(lbS) ? lbS.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
     setLbProfs(Array.isArray(lbP) ? lbP.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
+    setMyTopics(Array.isArray(topicsData) ? topicsData : []);
     setLoading(false);
   };
 
@@ -669,7 +848,15 @@ export default function StudentDashboard() {
 
   // My Consultations tab grouping
   const activeTabConsultations = consultations.filter(c => ['pending', 'confirmed', 'rescheduled'].includes(c.status));
-  const pastTabConsultations   = consultations.filter(c => ['completed', 'cancelled'].includes(c.status));
+  const pastTabConsultations   = consultations.filter(c => ['completed', 'cancelled', 'missed'].includes(c.status));
+
+  const recentConsultations = [...consultations]
+    .sort((a, b) => {
+      const da = (a.date || '') + (a.time || a.time_start || '');
+      const db = (b.date || '') + (b.time || b.time_start || '');
+      return db.localeCompare(da);
+    })
+    .slice(0, 3);
 
   // Notification bell: consultations with status updates shown as proper bell notifications
   const statusNotifConsults = consultations
@@ -687,6 +874,9 @@ export default function StudentDashboard() {
   // Calendar event maps
   const dateLabelMap = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date && o.value).map(o => [o.date!, o.value!]));
   const dateColorMap = new Map(calOverrides.filter(o => o.type === 'date_label' && o.date).map(o => [o.date!, o.color ?? 'red']));
+
+  // Most consulted topics — sourced from /api/consultations/my-topics (all statuses, all time)
+  const mostConsultedTopics = myTopics;
 
   // Style tokens
   const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white border border-sky-100 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
@@ -724,7 +914,7 @@ export default function StudentDashboard() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`min-h-screen flex ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
+    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <ConfirmModal
@@ -809,8 +999,8 @@ export default function StudentDashboard() {
             {/* ── Section 2: Stat cards + Leaderboard ── */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
 
-              {/* 4 stat cards — left */}
-              <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* 4 stat cards */}
+              <div className="lg:col-span-12 grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {([
                   {
                     value: allConsultsTotal,
@@ -886,46 +1076,6 @@ export default function StudentDashboard() {
                     <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{s.sub}</p>
                   </div>
                 ))}
-              </div>
-
-              {/* Leaderboard card — right */}
-              <div
-                className={`lg:col-span-4 rounded-2xl border p-4 ${card}`}
-                style={{ boxShadow: isDark
-                  ? '0 24px 64px rgba(0,0,0,0.85), 0 8px 24px rgba(0,0,0,0.65)'
-                  : '0 12px 40px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.12)' }}
-              >
-                <div className="grid grid-cols-2 gap-3 h-full">
-                  <div>
-                    <p className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${tm}`}>Top Students</p>
-                    <div className="space-y-0.5">
-                      {lbStudents.slice(0, 3).map((item, i) => {
-                        const isMe = item.label === profile.full_name;
-                        return (
-                          <div key={item.rank} className={`flex items-center gap-1.5 py-1 px-1 rounded-lg ${isMe ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50') : ''}`}>
-                            <span className="w-4 text-center text-sm leading-none flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                            <span className={`flex-1 text-[11px] truncate font-bold ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>
-                              {item.label}{isMe && <span className="ml-1 text-[10px] font-semibold opacity-70">(you)</span>}
-                            </span>
-                            <span className={`text-[11px] font-black tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : tp}`}>{item.count}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <p className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${tm}`}>Top Professors</p>
-                    <div className="space-y-0.5">
-                      {lbProfs.slice(0, 3).map((item, i) => (
-                        <div key={item.rank} className="flex items-center gap-1.5 py-1 px-1 rounded-lg">
-                          <span className="w-4 text-center text-sm leading-none flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                          <span className={`flex-1 text-[11px] truncate font-bold ${ts}`}>{item.label}</span>
-                          <span className={`text-[11px] font-black tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
               </div>
 
             </div>
@@ -1034,13 +1184,163 @@ export default function StudentDashboard() {
                   ))}
                 </div>
 
+                {/* Recent consultations */}
+                {recentConsultations.length > 0 && (
+                  <div className={`mt-4 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2.5 ${tm}`}>Recent</p>
+                    <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/[0.05] border border-white/[0.05]' : 'divide-gray-100 border border-gray-100'}`}>
+                      {recentConsultations.map(c => (
+                        <div key={c.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}>
+                          <Avatar name={c.professor_name} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-semibold truncate ${tp}`}>{c.professor_name}</p>
+                            <p className={`text-[10px] ${tm}`}>
+                              {c.date ? new Date(c.date.slice(0,10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '—'}
+                              {' · '}{formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')}
+                            </p>
+                          </div>
+                          <StatusBadge status={c.status} isDark={isDark} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               </div>
 
-              {/* Right: Quick Stats — Donut chart */}
-              <div className={`lg:col-span-4 rounded-2xl border p-5 flex flex-col ${card}`}>
-                <h3 className={`text-sm font-semibold mb-4 ${tp}`}>Quick Stats</h3>
+              {/* Right: Combined Rankings + Quick Stats */}
+              <div className={`lg:col-span-4 rounded-2xl border p-4 flex flex-col ${card}`}>
 
-                {/* SVG Donut chart */}
+                {/* ── Rankings / Most Consulted tabs ── */}
+                <div className={`flex-shrink-0 flex gap-1.5 mb-3`}>
+                  {(['rankings', 'consulted'] as const).map(v => (
+                    <button key={v} onClick={() => setLbView(v)}
+                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                        lbView === v
+                          ? isDark
+                            ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                            : 'bg-sky-50 text-sky-700 border-sky-300'
+                          : isDark
+                            ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25'
+                            : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
+                      }`}>
+                      {v === 'rankings' ? 'Rankings' : 'Most Consulted'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Tab content — fixed height so card doesn't resize on tab switch ── */}
+                <div className="flex-shrink-0 relative" style={{ minHeight: '148px' }}>
+
+                  {/* Rankings */}
+                  {lbView === 'rankings' && (
+                    <div className="absolute inset-0 grid grid-cols-2 gap-3 content-start">
+                      <div>
+                        <p className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${tm}`}>Top Students</p>
+                        <div className="space-y-0.5">
+                          {lbStudents.slice(0, 3).map((item, i) => {
+                            const isMe = item.label === profile.full_name;
+                            return (
+                              <div key={item.rank} className={`flex items-center gap-1.5 py-1 px-1 rounded-lg ${isMe ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50') : ''}`}>
+                                <span className="w-4 text-center text-sm leading-none flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
+                                <span className={`flex-1 text-[11px] truncate font-bold ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>
+                                  {item.label}{isMe && <span className="ml-1 text-[10px] font-semibold opacity-70">(you)</span>}
+                                </span>
+                                <span className={`text-[11px] font-black tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : tp}`}>{item.count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${tm}`}>Top Professors</p>
+                        <div className="space-y-0.5">
+                          {lbProfs.slice(0, 3).map((item, i) => (
+                            <div key={item.rank} className="flex items-center gap-1.5 py-1 px-1 rounded-lg">
+                              <span className="w-4 text-center text-sm leading-none flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
+                              <span className={`flex-1 text-[11px] truncate font-bold ${ts}`}>{item.label}</span>
+                              <span className={`text-[11px] font-black tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Most Consulted */}
+                  {lbView === 'consulted' && (() => {
+                    const RANK_CFG = [
+                      {
+                        medal: '🥇',
+                        border:  'border-amber-400',
+                        rowBg:   isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50',
+                        fill:    'from-amber-400 to-yellow-300',
+                        track:   isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60',
+                      },
+                      {
+                        medal: '🥈',
+                        border:  'border-slate-400',
+                        rowBg:   isDark ? 'bg-slate-400/[0.10]' : 'bg-slate-50',
+                        fill:    'from-slate-400 to-slate-300',
+                        track:   isDark ? 'bg-white/[0.07]' : 'bg-slate-200/60',
+                      },
+                      {
+                        medal: '🥉',
+                        border:  'border-orange-400',
+                        rowBg:   isDark ? 'bg-orange-400/[0.10]' : 'bg-orange-50',
+                        fill:    'from-orange-500 to-amber-400',
+                        track:   isDark ? 'bg-white/[0.07]' : 'bg-orange-200/60',
+                      },
+                    ];
+                    const top3 = mostConsultedTopics.slice(0, 3);
+                    const top = top3[0]?.count || 1;
+                    return (
+                      <div className="absolute inset-0">
+                        {/* Header */}
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-xs leading-none">🔥</span>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider ${tm}`}>Trending across all students</p>
+                        </div>
+                        {top3.length === 0 ? (
+                          <p className={`text-xs ${tm} py-1`}>No consultation data yet.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {top3.map((t, i) => {
+                              const cfg = RANK_CFG[i];
+                              const pct = Math.max(8, Math.round((t.count / top) * 100));
+                              return (
+                                <div key={t.label}
+                                  className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
+                                  <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
+                                    {/* Top row: medal + topic + count */}
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
+                                      <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
+                                      <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
+                                    </div>
+                                    {/* Progress bar */}
+                                    <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
+                                      <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`}
+                                        style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                </div>
+
+                {/* ── Divider ── */}
+                <div className={`my-3 border-t ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`} />
+
+                {/* ── Quick Stats ── */}
+                <h3 className={`text-sm font-semibold mb-3 ${tp}`}>Quick Stats</h3>
+
                 {(() => {
                   const allSegs = [
                     { label: 'Completed', value: allConsultsCompleted, color: '#10B981', darkColor: '#34D399' },
@@ -1063,8 +1363,8 @@ export default function StudentDashboard() {
                   });
                   return (
                     <>
-                      <div className="flex items-center justify-center mb-4">
-                        <div className="relative w-36 h-36">
+                      <div className="flex items-center justify-center mb-3">
+                        <div className="relative w-28 h-28">
                           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                             <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth="13"
                               stroke={isDark ? 'rgba(255,255,255,0.06)' : '#EFF6FF'} />
@@ -1084,7 +1384,7 @@ export default function StudentDashboard() {
                         </div>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {allSegs.map(seg => (
                           <div key={seg.label} className="flex items-center gap-2.5">
                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -1101,9 +1401,8 @@ export default function StudentDashboard() {
                   );
                 })()}
 
-                {/* Today's consultations */}
                 {todayConsultations.length > 0 && (
-                  <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                  <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
                     <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${tm}`}>Today</p>
                     <div className="space-y-2">
                       {todayConsultations.slice(0, 3).map(c => (
@@ -1123,75 +1422,17 @@ export default function StudentDashboard() {
 
             </div>{/* /widget grid */}
 
-            {/* ── Section 4: Upcoming table + Calendar ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-              <div className={`lg:col-span-7 rounded-2xl border overflow-hidden ${card}`}>
-                <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                  <h3 className={`text-sm font-semibold ${tp}`}>Upcoming Consultations</h3>
-                  <button onClick={() => handleTabChange('my')} className="text-xs text-[#0EA5E9] hover:text-sky-600 font-medium transition-colors">
-                    View all →
-                  </button>
-                </div>
-                {upcomingConsultations.length === 0 ? (
-                  <p className={`text-sm text-center py-10 ${tm}`}>No upcoming consultations</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[480px]">
-                      <thead>
-                        <tr className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                          {['Professor', 'Date & Time', 'Mode', 'Status'].map(h => (
-                            <th key={h} className={`text-left text-[11px] font-semibold uppercase tracking-wider px-5 py-3 ${tm}`}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
-                        {upcomingConsultations.slice(0, 7).map(c => (
-                          <tr key={c.id} className={`transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/80'}`}>
-                            <td className="px-5 py-3">
-                              <div className="flex items-center gap-2.5">
-                                <Avatar name={c.professor_name} size="sm" />
-                                <div className="min-w-0">
-                                  <p className={`text-xs font-semibold truncate ${tp}`}>{c.professor_name}</p>
-                                  <p className={`text-[10px] truncate ${tm}`}>{natureLabel(c).split(',')[0]}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-3">
-                              <p className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                {new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                              </p>
-                              <p className={`text-[10px] font-mono ${tm}`}>{formatTime12((c.time || c.time_start)?.slice(0, 5) ?? '')}</p>
-                            </td>
-                            <td className="px-5 py-3">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                c.mode === 'F2F'
-                                  ? isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-700'
-                                  : isDark ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-700'
-                              }`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</span>
-                            </td>
-                            <td className="px-5 py-3">
-                              <StatusBadge status={c.status} isDark={isDark} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <div className="lg:col-span-5">
-                <MiniCalendar
-                  dateLabelMap={dateLabelMap}
-                  dateColorMap={dateColorMap}
-                  isDark={isDark}
-                  token={token}
-                  calOverrides={calOverrides}
-                />
-              </div>
-
-            </div>{/* /upcoming + calendar */}
+            {/* ── Section 4: Full Calendar ── */}
+            <FullCalendar
+              consultations={consultations}
+              schedules={schedules}
+              dateLabelMap={dateLabelMap}
+              dateColorMap={dateColorMap}
+              isDark={isDark}
+              calOverrides={calOverrides}
+              onBook={() => handleTabChange('book')}
+              studentKey={profile.student_number || 'student'}
+            />
 
           </div>
           );
@@ -1216,73 +1457,209 @@ export default function StudentDashboard() {
                 }
                 profMap.get(s.professor_id)!.slots.push(s);
               }
-              const professors = Array.from(profMap.values());
+              const allProfessors = Array.from(profMap.values());
               const DAY_ORDER = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+              // Booked professor IDs (for "Already consulted" badge)
+              const bookedProfIds = new Set<number>(consultations.map(c => c.professor_id));
+
+              // Department categorisation
+              const deptCat = (dept: string): 'IT' | 'CS' | 'Other' => {
+                const d = dept.toLowerCase();
+                if (d.includes('information technology')) return 'IT';
+                if (d.includes('computer science')) return 'CS';
+                return 'Other';
+              };
+              const hasIT    = allProfessors.some(p => deptCat(p.department) === 'IT');
+              const hasCS    = allProfessors.some(p => deptCat(p.department) === 'CS');
+              const hasOther = allProfessors.some(p => deptCat(p.department) === 'Other');
+              const deptOptions = [
+                { key: 'all',   label: 'All' },
+                ...(hasIT    ? [{ key: 'IT',    label: 'Inf. Technology' }] : []),
+                ...(hasCS    ? [{ key: 'CS',    label: 'Comp. Science'   }] : []),
+                ...(hasOther ? [{ key: 'Other', label: 'Other'           }] : []),
+              ] as { key: string; label: string }[];
+
+              // Filter + sort
+              const q = bookSearch.trim().toLowerCase();
+              const filtered = allProfessors.filter(p => {
+                const matchQ    = !q || p.professor_name.toLowerCase().includes(q) || p.department.toLowerCase().includes(q);
+                const matchDept = bookDeptFilter === 'all' || deptCat(p.department) === bookDeptFilter;
+                return matchQ && matchDept;
+              });
+              const displayedProfessors = [...filtered].sort((a, b) => {
+                if (bookSortBy === 'slots') return b.slots.length - a.slots.length;
+                const aDate = a.slots.filter(s => s.date).sort((x, y) => x.date!.localeCompare(y.date!))[0]?.date || '9999';
+                const bDate = b.slots.filter(s => s.date).sort((x, y) => x.date!.localeCompare(y.date!))[0]?.date || '9999';
+                return aDate.localeCompare(bDate);
+              });
 
               return (
                 <>
-                  <div className="mb-5 sm:mb-7">
+                  {/* Header */}
+                  <div className="mb-5 sm:mb-6">
                     <h1 className={`text-2xl sm:text-3xl font-bold ${tp}`}>Book a Consultation</h1>
-                    <p className={`text-sm sm:text-base mt-1 ${ts}`}>{professors.length} professor{professors.length !== 1 ? 's' : ''} available</p>
+                    <p className={`text-sm mt-1 ${ts}`}>{allProfessors.length} professor{allProfessors.length !== 1 ? 's' : ''} available</p>
                   </div>
-                  {professors.length === 0 ? (
-                    <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
-                      <p className={`font-medium text-sm ${ts}`}>No slots available</p>
-                      <p className={`text-xs mt-1 ${tm}`}>Check back later when professors post their schedules</p>
+
+                  {/* Search + Sort */}
+                  <div className="flex flex-col sm:flex-row gap-2.5 mb-3">
+                    <div className="relative flex-1">
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input type="text" placeholder="Search by name or department…" value={bookSearch}
+                        onChange={e => setBookSearch(e.target.value)}
+                        className={`w-full pl-9 pr-8 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/40 transition-all ${isDark ? 'bg-[#252535] border border-white/8 text-gray-200 placeholder-gray-500' : 'bg-white border border-gray-200 text-gray-800 placeholder-gray-400'}`} />
+                      {bookSearch && (
+                        <button onClick={() => setBookSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                    </div>
+                    <select value={bookSortBy} onChange={e => setBookSortBy(e.target.value as typeof bookSortBy)}
+                      className={`py-2 pl-3 pr-8 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer ${isDark ? 'bg-[#252535] border border-white/8 text-gray-200' : 'bg-white border border-gray-200 text-gray-700'}`}>
+                      <option value="slots">Most Available</option>
+                      <option value="date">Soonest Slot</option>
+                    </select>
+                  </div>
+
+                  {/* Dept filter chips */}
+                  {deptOptions.length > 2 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {deptOptions.map(opt => (
+                        <button key={opt.key} type="button"
+                          onClick={() => setBookDeptFilter(opt.key as typeof bookDeptFilter)}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                            bookDeptFilter === opt.key
+                              ? 'bg-[#0EA5E9] border-[#0EA5E9] text-white shadow-sm shadow-sky-500/20'
+                              : isDark ? 'border-white/10 text-gray-400 hover:border-sky-500/40 hover:text-sky-400' : 'border-gray-200 text-gray-600 hover:border-sky-300 hover:text-sky-600'
+                          }`}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Empty states */}
+                  {allProfessors.length === 0 ? (
+                    <div className={`flex flex-col items-center justify-center py-20 rounded-2xl gap-2 ${card}`}>
+                      <svg className="w-10 h-10 text-gray-600 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.25}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                      <p className={`font-semibold text-sm ${ts}`}>No consultations available</p>
+                      <p className={`text-xs text-center max-w-xs ${tm}`}>Professors haven&apos;t posted any open slots yet. Check back later or message your adviser directly.</p>
+                    </div>
+                  ) : displayedProfessors.length === 0 ? (
+                    <div className={`flex flex-col items-center justify-center py-14 rounded-2xl gap-1.5 ${card}`}>
+                      <p className={`font-medium text-sm ${ts}`}>No professors match your search</p>
+                      <button onClick={() => { setBookSearch(''); setBookDeptFilter('all'); }}
+                        className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {professors.map(prof => {
-                        const sorted = [...prof.slots].sort((a, b) => {
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {displayedProfessors.map(prof => {
+                        const slotsSorted = [...prof.slots].sort((a, b) => {
                           if (a.date && b.date) return a.date.localeCompare(b.date);
-                          if (a.date) return -1;
-                          if (b.date) return 1;
+                          if (a.date) return -1; if (b.date) return 1;
                           return DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
                         });
+                        const isExpanded    = bookExpandedId === prof.professor_id;
+                        const alreadyBooked = bookedProfIds.has(prof.professor_id);
+
                         return (
                           <div key={prof.professor_id} className={`rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
-                            <div className="p-4 sm:p-5">
-                              <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="p-4">
+                              {/* Prof header */}
+                              <div className="flex items-start gap-3">
                                 <button type="button" onClick={() => setProfileCard({ id: prof.professor_id, role: 'professor' })}
-                                  className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
+                                  className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none">
                                   <Avatar name={prof.professor_name} avatarUrl={prof.professor_avatar} />
                                 </button>
                                 <div className="flex-1 min-w-0">
-                                  <button type="button" onClick={() => setProfileCard({ id: prof.professor_id, role: 'professor' })}
-                                    className={`font-bold text-base sm:text-xl hover:opacity-75 transition-opacity text-left ${tp}`}>
-                                    {prof.professor_name}
-                                  </button>
-                                  <p className={`text-sm sm:text-base font-semibold mt-0.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{prof.department}</p>
-                                  <div className="flex flex-wrap gap-1.5 mt-2">
-                                    {sorted.map(s => {
-                                      const label = s.date
-                                        ? new Date(s.date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
-                                        : s.day.slice(0, 3);
-                                      const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
-                                        .map(r => `${formatTime12(r.time_start.slice(0, 5))}–${formatTime12(r.time_end.slice(0, 5))}`).join(', ');
-                                      return (
-                                        <span key={s.id} title={times}
-                                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                            isDark ? 'bg-sky-500/15 text-sky-400 border border-sky-500/25' : 'bg-sky-50 text-sky-600 border border-sky-200'
-                                          }`}>
-                                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
-                                          </svg>
-                                          {label}
-                                        </span>
-                                      );
-                                    })}
+                                  <div className="flex items-start justify-between gap-2">
+                                    <button type="button" onClick={() => setProfileCard({ id: prof.professor_id, role: 'professor' })}
+                                      className={`font-bold text-sm sm:text-base hover:opacity-75 transition-opacity text-left leading-snug ${tp}`}>
+                                      {prof.professor_name}
+                                    </button>
+                                    {alreadyBooked && (
+                                      <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                                        Consulted
+                                      </span>
+                                    )}
                                   </div>
+                                  <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department}</p>
+                                  <span className="inline-flex items-center gap-1 text-xs text-emerald-500 mt-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    {prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''} open
+                                  </span>
                                 </div>
                               </div>
-                              <div className="mt-4 flex items-center justify-between">
-                                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-500">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  {prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''} available
-                                </span>
+
+                              {/* Date chips */}
+                              <div className="flex flex-wrap gap-1.5 mt-3">
+                                {slotsSorted.slice(0, isExpanded ? undefined : 3).map(s => {
+                                  const dateObj  = s.date ? new Date(s.date + 'T12:00:00') : null;
+                                  const dayAbbr  = dateObj ? dateObj.toLocaleDateString('en-PH', { weekday: 'short' }) : s.day.slice(0, 3);
+                                  const dateShort = dateObj ? dateObj.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
+                                  const chipLabel = dateObj ? `${dayAbbr} ${dateShort}` : dayAbbr;
+                                  const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
+                                    .map(r => `${formatTime12(r.time_start.slice(0, 5))}–${formatTime12(r.time_end.slice(0, 5))}`).join(', ');
+                                  return (
+                                    <span key={s.id} title={times}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-sky-500/15 text-sky-400 border border-sky-500/25' : 'bg-sky-50 text-sky-600 border border-sky-200'}`}>
+                                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
+                                      </svg>
+                                      {chipLabel}
+                                    </span>
+                                  );
+                                })}
+                                {!isExpanded && slotsSorted.length > 3 && (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>
+                                    +{slotsSorted.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Slot detail panel */}
+                              {isExpanded && (
+                                <div className={`mt-3 rounded-xl overflow-hidden divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
+                                  {slotsSorted.map(s => {
+                                    const dateObj = s.date ? new Date(s.date + 'T12:00:00') : null;
+                                    const dateLabel = dateObj
+                                      ? dateObj.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })
+                                      : s.day;
+                                    const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
+                                      .map(r => `${formatTime12(r.time_start.slice(0, 5))}–${formatTime12(r.time_end.slice(0, 5))}`).join(' · ');
+                                    return (
+                                      <div key={s.id} className="flex items-center justify-between px-3 py-2 gap-3">
+                                        <div className="min-w-0">
+                                          <p className={`text-xs font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{dateLabel}</p>
+                                          <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{times}</p>
+                                          {s.location && <p className={`text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{s.location}</p>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Actions */}
+                              <div className="mt-3 flex items-center justify-between gap-2">
+                                <button type="button"
+                                  onClick={() => setBookExpandedId(isExpanded ? null : prof.professor_id)}
+                                  className={`flex items-center gap-1 text-xs font-medium transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}>
+                                  {isExpanded ? (
+                                    <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>Hide slots</>
+                                  ) : (
+                                    <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>Preview slots</>
+                                  )}
+                                </button>
                                 <button onClick={() => router.push(`/dashboard/student/book/prof/${prof.professor_id}`)}
-                                  className="min-h-[44px] sm:min-h-0 px-4 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#0EA5E9] text-white hover:bg-[#0284C7] shadow-lg shadow-sky-500/20">
-                                  Book Appointment
+                                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0EA5E9] text-white hover:bg-[#0284C7] transition-colors shadow-sm shadow-sky-500/20">
+                                  Book
                                 </button>
                               </div>
                             </div>
@@ -1303,7 +1680,7 @@ export default function StudentDashboard() {
               <p className={`text-sm mt-1 ${ts}`}>Past consultations grouped by term</p>
             </div>
             {(() => {
-              const historyItems = consultations.filter(c => ['completed', 'cancelled', 'rescheduled'].includes(c.status));
+              const historyItems = consultations.filter(c => ['completed', 'cancelled', 'rescheduled', 'missed'].includes(c.status));
               if (historyItems.length === 0) {
                 return (
                   <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
@@ -1345,9 +1722,9 @@ export default function StudentDashboard() {
                                   <td className="px-4 py-3">
                                     {c.status === 'completed' && (
                                       <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
-                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
                                         {downloadingReceipt === c.id
-                                          ? <span className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                                          ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
                                           : <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
                                         PDF
                                       </button>
@@ -1476,8 +1853,12 @@ export default function StudentDashboard() {
                           <button onClick={() => triggerUpload(c.id)} disabled={uploadingId === c.id}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
                               c.uploaded_form_path
-                                ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20'
-                                : 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20 hover:bg-amber-500/20'
+                                ? isDark
+                                  ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20'
+                                  : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'
+                                : isDark
+                                  ? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20 hover:bg-amber-500/20'
+                                  : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-200'
                             }`}>
                             {uploadingId === c.id ? (
                               <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
@@ -1491,16 +1872,16 @@ export default function StudentDashboard() {
 
                         {c.status === 'completed' && (
                           <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
                             {downloadingReceipt === c.id
-                              ? <span className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                              ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
                               : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
                             Download Receipt
                           </button>
                         )}
 
                         {c.status !== 'pending' && c.status !== 'confirmed' && c.uploaded_form_path && (
-                          <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+                          <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                             Form submitted
                           </span>
@@ -1509,7 +1890,7 @@ export default function StudentDashboard() {
 
                       {(c.status === 'pending' || c.status === 'confirmed') && (
                         <button onClick={() => handleCancel(c.id)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors">
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'}`}>
                           Cancel
                         </button>
                       )}

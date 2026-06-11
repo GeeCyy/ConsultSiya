@@ -188,6 +188,7 @@ export default function BookProfPage() {
     mode: 'F2F',
     date: '',
     time: '',
+    notes: '',
   });
   const [bookError, setBookError]       = useState('');
   const [isBooking, setIsBooking]       = useState(false);
@@ -274,6 +275,7 @@ export default function BookProfPage() {
         nature_of_advising: bookForm.nature_of_advising,
         nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
         mode: bookForm.mode,
+        notes: bookForm.notes.trim() || undefined,
       }, token!);
       if (data.error) { setBookError(data.error); return; }
       router.push('/dashboard/student?view=my');
@@ -390,41 +392,65 @@ export default function BookProfPage() {
         {/* Form grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {/* Left: Nature of Advising */}
-          <div className={`rounded-2xl border p-5 ${card}`}>
-            <h3 className={`text-sm font-bold mb-0.5 ${tp}`}>Nature of Advising</h3>
-            <p className={`text-xs mb-3 ${ts}`}>Select all that apply</p>
-            <div className="space-y-1.5">
-              {NATURE_OPTIONS.map(opt => {
-                const checked = bookForm.nature_of_advising.includes(opt);
-                return (
-                  <label key={opt}
-                    className={`flex items-start gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
-                      checked ? 'bg-[#0EA5E9]/10 ring-1 ring-[#0EA5E9]/30' : isDark ? 'bg-white/[0.03] hover:bg-white/[0.06]' : 'bg-gray-50 hover:bg-gray-100'
-                    }`}>
-                    <span className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
-                      checked ? 'border-[#0EA5E9] bg-[#0EA5E9]' : isDark ? 'border-gray-600' : 'border-gray-300'
-                    }`}>
-                      {checked && (
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </span>
-                    <span className={`text-sm leading-snug ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{opt}</span>
-                    <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(opt)} />
-                  </label>
-                );
-              })}
+          {/* Left: Nature of Advising + Notes */}
+          <div className="space-y-4">
+            <div className={`rounded-2xl border p-5 ${card}`}>
+              <h3 className={`text-sm font-bold mb-0.5 ${tp}`}>Nature of Advising</h3>
+              <p className={`text-xs mb-3 ${ts}`}>Select all that apply</p>
+              <div className="space-y-1.5">
+                {NATURE_OPTIONS.map(opt => {
+                  const checked = bookForm.nature_of_advising.includes(opt);
+                  return (
+                    <label key={opt}
+                      className={`flex items-start gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
+                        checked ? 'bg-[#0EA5E9]/10 ring-1 ring-[#0EA5E9]/30' : isDark ? 'bg-white/[0.03] hover:bg-white/[0.06]' : 'bg-gray-50 hover:bg-gray-100'
+                      }`}>
+                      <span className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                        checked ? 'border-[#0EA5E9] bg-[#0EA5E9]' : isDark ? 'border-gray-600' : 'border-gray-300'
+                      }`}>
+                        {checked && (
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className={`text-sm leading-snug ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{opt}</span>
+                      <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(opt)} />
+                    </label>
+                  );
+                })}
+              </div>
+              {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
+                <input
+                  className={`mt-3 w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 ${inputCls}`}
+                  placeholder="Please specify…"
+                  value={bookForm.nature_of_advising_specify}
+                  onChange={e => setBookForm(f => ({ ...f, nature_of_advising_specify: e.target.value }))}
+                />
+              )}
             </div>
-            {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
-              <input
-                className={`mt-3 w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 ${inputCls}`}
-                placeholder="Please specify…"
-                value={bookForm.nature_of_advising_specify}
-                onChange={e => setBookForm(f => ({ ...f, nature_of_advising_specify: e.target.value }))}
+
+            {/* Notes */}
+            <div className={`rounded-2xl border p-5 ${card}`}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className={`text-sm font-bold ${tp}`}>Additional Notes</h3>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
+              </div>
+              <p className={`text-xs mb-3 ${ts}`}>Describe your concern so your adviser can prepare in advance.</p>
+              <textarea
+                rows={4}
+                maxLength={500}
+                placeholder="e.g. I'm struggling with my thesis topic and need guidance on narrowing down my research area…"
+                value={bookForm.notes}
+                onChange={e => setBookForm(f => ({ ...f, notes: e.target.value }))}
+                className={`w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none resize-none placeholder-gray-400 transition-colors ${inputCls}`}
               />
-            )}
+              <div className="flex justify-end mt-1.5">
+                <span className={`text-[10px] tabular-nums ${bookForm.notes.length > 450 ? 'text-amber-400' : isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                  {bookForm.notes.length}/500
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Right: Mode + Date + Time + Submit */}

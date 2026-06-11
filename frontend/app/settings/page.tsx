@@ -8,7 +8,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'notifications' | 'security' | 'system';
+type Tab = 'profile' | 'notifications' | 'system';
 
 type Profile = {
   role: string;
@@ -21,12 +21,19 @@ type Profile = {
   student_number?: string;
   profile_picture_url?: string | null;
   created_at?: string;
+  // Professor preferences
+  bio?: string;
+  preferred_mode?: 'Online' | 'F2F' | 'Both';
+  is_available?: boolean;
 };
 
 type NotifSettings = {
   inapp_booking_confirmed: boolean;
   inapp_booking_cancelled: boolean;
   inapp_upcoming_reminder: boolean;
+  email_booking_confirmed: boolean;
+  email_booking_cancelled: boolean;
+  email_upcoming_reminder: boolean;
 };
 
 type SystemSettings = {
@@ -50,7 +57,7 @@ function Toggle({
       type="button"
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none ${
-        checked ? 'bg-[#CC0000]' : 'bg-[#383a40]'
+        checked ? 'bg-[#0EA5E9]' : 'bg-[#383a40]'
       }`}
     >
       <span
@@ -92,6 +99,7 @@ function FieldInput({
   placeholder,
   disabled,
   required,
+  isDark = true,
 }: {
   label: string;
   value: string;
@@ -100,12 +108,16 @@ function FieldInput({
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  isDark?: boolean;
 }) {
+  const inputCls = isDark
+    ? 'bg-[#1a1f35] border border-white/10 text-gray-200 placeholder-gray-500'
+    : 'bg-white border border-gray-200 text-gray-800 placeholder-gray-400';
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+      <label className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
         {label}
-        {required && <span className="text-[#CC0000] ml-1">*</span>}
+        {required && <span className="text-sky-400 ml-1">*</span>}
       </label>
       <input
         type={type}
@@ -113,7 +125,7 @@ function FieldInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 placeholder-gray-600 text-sm focus:outline-none focus:border-[#CC0000]/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${inputCls}`}
       />
     </div>
   );
@@ -208,9 +220,11 @@ function applyPhoneFormat(digits: string, groups: number[]): string {
 function CountryCodeSelect({
   value,
   onChange,
+  isDark = true,
 }: {
   value: string;
   onChange: (code: string) => void;
+  isDark?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -236,7 +250,7 @@ function CountryCodeSelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 text-sm hover:border-white/20 focus:outline-none focus:border-[#CC0000]/60 transition-colors"
+        className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${isDark ? 'bg-[#1a1f35] border border-white/10 text-gray-200 hover:border-white/20' : 'bg-white border border-gray-200 text-gray-800 hover:border-gray-300'}`}
       >
         <img
           src={`https://flagcdn.com/24x18/${selected.iso}.png`}
@@ -256,7 +270,7 @@ function CountryCodeSelect({
 
       {/* Dropdown list */}
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-56 rounded-xl bg-[#2b2d31] border border-white/10 shadow-2xl overflow-hidden">
+        <div className={`absolute top-full left-0 mt-1 z-50 w-56 rounded-xl border shadow-2xl overflow-hidden ${isDark ? 'bg-[#252535] border-white/10' : 'bg-white border-gray-200'}`}>
           <div className="max-h-60 overflow-y-auto">
             {COUNTRY_CODES.map((c) => (
               <button
@@ -265,8 +279,8 @@ function CountryCodeSelect({
                 onClick={() => { onChange(c.code); setOpen(false); }}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors ${
                   c.code === value
-                    ? 'bg-[#CC0000]/10 text-white'
-                    : 'text-gray-300 hover:bg-white/5'
+                    ? isDark ? 'bg-sky-500/15 text-white' : 'bg-sky-50 text-sky-700'
+                    : isDark ? 'text-gray-300 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 <img
@@ -287,7 +301,7 @@ function CountryCodeSelect({
   );
 }
 
-function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function PhoneInput({ value, onChange, isDark = true }: { value: string; onChange: (v: string) => void; isDark?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { code: selectedCode, local: localFormatted } = parsePhone(value);
   const groups = PHONE_FORMATS[selectedCode] ?? [3, 3, 4];
@@ -315,14 +329,14 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) 
         Phone Number
       </label>
       <div className="flex gap-2">
-        <CountryCodeSelect value={selectedCode} onChange={handleCode} />
+        <CountryCodeSelect value={selectedCode} onChange={handleCode} isDark={isDark} />
         <input
           ref={inputRef}
           type="tel"
           value={applyPhoneFormat(rawDigits, groups)}
           onChange={handleLocal}
           placeholder={placeholder}
-          className="flex-1 px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 placeholder-gray-600 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
+          className={`flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${isDark ? 'bg-[#1a1f35] border border-white/10 text-gray-200 placeholder-gray-500' : 'bg-white border border-gray-200 text-gray-800 placeholder-gray-400'}`}
         />
       </div>
     </div>
@@ -364,11 +378,15 @@ export default function SettingsPage() {
     inapp_booking_confirmed: true,
     inapp_booking_cancelled: true,
     inapp_upcoming_reminder: true,
+    email_booking_confirmed: false,
+    email_booking_cancelled: false,
+    email_upcoming_reminder: false,
   });
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifMsg, setNotifMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Password state
+  // Password state — inline collapsible in Profile tab
+  const [pwOpen,    setPwOpen]    = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -421,10 +439,21 @@ export default function SettingsPage() {
             student_number: profData.student_number || '',
             profile_picture_url: profData.profile_picture_url || null,
             created_at: profData.created_at,
+            bio: profData.bio || '',
+            preferred_mode: profData.preferred_mode || 'Both',
+            is_available: profData.is_available !== false,
           });
         }
         if (notifRes.ok) {
-          setNotif(await notifRes.json());
+          const n = await notifRes.json();
+          setNotif({
+            inapp_booking_confirmed:  n.inapp_booking_confirmed  ?? true,
+            inapp_booking_cancelled:  n.inapp_booking_cancelled  ?? true,
+            inapp_upcoming_reminder:  n.inapp_upcoming_reminder  ?? true,
+            email_booking_confirmed:  n.email_booking_confirmed  ?? false,
+            email_booking_cancelled:  n.email_booking_cancelled  ?? false,
+            email_upcoming_reminder:  n.email_upcoming_reminder  ?? false,
+          });
         }
         if (storedRole === 'admin') {
           const sysRes = await fetch(`${API_URL}/api/settings/system`, { headers });
@@ -515,6 +544,9 @@ export default function SettingsPage() {
           program: profile.program,
           year_level: profile.year_level,
           student_number: profile.student_number,
+          bio: profile.bio,
+          preferred_mode: profile.preferred_mode,
+          is_available: profile.is_available,
         }),
       });
       const data = await res.json();
@@ -631,15 +663,6 @@ export default function SettingsPage() {
       ),
     },
     {
-      id: 'security',
-      label: 'Security',
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-      ),
-    },
-    {
       id: 'system',
       label: 'System',
       adminOnly: true,
@@ -668,6 +691,37 @@ export default function SettingsPage() {
         .toUpperCase()
     : profile.email?.[0]?.toUpperCase() || '?';
 
+  // Shared input/select class — switches between dark and light mode
+  const inpCls = isDark
+    ? 'bg-[#1a1f35] border border-white/10 text-gray-200 placeholder-gray-500'
+    : 'bg-white border border-gray-200 text-gray-800 placeholder-gray-400';
+
+  // Profile completion score
+  const completionItems = role === 'professor'
+    ? [
+        { label: 'Full name',    done: !!profile.full_name },
+        { label: 'Email',        done: !!profile.email },
+        { label: 'Phone',        done: !!profile.phone },
+        { label: 'Specialty',    done: !!profile.department },
+        { label: 'Bio',          done: !!profile.bio },
+        { label: 'Photo',        done: !!avatarSrc },
+      ]
+    : role === 'student'
+    ? [
+        { label: 'Full name',       done: !!profile.full_name },
+        { label: 'Email',           done: !!profile.email },
+        { label: 'Phone',           done: !!profile.phone },
+        { label: 'Student number',  done: !!profile.student_number },
+        { label: 'Program',         done: !!profile.program },
+        { label: 'Year level',      done: !!profile.year_level },
+        { label: 'Photo',           done: !!avatarSrc },
+      ]
+    : [];
+  const completionPct  = completionItems.length
+    ? Math.round((completionItems.filter(i => i.done).length / completionItems.length) * 100)
+    : 100;
+  const firstMissing   = completionItems.find(i => !i.done);
+
   return (
     <DashboardShell weekBadge={false} hideTopBar={true}>
       <div className={`min-h-full ${isDark ? 'bg-[#1e2235]' : 'bg-[#f2f3f5]'}`}>
@@ -689,7 +743,7 @@ export default function SettingsPage() {
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-[#CC0000] border-t-transparent animate-spin" />
+              <div className="w-8 h-8 rounded-full border-2 border-[#0EA5E9] border-t-transparent animate-spin" />
               <span className="text-sm text-gray-500">Loading settings…</span>
             </div>
           </div>
@@ -698,12 +752,12 @@ export default function SettingsPage() {
             {/* ── Sidebar ──────────────────────────────────────────────────── */}
             <aside className="w-52 flex-shrink-0">
               {/* Mini profile card */}
-              <div className={`flex flex-col items-center gap-2 p-4 mb-4 rounded-xl border ${isDark ? 'bg-[#2b2d31] border-white/10' : 'bg-white border-black/10'}`}>
-                <div className={`w-14 h-14 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center border-2 border-[#CC0000]/40 ${isDark ? 'bg-[#383a40]' : 'bg-[#f2f3f5]'}`}>
+              <div className={`flex flex-col items-center gap-2 p-4 mb-4 rounded-xl border ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
+                <div className={`w-14 h-14 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center border-2 border-[#0EA5E9]/40 ${isDark ? 'bg-[#0369A1]/20' : 'bg-sky-50'}`}>
                   {avatarSrc ? (
                     <img src={avatarSrc} alt="avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-lg font-bold text-[#CC0000]">{initials}</span>
+                    <span className="text-lg font-bold text-sky-400">{initials}</span>
                   )}
                 </div>
                 <div className="text-center min-w-0 w-full">
@@ -711,7 +765,7 @@ export default function SettingsPage() {
                   <span
                     className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1 ${
                       role === 'admin'
-                        ? 'bg-[#CC0000]/20 text-[#CC0000]'
+                        ? 'bg-sky-500/20 text-sky-400'
                         : role === 'professor'
                         ? 'bg-blue-500/15 text-blue-400'
                         : 'bg-emerald-500/15 text-emerald-400'
@@ -720,6 +774,25 @@ export default function SettingsPage() {
                     {role.charAt(0).toUpperCase() + role.slice(1)}
                   </span>
                 </div>
+
+                {/* Profile completion bar */}
+                {completionItems.length > 0 && (
+                  <div className="w-full mt-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[10px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Profile</span>
+                      <span className={`text-[10px] font-bold ${completionPct === 100 ? 'text-emerald-400' : 'text-sky-400'}`}>{completionPct}%</span>
+                    </div>
+                    <div className={`h-1.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-200'}`}>
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${completionPct === 100 ? 'bg-emerald-400' : 'bg-gradient-to-r from-[#0369A1] to-[#0EA5E9]'}`}
+                        style={{ width: `${completionPct}%` }}
+                      />
+                    </div>
+                    {firstMissing && (
+                      <p className="text-[10px] text-gray-500 mt-1 leading-tight">Add {firstMissing.label}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Nav tabs */}
@@ -730,7 +803,7 @@ export default function SettingsPage() {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors ${
                       activeTab === tab.id
-                        ? 'bg-[#CC0000]/15 text-[#CC0000]'
+                        ? 'bg-sky-500/15 text-sky-400'
                         : isDark
                           ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                           : 'text-gray-600 hover:text-gray-900 hover:bg-black/5'
@@ -748,7 +821,7 @@ export default function SettingsPage() {
 
               {/* ── PROFILE TAB ────────────────────────────────────────────── */}
               {activeTab === 'profile' && (
-                <div className="bg-[#2b2d31] rounded-xl border border-white/10 overflow-hidden">
+                <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
                   <div className="px-6 py-4 border-b border-white/5">
                     <h2 className="text-sm font-semibold text-white">Profile Information</h2>
                     <p className="text-xs text-gray-500 mt-0.5">Update your display name, contact email, and profile picture.</p>
@@ -765,11 +838,11 @@ export default function SettingsPage() {
 
                     {/* Avatar section */}
                     <div className="flex items-center gap-4 pb-5 border-b border-white/5">
-                      <div className="w-20 h-20 rounded-full overflow-hidden flex-shrink-0 bg-[#383a40] flex items-center justify-center border-2 border-[#CC0000]/30">
+                      <div className="w-20 h-20 rounded-full overflow-hidden flex-shrink-0 bg-[#0369A1]/20 flex items-center justify-center border-2 border-[#0EA5E9]/40">
                         {avatarSrc ? (
                           <img src={avatarSrc} alt="avatar" className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-2xl font-bold text-[#CC0000]">{initials}</span>
+                          <span className="text-2xl font-bold text-sky-400">{initials}</span>
                         )}
                       </div>
                       <div className="flex flex-col gap-2">
@@ -785,7 +858,7 @@ export default function SettingsPage() {
                             type="button"
                             disabled={avatarUploading}
                             onClick={() => avatarInputRef.current?.click()}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {avatarUploading ? 'Uploading…' : 'Change Photo'}
                           </button>
@@ -808,7 +881,7 @@ export default function SettingsPage() {
                     {/* Profile form */}
                     <form onSubmit={handleSaveProfile} className="space-y-4">
                       {role !== 'admin' && (
-                        <FieldInput
+                        <FieldInput isDark={isDark}
                           label="Full Name"
                           value={profile.full_name}
                           onChange={(v) => setProfile((p) => ({ ...p, full_name: v }))}
@@ -817,7 +890,7 @@ export default function SettingsPage() {
                         />
                       )}
 
-                      <FieldInput
+                      <FieldInput isDark={isDark}
                         label="Email Address"
                         type="email"
                         value={profile.email}
@@ -827,7 +900,7 @@ export default function SettingsPage() {
                       />
 
                       {(role === 'student' || role === 'professor') && (
-                        <PhoneInput
+                        <PhoneInput isDark={isDark}
                           value={profile.phone}
                           onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
                         />
@@ -836,21 +909,30 @@ export default function SettingsPage() {
                       {/* Student-specific fields */}
                       {role === 'student' && (
                         <>
-                          <FieldInput
+                          <FieldInput isDark={isDark}
                             label="Student Number"
                             value={profile.student_number || ''}
                             onChange={(v) => setProfile((p) => ({ ...p, student_number: v }))}
                             placeholder="e.g. 2021-XXXXX-MN-0"
                             required
                           />
-                          <FieldInput
-                            label="Program"
-                            value={profile.program || ''}
-                            onChange={(v) => setProfile((p) => ({ ...p, program: v }))}
-                            placeholder="e.g. BS Computer Science"
-                          />
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                            <label className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Program
+                            </label>
+                            <select
+                              value={profile.program || ''}
+                              onChange={(e) => setProfile((p) => ({ ...p, program: e.target.value }))}
+                              className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
+                            >
+                              <option value="">Select program…</option>
+                              {['BS Computer Science','BS Entertainment and Multimedia Computing','BS Information Technology','BS Information Systems','BS Data Science','BS Cybersecurity','Others'].map(p => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                               Year Level
                             </label>
                             <select
@@ -861,7 +943,7 @@ export default function SettingsPage() {
                                   year_level: e.target.value ? parseInt(e.target.value) : '',
                                 }))
                               }
-                              className="w-full px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
+                              className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
                             >
                               <option value="">Select year level</option>
                               {[1, 2, 3, 4, 5].map((y) => (
@@ -876,17 +958,85 @@ export default function SettingsPage() {
 
                       {/* Professor-specific fields */}
                       {role === 'professor' && (
-                        <FieldInput
-                          label="Department"
-                          value={profile.department || ''}
-                          onChange={(v) => setProfile((p) => ({ ...p, department: v }))}
-                          placeholder="e.g. Computer Engineering"
-                        />
+                        <>
+                          <div className="flex flex-col gap-1.5">
+                            <label className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Specialty
+                            </label>
+                            <input
+                              type="text"
+                              value={profile.department || ''}
+                              onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value }))}
+                              placeholder="e.g. Web Development, Data Science…"
+                              className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
+                            />
+                          </div>
+
+                          {/* Bio / About Me */}
+                          <div className="flex flex-col gap-1.5">
+                            <label className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Bio / About Me
+                            </label>
+                            <textarea
+                              value={profile.bio || ''}
+                              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+                              rows={3}
+                              placeholder="Subjects handled, research interests, advising focus…"
+                              className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors resize-none ${inpCls}`}
+                            />
+                            <p className={`text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Visible to students when they view your profile before booking.</p>
+                          </div>
+
+                          {/* Availability + Preferred Mode in a 2-col row */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Availability toggle */}
+                            <div className={`rounded-xl border p-4 flex items-start gap-3 ${isDark ? 'bg-[#1a1f35] border-white/8' : 'bg-gray-50 border-gray-200'}`}>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                                  Available for Bookings
+                                </p>
+                                <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                                  {profile.is_available !== false
+                                    ? 'Students can book consultations with you'
+                                    : 'Students cannot book new consultations'}
+                                </p>
+                              </div>
+                              <Toggle
+                                checked={profile.is_available !== false}
+                                onChange={(v) => setProfile((p) => ({ ...p, is_available: v }))}
+                              />
+                            </div>
+
+                            {/* Preferred mode */}
+                            <div className={`rounded-xl border p-4 ${isDark ? 'bg-[#1a1f35] border-white/8' : 'bg-gray-50 border-gray-200'}`}>
+                              <p className={`text-sm font-medium mb-2.5 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                                Preferred Mode
+                              </p>
+                              <div className="flex gap-2">
+                                {(['F2F', 'Online', 'Both'] as const).map((m) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => setProfile((p) => ({ ...p, preferred_mode: m }))}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                      profile.preferred_mode === m
+                                        ? 'bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white shadow-sm'
+                                        : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-600 hover:border-sky-300'
+                                    }`}
+                                  >
+                                    {m === 'F2F' ? 'In-Person' : m}
+                                  </button>
+                                ))}
+                              </div>
+                              <p className={`text-[11px] mt-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Auto-suggested when students book</p>
+                            </div>
+                          </div>
+                        </>
                       )}
 
                       {/* Admin info */}
                       {role === 'admin' && (
-                        <div className="px-4 py-3 rounded-lg bg-[#1e1f22] border border-white/5 text-xs text-gray-500">
+                        <div className={`px-4 py-3 rounded-lg text-xs text-gray-500 ${isDark ? 'bg-[#1a1f35] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
                           Admin accounts use only the email address as profile information. Contact your system owner to update additional details.
                         </div>
                       )}
@@ -895,23 +1045,79 @@ export default function SettingsPage() {
                         <button
                           type="submit"
                           disabled={profileSaving}
-                          className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {profileSaving ? 'Saving…' : 'Save Changes'}
                         </button>
                       </div>
                     </form>
+
+                    {/* ── Inline Change Password ── */}
+                    <div className={`mt-2 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                      <button
+                        type="button"
+                        onClick={() => { setPwOpen(o => !o); setPwMsg(null); setPwForm({ current: '', next: '', confirm: '' }); }}
+                        className={`w-full flex items-center justify-between px-6 py-4 text-left transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50'}`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Change Password</span>
+                        </div>
+                        <svg className={`w-4 h-4 text-gray-500 transition-transform ${pwOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {pwOpen && (
+                        <div className="px-6 pb-6 space-y-4">
+                          {pwMsg && <StatusBanner message={pwMsg.text} type={pwMsg.type} onDismiss={() => setPwMsg(null)} />}
+                          <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
+                            {(['current', 'next', 'confirm'] as const).map((key) => (
+                              <div key={key} className="flex flex-col gap-1.5">
+                                <label className={`text-xs font-medium uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {key === 'current' ? 'Current Password' : key === 'next' ? 'New Password' : 'Confirm New Password'} <span className="text-sky-400">*</span>
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type={showPw[key] ? 'text' : 'password'}
+                                    value={pwForm[key]}
+                                    onChange={(e) => setPwForm((p) => ({ ...p, [key]: e.target.value }))}
+                                    placeholder={key === 'current' ? 'Your current password' : key === 'next' ? 'At least 8 characters' : 'Repeat new password'}
+                                    required
+                                    minLength={key === 'next' ? 8 : undefined}
+                                    className={`w-full pl-3 pr-10 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
+                                  />
+                                  <button type="button" onClick={() => setShowPw((s) => ({ ...s, [key]: !s[key] }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+                                    {showPw[key]
+                                      ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                      : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>}
+                                  </button>
+                                </div>
+                                {key === 'next' && pwForm.next.length > 0 && pwForm.next.length < 8 && <p className="text-[11px] text-amber-400">Must be at least 8 characters.</p>}
+                                {key === 'confirm' && pwForm.confirm.length > 0 && pwForm.next !== pwForm.confirm && <p className="text-[11px] text-red-400">Passwords do not match.</p>}
+                              </div>
+                            ))}
+                            <button type="submit" disabled={pwSaving || !pwForm.current || !pwForm.next || pwForm.next !== pwForm.confirm}
+                              className="px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                              {pwSaving ? 'Changing…' : 'Change Password'}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* ── NOTIFICATIONS TAB ──────────────────────────────────────── */}
               {activeTab === 'notifications' && (
-                <div className="bg-[#2b2d31] rounded-xl border border-white/10 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-white/5">
-                    <h2 className="text-sm font-semibold text-white">Notification Preferences</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Choose which events trigger in-app notifications.
+                <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
+                  <div className={`px-6 py-4 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                    <h2 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Notification Preferences</h2>
+                    <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Choose which events trigger notifications.
                     </p>
                   </div>
 
@@ -926,10 +1132,11 @@ export default function SettingsPage() {
 
                     {/* In-app notifications */}
                     <div>
-                      <div className="rounded-xl bg-[#1e1f22] border border-white/5 px-4 divide-y divide-white/5">
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>In-App Alerts</p>
+                      <div className={`rounded-xl px-4 divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
                         <ToggleRow
                           label="Booking Confirmed"
-                          sublabel="Show alert when your booking is confirmed"
+                          sublabel="Show alert when a booking is confirmed"
                           checked={notif.inapp_booking_confirmed}
                           onChange={(v) => setNotif((n) => ({ ...n, inapp_booking_confirmed: v }))}
                         />
@@ -948,12 +1155,36 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
+                    {/* Email notifications — professors only */}
+                    {role === 'professor' && (
+                      <div>
+                        <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Email Notifications</p>
+                        <div className={`rounded-xl px-4 divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
+                          <ToggleRow
+                            label="New Booking Request"
+                            sublabel="Email when a student books a new consultation"
+                            checked={notif.email_booking_confirmed}
+                            onChange={(v) => setNotif((n) => ({ ...n, email_booking_confirmed: v }))}
+                          />
+                          <ToggleRow
+                            label="Booking Cancelled by Student"
+                            sublabel="Email when a student cancels their consultation"
+                            checked={notif.email_booking_cancelled}
+                            onChange={(v) => setNotif((n) => ({ ...n, email_booking_cancelled: v }))}
+                          />
+                        </div>
+                        <p className={`mt-2 text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                          Emails are sent to <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{profile.email || 'your registered email'}</span>
+                        </p>
+                      </div>
+                    )}
+
                     <div>
                       <button
                         type="button"
                         disabled={notifSaving}
                         onClick={handleSaveNotif}
-                        className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {notifSaving ? 'Saving…' : 'Save Preferences'}
                       </button>
@@ -962,148 +1193,10 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* ── SECURITY TAB ───────────────────────────────────────────── */}
-              {activeTab === 'security' && (
-                <div className="bg-[#2b2d31] rounded-xl border border-white/10 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-white/5">
-                    <h2 className="text-sm font-semibold text-white">Security</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Change your account password. You will need your current password to confirm.</p>
-                  </div>
-
-                  <div className="px-6 py-5">
-                    {pwMsg && (
-                      <div className="mb-4">
-                        <StatusBanner
-                          message={pwMsg.text}
-                          type={pwMsg.type}
-                          onDismiss={() => setPwMsg(null)}
-                        />
-                      </div>
-                    )}
-
-                    <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
-                      {/* Current password */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                          Current Password <span className="text-[#CC0000]">*</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showPw.current ? 'text' : 'password'}
-                            value={pwForm.current}
-                            onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
-                            placeholder="Your current password"
-                            required
-                            className="w-full pl-3 pr-10 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 placeholder-gray-600 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPw((s) => ({ ...s, current: !s.current }))}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                          >
-                            {showPw.current ? (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* New password */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                          New Password <span className="text-[#CC0000]">*</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showPw.next ? 'text' : 'password'}
-                            value={pwForm.next}
-                            onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))}
-                            placeholder="At least 8 characters"
-                            required
-                            minLength={8}
-                            className="w-full pl-3 pr-10 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 placeholder-gray-600 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPw((s) => ({ ...s, next: !s.next }))}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                          >
-                            {showPw.next ? (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            )}
-                          </button>
-                        </div>
-                        {pwForm.next.length > 0 && pwForm.next.length < 8 && (
-                          <p className="text-[11px] text-amber-400">Password must be at least 8 characters.</p>
-                        )}
-                      </div>
-
-                      {/* Confirm password */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                          Confirm New Password <span className="text-[#CC0000]">*</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showPw.confirm ? 'text' : 'password'}
-                            value={pwForm.confirm}
-                            onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
-                            placeholder="Repeat new password"
-                            required
-                            className="w-full pl-3 pr-10 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 placeholder-gray-600 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPw((s) => ({ ...s, confirm: !s.confirm }))}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                          >
-                            {showPw.confirm ? (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            )}
-                          </button>
-                        </div>
-                        {pwForm.confirm.length > 0 && pwForm.next !== pwForm.confirm && (
-                          <p className="text-[11px] text-red-400">Passwords do not match.</p>
-                        )}
-                      </div>
-
-                      <div className="pt-2">
-                        <button
-                          type="submit"
-                          disabled={pwSaving || !pwForm.current || !pwForm.next || pwForm.next !== pwForm.confirm}
-                          className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {pwSaving ? 'Changing…' : 'Change Password'}
-                        </button>
-                      </div>
-                    </form>
-
-                    {/* Account info */}
-                    {profile.created_at && (
-                      <div className="mt-6 pt-5 border-t border-white/5">
-                        <p className="text-xs text-gray-600">
-                          Account created{' '}
-                          {new Date(profile.created_at).toLocaleDateString('en-PH', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* ── SYSTEM TAB (admin only) ────────────────────────────────── */}
               {activeTab === 'system' && role === 'admin' && (
-                <div className="bg-[#2b2d31] rounded-xl border border-white/10 overflow-hidden">
+                <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
                   <div className="px-6 py-4 border-b border-white/5">
                     <h2 className="text-sm font-semibold text-white">System Configuration</h2>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -1163,7 +1256,7 @@ export default function SettingsPage() {
                               max_bookings_per_student: e.target.value,
                             }))
                           }
-                          className="w-28 px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
+                          className={`w-28 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
                         />
                       </div>
 
@@ -1179,7 +1272,7 @@ export default function SettingsPage() {
                             setSysSettings((s) => ({ ...s, academic_year: e.target.value }))
                           }
                           placeholder="e.g. 2025-2026"
-                          className="w-40 px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
+                          className={`w-40 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
                         />
                       </div>
 
@@ -1193,7 +1286,7 @@ export default function SettingsPage() {
                           onChange={(e) =>
                             setSysSettings((s) => ({ ...s, current_semester: e.target.value }))
                           }
-                          className="w-48 px-3 py-2 rounded-lg bg-[#1e1f22] border border-white/10 text-gray-200 text-sm focus:outline-none focus:border-[#CC0000]/60 transition-colors"
+                          className={`w-48 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#0EA5E9]/50 transition-colors ${inpCls}`}
                         >
                           <option value="1st Semester">1st Semester</option>
                           <option value="2nd Semester">2nd Semester</option>
@@ -1205,7 +1298,7 @@ export default function SettingsPage() {
                         <button
                           type="submit"
                           disabled={sysSaving}
-                          className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#CC0000] hover:bg-[#aa0000] text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {sysSaving ? 'Saving…' : 'Save System Settings'}
                         </button>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
+const notifModule = require('./notifications');
 
 // Professor sets their available schedules
 router.post('/', authenticate, authorize('professor'), async (req, res) => {
@@ -33,6 +34,19 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
        RETURNING id, day, time_start, time_end, location, date::text AS date, time_ranges`,
       [professor_id, day, effectiveStart, effectiveEnd, location || null, dateValue, trJson]
     );
+
+    // Notify all students (fire-and-forget — may be many users)
+    pool.query(`SELECT full_name FROM professors WHERE id = $1`, [professor_id]).then(profRow => {
+      const professorName = profRow.rows[0]?.full_name || 'A professor';
+      return pool.query(`SELECT id FROM users WHERE role = 'student'`).then(students => {
+        students.rows.forEach(s => notifModule.insertAndPush(
+          s.id, 'new_slot',
+          `${professorName} has a new available consultation slot`,
+          { schedule_id: result.rows[0].id, professor_name: professorName, route: 'book' }
+        ));
+      });
+    }).catch(() => {});
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);

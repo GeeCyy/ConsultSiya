@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 type Consultation = {
   id: number;
@@ -94,6 +94,9 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
   const [intervalMins, setIntervalMins] = useState(70);
   const [selectedCell, setSelectedCell] = useState<{ date: string; slotLabel: string; items: Consultation[] } | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [animatingDay, setAnimatingDay] = useState<string | null>(null);
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const weekDates = getWeekDates(weekOffset);
   const slots = generateSlots(7 * 60, 18 * 60, intervalMins);
@@ -111,6 +114,24 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
       return `${a.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}`;
     return `${a.toLocaleDateString('en-PH', { month: 'short' })} – ${b.toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })}`;
   })();
+
+  // All consultations for the selected day (ignores filterStatus — shows full picture)
+  const dayConsults = selectedDay
+    ? [...consultations]
+        .filter(c => c.date.slice(0, 10) === selectedDay)
+        .sort((a, b) => (a.time || a.time_start || '').localeCompare(b.time || b.time_start || ''))
+    : [];
+
+  const handleDayClick = (dateStr: string) => {
+    if (selectedDay === dateStr) {
+      setSelectedDay(null);
+      return;
+    }
+    setSelectedDay(dateStr);
+    setAnimatingDay(dateStr);
+    if (animTimerRef.current) clearTimeout(animTimerRef.current);
+    animTimerRef.current = setTimeout(() => setAnimatingDay(null), 380);
+  };
 
   const card = isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200';
   const bg = isDark ? 'bg-[#1e1f22]' : 'bg-gray-50';
@@ -203,6 +224,9 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
             <span className={`text-[10px] ${tm}`}>{l.label}</span>
           </div>
         ))}
+        <span className={`text-[10px] ml-auto ${tm}`}>
+          Click a day header to see details
+        </span>
       </div>
 
       {/* ── Grid ── */}
@@ -213,17 +237,35 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
               <th className={`w-[88px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide border-b border-r ${borderCls} ${tm}`}>
                 Time
               </th>
-              {weekDates.map(d => (
-                <th
-                  key={d.date}
-                  className={`px-2 py-2.5 text-center text-[11px] font-semibold border-b border-r last:border-r-0 ${borderCls} ${
-                    d.isToday ? 'text-[#CC0000]' : ts
-                  }`}
-                >
-                  <div>{d.day}</div>
-                  <div className={`text-[10px] font-normal mt-0.5 ${d.isToday ? 'text-[#CC0000]' : tm}`}>{d.date.slice(5).replace('-', '/')}</div>
-                </th>
-              ))}
+              {weekDates.map(d => {
+                const isSelected = selectedDay === d.date;
+                const isAnimating = animatingDay === d.date;
+                return (
+                  <th
+                    key={d.date}
+                    onClick={() => handleDayClick(d.date)}
+                    className={`px-2 py-2.5 text-center text-[11px] font-semibold border-b border-r last:border-r-0 ${borderCls} cursor-pointer select-none transition-all duration-200 ${
+                      isAnimating
+                        ? isDark ? 'bg-sky-400/30' : 'bg-sky-200/60'
+                        : isSelected
+                          ? isDark ? 'bg-sky-500/10' : 'bg-sky-50'
+                          : isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'
+                    } ${
+                      isSelected || d.isToday ? 'text-sky-500' : ts
+                    }`}
+                  >
+                    <div className={`transition-transform duration-150 ${isAnimating ? 'scale-110' : 'scale-100'}`}>
+                      <div>{d.day}</div>
+                      <div className={`text-[10px] font-normal mt-0.5 ${isSelected || d.isToday ? 'text-sky-400' : tm}`}>
+                        {d.date.slice(5).replace('-', '/')}
+                      </div>
+                      {isSelected && (
+                        <div className="mt-1 mx-auto w-1 h-1 rounded-full bg-sky-400" />
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -237,10 +279,17 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
                   {weekDates.map(d => {
                     const items = getConsultsForCell(d.date, slot.start, slot.end, active);
                     const cellBg = getCellBg(items);
+                    const isDaySelected = selectedDay === d.date;
                     return (
                       <td
                         key={d.date}
-                        className={`relative px-1.5 py-1.5 border-r border-b last:border-r-0 ${borderCls} align-top min-h-[40px] ${items.length > 0 ? 'cursor-pointer' : ''}`}
+                        className={`relative px-1.5 py-1.5 border-r border-b last:border-r-0 ${borderCls} align-top min-h-[40px] transition-colors ${
+                          items.length > 0 ? 'cursor-pointer' : ''
+                        } ${
+                          isDaySelected && items.length === 0
+                            ? isDark ? 'bg-sky-500/[0.04]' : 'bg-sky-50/40'
+                            : ''
+                        }`}
                         onClick={() => items.length > 0 && setSelectedCell({
                           date: d.date,
                           slotLabel: `${fmtMins(slot.start)} – ${fmtMins(slot.end)}`,
@@ -270,7 +319,86 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
         </table>
       </div>
 
-      {/* ── Cell detail modal ── */}
+      {/* ── Day detail slide-down panel ── */}
+      <div
+        style={{
+          maxHeight: selectedDay ? '600px' : '0px',
+          opacity: selectedDay ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease',
+        }}
+      >
+        <div className={`border-t px-4 pt-4 pb-5 ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+          {/* Panel header */}
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className={`font-semibold text-sm ${tp}`}>
+                {selectedDay && new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-PH', {
+                  weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                })}
+              </p>
+              <p className={`text-xs mt-0.5 ${tm}`}>
+                {dayConsults.length === 0
+                  ? 'No consultations scheduled'
+                  : `${dayConsults.length} consultation${dayConsults.length !== 1 ? 's' : ''}`}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedDay(null)}
+              className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 ml-3 ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          {dayConsults.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center py-8 rounded-xl border ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50'}`}>
+              <svg className={`w-8 h-8 mb-2 ${tm}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 9v7.5" />
+              </svg>
+              <p className={`text-sm font-medium ${ts}`}>No consultations on this day</p>
+              <p className={`text-xs mt-1 ${tm}`}>Click another day to see its schedule</p>
+            </div>
+          ) : (
+            <div className={`rounded-xl border overflow-hidden divide-y ${isDark ? 'border-white/5 divide-white/5' : 'border-gray-100 divide-gray-100'}`}>
+              {dayConsults.map(c => (
+                <div
+                  key={c.id}
+                  className={`flex items-center gap-3 px-4 py-3 transition-colors ${isDark ? 'bg-[#252525] hover:bg-white/[0.03]' : 'bg-white hover:bg-gray-50'}`}
+                >
+                  {/* Avatar initials */}
+                  <div className="w-8 h-8 rounded-full bg-red-950 border border-red-900/50 flex items-center justify-center text-red-300 text-xs font-semibold flex-shrink-0">
+                    {c.student_name.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${tp}`}>{c.student_name}</p>
+                    <p className={`text-xs mt-0.5 ${tm}`}>
+                      {(c.time || c.time_start)?.slice(0, 5)}
+                      {c.time_end && ` – ${c.time_end.slice(0, 5)}`}
+                      {' · '}
+                      {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
+                    </p>
+                  </div>
+                  {/* Status badge */}
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                    c.status === 'confirmed'   ? (isDark ? 'bg-blue-500/15 text-blue-400'       : 'bg-blue-50 text-blue-600') :
+                    c.status === 'pending'     ? (isDark ? 'bg-amber-500/15 text-amber-400'     : 'bg-amber-50 text-amber-700') :
+                    c.status === 'completed'   ? (isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-700') :
+                    c.status === 'cancelled'   ? (isDark ? 'bg-red-500/15 text-red-400'         : 'bg-red-50 text-red-600') :
+                    c.status === 'missed'      ? (isDark ? 'bg-purple-500/15 text-purple-400'   : 'bg-purple-50 text-purple-600') :
+                    isDark ? 'bg-gray-500/15 text-gray-400' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[c.status] ?? 'bg-gray-400'}`} />
+                    {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Time-slot cell detail modal ── */}
       {selectedCell && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"

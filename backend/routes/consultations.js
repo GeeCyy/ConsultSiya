@@ -2,11 +2,34 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
+const notifModule = require('./notifications');
 
 const DAY_MAP = {
   Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
   Thursday: 4, Friday: 5, Saturday: 6,
 };
+
+// Shared helper: marks overdue consultations as missed for a given professor (or all if null).
+// Uses date+time so same-day past slots are caught immediately, not just next-day.
+async function autoMarkMissed(professorId = null) {
+  try {
+    const sql = `
+      UPDATE consultations
+      SET status = 'missed'
+      WHERE status IN ('pending', 'confirmed')
+        AND (date + COALESCE(time, '23:59:00'::time)) < (NOW() AT TIME ZONE 'Asia/Manila')
+        ${professorId ? 'AND professor_id = $1' : ''}
+      RETURNING id
+    `;
+    const result = professorId
+      ? await pool.query(sql, [professorId])
+      : await pool.query(sql);
+    return result.rows.length;
+  } catch (err) {
+    console.error('[autoMarkMissed] error:', err.message);
+    return 0;
+  }
+}
 
 // Get fully-booked future dates for a schedule slot (all time slots taken) — for student date picker
 router.get('/booked-dates', authenticate, async (req, res) => {
@@ -66,21 +89,17 @@ router.get('/booked-dates', authenticate, async (req, res) => {
   }
 });
 
-// Professor triggers auto-mark of past pending/confirmed consultations as missed
-router.post('/mark-missed', authenticate, authorize('professor'), async (req, res) => {
+// Triggers auto-mark for the calling user's consultations (professor or student)
+router.post('/mark-missed', authenticate, async (req, res) => {
   try {
-    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
-    if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
-
-    const result = await pool.query(
-      `UPDATE consultations SET status = 'missed'
-       WHERE professor_id = $1
-         AND status IN ('pending', 'confirmed')
-         AND date < CURRENT_DATE
-       RETURNING id`,
-      [prof.rows[0].id]
-    );
-    res.json({ marked: result.rows.length });
+    let professorId = null;
+    if (req.user.role === 'professor') {
+      const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+      if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
+      professorId = prof.rows[0].id;
+    }
+    const marked = await autoMarkMissed(professorId);
+    res.json({ marked });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -89,7 +108,7 @@ router.post('/mark-missed', authenticate, authorize('professor'), async (req, re
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode } = req.body;
+  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, notes } = req.body;
 
   try {
     const studentResult = await pool.query(
@@ -162,14 +181,60 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
         return res.status(409).json({ error: 'You already have a booking with this professor at this time.' });
       }
 
-      const result = await client.query(
-        `INSERT INTO consultations
-         (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null]
-      );
+      // Use a savepoint so a failed INSERT (e.g. missing column) doesn't abort the
+      // whole transaction — we can roll back to the savepoint and retry without it.
+      await client.query('SAVEPOINT before_insert');
+      let result;
+      try {
+        result = await client.query(
+          `INSERT INTO consultations
+           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null]
+        );
+        await client.query('RELEASE SAVEPOINT before_insert');
+      } catch (colErr) {
+        // Roll back the failed statement so the transaction stays healthy
+        await client.query('ROLLBACK TO SAVEPOINT before_insert');
+        if (colErr.code !== '42703') throw colErr; // re-raise anything that isn't "column does not exist"
+        console.warn('[booking] notes column missing — inserting without it. Run: ALTER TABLE consultations ADD COLUMN IF NOT EXISTS notes TEXT;');
+        result = await client.query(
+          `INSERT INTO consultations
+           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null]
+        );
+      }
 
       await client.query('COMMIT');
+
+      // Notifications — best-effort, outside transaction
+      try {
+        const [profUserRow, studentNameRow] = await Promise.all([
+          pool.query(`SELECT user_id FROM professors WHERE id = $1`, [professor_id]),
+          pool.query(`SELECT full_name FROM students WHERE id = $1`, [student_id]),
+        ]);
+        const studentName = studentNameRow.rows[0]?.full_name || 'A student';
+        const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+
+        if (profUserRow.rows[0]) {
+          await notifModule.insertAndPush(
+            profUserRow.rows[0].user_id, 'new_booking',
+            `${studentName} booked a consultation on ${fmtDate}`,
+            { consultation_id: result.rows[0].id, student_name: studentName, date, route: 'consultations' }
+          );
+        }
+
+        // Notify all admins (fire-and-forget)
+        pool.query(`SELECT id FROM users WHERE role = 'admin'`).then(admins => {
+          admins.rows.forEach(a => notifModule.insertAndPush(
+            a.id, 'new_request',
+            `New consultation request from ${studentName}`,
+            { consultation_id: result.rows[0].id, student_name: studentName, date, route: 'consultations' }
+          ));
+        }).catch(() => {});
+      } catch { /* notifications are best-effort */ }
+
       res.status(201).json(result.rows[0]);
     } catch (err) {
       await client.query('ROLLBACK');
@@ -183,9 +248,50 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
   }
 });
 
+// Global: most consulted topics across ALL consultations (all students, all statuses, all time)
+router.get('/my-topics', authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        topic AS label,
+        COUNT(*)::int AS count
+      FROM (
+        SELECT jsonb_array_elements_text(nature_of_advising::jsonb) AS topic
+        FROM consultations
+        WHERE nature_of_advising IS NOT NULL
+          AND nature_of_advising LIKE '[%'
+        UNION ALL
+        SELECT nature_of_advising AS topic
+        FROM consultations
+        WHERE nature_of_advising IS NOT NULL
+          AND nature_of_advising <> ''
+          AND nature_of_advising NOT LIKE '[%'
+      ) t
+      WHERE topic IS NOT NULL AND topic <> ''
+      GROUP BY topic
+      ORDER BY count DESC
+      LIMIT 3
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get consultations (professors see their own, students see their own, admin sees all)
 router.get('/', authenticate, async (req, res) => {
   try {
+    // Auto-mark overdue consultations before returning data so the list is always fresh.
+    // Professor: scope to their own; student/admin: mark all overdue globally.
+    if (req.user.role === 'professor') {
+      const profRow = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+      if (profRow.rows[0]) await autoMarkMissed(profRow.rows[0].id);
+    } else {
+      await autoMarkMissed();
+    }
+
     let result;
 
     if (req.user.role === 'professor') {
@@ -287,6 +393,27 @@ router.patch('/:id/confirm', authenticate, authorize('professor'), async (req, r
       `UPDATE consultations SET status = 'confirmed', meeting_link = $2 WHERE id = $1 RETURNING *`,
       [id, link]
     );
+
+    // Notify student
+    try {
+      const row = await pool.query(`
+        SELECT s.user_id AS student_user_id, p.full_name AS professor_name, c.date::text AS date
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN professors p ON c.professor_id = p.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        const { student_user_id, professor_name, date } = row.rows[0];
+        const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        await notifModule.insertAndPush(
+          student_user_id, 'status_update',
+          `Your consultation with ${professor_name} on ${fmtDate} was confirmed`,
+          { consultation_id: Number(id), professor_name, date, route: 'my' }
+        );
+      }
+    } catch { /* best-effort */ }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -358,6 +485,36 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
       `UPDATE consultations SET status = 'cancelled', cancel_reason = $1 WHERE id = $2`,
       [cancel_reason?.trim() || null, id]
     );
+
+    // Notify the other party
+    try {
+      const row = await pool.query(`
+        SELECT s.user_id AS student_user_id, p.user_id AS prof_user_id,
+               s.full_name AS student_name, p.full_name AS professor_name, c.date::text AS date
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN professors p ON c.professor_id = p.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        const { student_user_id, prof_user_id, student_name, professor_name, date } = row.rows[0];
+        const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        if (req.user.role === 'professor') {
+          await notifModule.insertAndPush(
+            student_user_id, 'cancelled',
+            `Your consultation with ${professor_name} on ${fmtDate} was cancelled`,
+            { consultation_id: Number(id), professor_name, date, route: 'my' }
+          );
+        } else {
+          await notifModule.insertAndPush(
+            prof_user_id, 'cancelled',
+            `${student_name} cancelled their consultation on ${fmtDate}`,
+            { consultation_id: Number(id), student_name, date, route: 'consultations' }
+          );
+        }
+      }
+    } catch { /* best-effort */ }
+
     res.json({ message: 'Consultation cancelled.' });
   } catch (err) {
     console.error(err);
@@ -395,7 +552,70 @@ router.patch('/:id/complete', authenticate, authorize('professor'), async (req, 
       [id, action_taken, referral || null, referral_specify || null, remarks || null]
     );
 
+    // Notify student
+    try {
+      const row = await pool.query(`
+        SELECT s.user_id AS student_user_id, p.full_name AS professor_name, c.date::text AS date
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN professors p ON c.professor_id = p.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        const { student_user_id, professor_name, date } = row.rows[0];
+        const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        await notifModule.insertAndPush(
+          student_user_id, 'status_update',
+          `Your consultation with ${professor_name} on ${fmtDate} was completed`,
+          { consultation_id: Number(id), professor_name, date, route: 'my' }
+        );
+      }
+    } catch { /* best-effort */ }
+
     res.json({ message: 'Consultation completed', details: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Professor updates notes on a completed consultation
+router.patch('/:id/notes', authenticate, authorize('professor'), async (req, res) => {
+  const { id } = req.params;
+  const { action_taken, referral, referral_specify, remarks } = req.body;
+
+  try {
+    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+    if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
+
+    const consultation = await pool.query(
+      `SELECT professor_id, status FROM consultations WHERE id = $1`, [id]
+    );
+    if (consultation.rows.length === 0) return res.status(404).json({ error: 'Consultation not found.' });
+    if (consultation.rows[0].professor_id !== prof.rows[0].id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    // Upsert consultation_details
+    const existing = await pool.query(
+      `SELECT id FROM consultation_details WHERE consultation_id = $1`, [id]
+    );
+    if (existing.rows.length > 0) {
+      await pool.query(
+        `UPDATE consultation_details
+         SET action_taken = $1, referral = $2, referral_specify = $3, remarks = $4
+         WHERE consultation_id = $5`,
+        [action_taken || null, referral || null, referral_specify || null, remarks || null, id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO consultation_details (consultation_id, action_taken, referral, referral_specify, remarks)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, action_taken || null, referral || null, referral_specify || null, remarks || null]
+      );
+    }
+
+    res.json({ message: 'Notes updated.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -436,4 +656,5 @@ router.patch('/:id/reschedule', authenticate, authorize('professor'), async (req
   }
 });
 
+router.autoMarkMissed = autoMarkMissed;
 module.exports = router;

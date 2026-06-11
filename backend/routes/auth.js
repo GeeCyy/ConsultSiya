@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/db');
 const { authenticate } = require('../middleware/auth.middleware');
+const notifModule = require('./notifications');
 
 
 // ── Auth-specific rate limiter: max 100 requests per 15 min per IP ────────────
@@ -52,7 +53,7 @@ router.post(
       const userId = userResult.rows[0].id;
 
       if (role === 'student') {
-        if (!student_number) return res.status(400).json({ error: 'Student number is required.' });
+        if (!student_number || !/^\d{10}$/.test(student_number)) return res.status(400).json({ error: 'Student number must be exactly 10 digits.' });
         await pool.query(
           `INSERT INTO students (user_id, full_name, student_number, program, year_level)
            VALUES ($1, $2, $3, $4, $5)`,
@@ -67,6 +68,16 @@ router.post(
       }
 
       res.status(201).json({ message: 'Registration successful. Your account is pending admin approval.' });
+
+      // Notify all admins of the new pending registration (fire-and-forget)
+      pool.query(`SELECT id FROM users WHERE role = 'admin'`).then(admins => {
+        admins.rows.forEach(admin => notifModule.insertAndPush(
+          admin.id,
+          'new_registration',
+          `New account pending approval: ${full_name} (${role})`,
+          { userId, route: 'accounts' }
+        ));
+      }).catch(() => {});
     } catch (err) {
       console.error('[Register]', err.code, err.message);
       if (err.code === '23505') return res.status(400).json({ error: 'Email or student number already registered.' });

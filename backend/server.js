@@ -3,10 +3,12 @@ const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const cron = require('node-cron');
 require('dotenv').config();
 
 const pool = require('./db/db');
 const { authenticate } = require('./middleware/auth.middleware');
+const { autoMarkMissed } = require('./routes/consultations');
 
 const app = express();
 
@@ -43,6 +45,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/schedules', require('./routes/schedules'));
 app.use('/api/consultations', require('./routes/consultations'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/calendar', require('./routes/calendar'));
@@ -69,6 +72,12 @@ app.get('/db-health', async (req, res) => {
 app.get('/api/protected', authenticate, (req, res) => {
   res.json({ message: `Hello ${req.user.role}!`, user: req.user });
 });
+
+// ── Cron: mark missed consultations every 30 minutes (Asia/Manila) ────────────
+cron.schedule('*/30 * * * *', async () => {
+  const count = await autoMarkMissed();
+  if (count > 0) console.log(`[cron] marked ${count} consultation(s) as missed`);
+}, { timezone: 'Asia/Manila' });
 
 // ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
@@ -206,4 +215,54 @@ app.listen(PORT, '0.0.0.0', () => {
   `)
     .then(() => console.log('[startup] calendar_overrides unique indexes ready'))
     .catch(err => console.error('[startup] calendar_overrides index migration failed:', err.message));
+
+  pool.query(`
+    UPDATE students
+    SET program = 'Others'
+    WHERE program IS NOT NULL
+      AND program NOT IN (
+        'BS Computer Science',
+        'BS Entertainment and Multimedia Computing',
+        'BS Information Technology',
+        'BS Information Systems',
+        'BS Data Science',
+        'BS Cybersecurity',
+        'Others'
+      )
+  `)
+    .then(r => r.rowCount > 0 && console.log(`[startup] migrated ${r.rowCount} student program(s) to Others`))
+    .catch(err => console.error('[startup] student program migration failed:', err.message));
+
+  pool.query(`
+    UPDATE professors
+    SET department = 'Others'
+    WHERE department IS NOT NULL
+      AND department NOT IN (
+        'BS Computer Science',
+        'BS Entertainment and Multimedia Computing',
+        'BS Information Technology',
+        'BS Information Systems',
+        'BS Data Science',
+        'BS Cybersecurity',
+        'Others'
+      )
+  `)
+    .then(r => r.rowCount > 0 && console.log(`[startup] migrated ${r.rowCount} professor department(s) to Others`))
+    .catch(err => console.error('[startup] professor department migration failed:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type       VARCHAR(50) NOT NULL,
+      message    TEXT NOT NULL,
+      metadata   JSONB,
+      is_read    BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id);
+    CREATE INDEX IF NOT EXISTS notifications_created_idx ON notifications (created_at DESC);
+  `)
+    .then(() => console.log('[startup] notifications table ready'))
+    .catch(err => console.error('[startup] notifications migration failed:', err.message));
 });

@@ -55,6 +55,18 @@ router.get('/profile', authenticate, async (req, res) => {
       );
       if (result.rows.length === 0) return res.status(404).json({ error: 'Profile not found.' });
       profileData = result.rows[0];
+
+      // Optional professor-preference columns — skip gracefully if not yet migrated
+      try {
+        const prefRow = await pool.query(
+          `SELECT bio, preferred_mode, is_available FROM professors WHERE user_id = $1`, [id]
+        );
+        if (prefRow.rows.length > 0) {
+          profileData.bio            = prefRow.rows[0].bio            ?? '';
+          profileData.preferred_mode = prefRow.rows[0].preferred_mode ?? 'Both';
+          profileData.is_available   = prefRow.rows[0].is_available   ?? true;
+        }
+      } catch { /* 42703 — columns not yet added; return without them */ }
     } else if (role === 'admin') {
       const result = await pool.query(
         `SELECT email, created_at FROM users WHERE id = $1`,
@@ -106,7 +118,10 @@ router.get('/profile/public', authenticate, async (req, res) => {
     let data;
     if (role === 'professor') {
       const result = await pool.query(
-        `SELECT p.full_name, p.department, p.phone, u.avatar
+        `SELECT p.full_name, p.department, p.phone, u.avatar,
+                COALESCE(p.bio, '') AS bio,
+                COALESCE(p.preferred_mode, 'Both') AS preferred_mode,
+                COALESCE(p.is_available, true) AS is_available
          FROM professors p
          JOIN users u ON u.id = p.user_id
          WHERE p.id = $1`,
@@ -150,7 +165,7 @@ router.patch(
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
 
     const { id, role } = req.user;
-    const { full_name, student_number, program, year_level, department, email, phone } = req.body;
+    const { full_name, student_number, program, year_level, department, email, phone, bio, preferred_mode, is_available } = req.body;
 
     try {
       if (role === 'student') {
@@ -187,19 +202,33 @@ router.patch(
       }
 
       if (role === 'professor') {
+        // Try full update including optional preference columns
         try {
           await pool.query(
             `UPDATE professors
-             SET full_name = $1, department = $2, email = $3, phone = $4
-             WHERE user_id = $5`,
-            [full_name || null, department || null, email || null, phone || null, id]
+             SET full_name = $1, department = $2, email = $3, phone = $4,
+                 bio = $5, preferred_mode = $6, is_available = $7
+             WHERE user_id = $8`,
+            [full_name || null, department || null, email || null, phone || null,
+             bio || null, preferred_mode || 'Both',
+             is_available !== undefined ? Boolean(is_available) : true, id]
           );
         } catch (colErr) {
           if (colErr.code !== '42703') throw colErr;
-          await pool.query(
-            `UPDATE professors SET full_name = $1, department = $2 WHERE user_id = $3`,
-            [full_name || null, department || null, id]
-          );
+          // Fallback: columns not yet added — update base fields only
+          try {
+            await pool.query(
+              `UPDATE professors
+               SET full_name = $1, department = $2, email = $3, phone = $4
+               WHERE user_id = $5`,
+              [full_name || null, department || null, email || null, phone || null, id]
+            );
+          } catch {
+            await pool.query(
+              `UPDATE professors SET full_name = $1, department = $2 WHERE user_id = $3`,
+              [full_name || null, department || null, id]
+            );
+          }
         }
 
         if (email) {

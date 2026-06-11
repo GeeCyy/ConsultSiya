@@ -87,7 +87,7 @@ function FaqPanel({ onClose }: { onClose: () => void }) {
           )}
           <div
             className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: '#CC0000' }}
+            style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}
           >
             <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -275,8 +275,8 @@ function FaqButton({ onClick, open }: { onClick: () => void; open: boolean }) {
       onClick={onClick}
       title="FAQ"
       aria-label={open ? 'Close FAQ' : 'Open FAQ'}
-      className="fixed bottom-6 right-6 z-50 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-      style={{ backgroundColor: '#CC0000', width: 52, height: 52 }}
+      className="fixed bottom-6 right-6 z-50 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 hover:-translate-y-0.5"
+      style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)', width: 52, height: 52, boxShadow: '0 4px 20px rgba(14,165,233,0.4), 0 2px 8px rgba(14,165,233,0.2)' }}
     >
       {open ? (
         <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
