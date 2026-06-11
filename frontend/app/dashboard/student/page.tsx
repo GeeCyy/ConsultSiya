@@ -111,6 +111,8 @@ type Consultation = {
   time?: string | null;
   location?: string;
   meeting_link?: string | null;
+  proof_of_evidence: string | null;
+  proof_type: 'file' | 'link' | null;
 };
 
 type StudentProfile = {
@@ -605,6 +607,14 @@ export default function StudentDashboard() {
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const uploadForId   = useRef<number | null>(null);
 
+  // Proof of evidence
+  const [proofPanelId, setProofPanelId]         = useState<number | null>(null);
+  const [proofMode, setProofMode]               = useState<'file' | 'link'>('file');
+  const [proofLinkValue, setProofLinkValue]     = useState('');
+  const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
+  const proofFileRef   = useRef<HTMLInputElement>(null);
+  const proofUploadForId = useRef<number | null>(null);
+
   // Profile card popup
   const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
 
@@ -808,6 +818,40 @@ export default function StudentDashboard() {
     } finally { setUploadingId(null); uploadForId.current = null; }
   };
 
+  const handleProofFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !proofUploadForId.current) return;
+    const id = proofUploadForId.current;
+    setSubmittingProofId(id);
+    e.target.value = '';
+    const formData = new FormData();
+    formData.append('proof', file);
+    try {
+      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
+      });
+      const data = await res.json();
+      if (data.error) { toast.error(data.error); return; }
+      toast.success('Proof of evidence submitted!');
+      setProofPanelId(null);
+      await fetchData();
+    } finally { setSubmittingProofId(null); proofUploadForId.current = null; }
+  };
+
+  const handleProofLinkSubmit = async (id: number) => {
+    const link = proofLinkValue.trim();
+    if (!link) { toast.error('Please enter a valid link.'); return; }
+    setSubmittingProofId(id);
+    try {
+      const data = await api.post(`/api/consultations/${id}/proof`, { link }, token!);
+      if (data.error) { toast.error(data.error); return; }
+      toast.success('Proof link submitted!');
+      setProofPanelId(null);
+      setProofLinkValue('');
+      await fetchData();
+    } finally { setSubmittingProofId(null); }
+  };
+
   // ── Theme ──
 
   const toggleTheme = () => {
@@ -943,6 +987,7 @@ export default function StudentDashboard() {
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <div className="lg:hidden h-14 flex-shrink-0" />
         <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
+        <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
 
         <main className="flex-1 overflow-y-auto">
         {loading ? (
@@ -1849,27 +1894,6 @@ export default function StudentDashboard() {
                           Download Form
                         </button>
 
-                        {(c.status === 'pending' || c.status === 'confirmed') && (
-                          <button onClick={() => triggerUpload(c.id)} disabled={uploadingId === c.id}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
-                              c.uploaded_form_path
-                                ? isDark
-                                  ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20'
-                                  : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'
-                                : isDark
-                                  ? 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20 hover:bg-amber-500/20'
-                                  : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-200'
-                            }`}>
-                            {uploadingId === c.id ? (
-                              <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                            ) : c.uploaded_form_path ? (
-                              <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Form Uploaded · Replace</>
-                            ) : (
-                              <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8-4-4m0 0L8 8m4-4v12" /></svg>Upload Signed Form</>
-                            )}
-                          </button>
-                        )}
-
                         {c.status === 'completed' && (
                           <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
@@ -1880,12 +1904,6 @@ export default function StudentDashboard() {
                           </button>
                         )}
 
-                        {c.status !== 'pending' && c.status !== 'confirmed' && c.uploaded_form_path && (
-                          <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            Form submitted
-                          </span>
-                        )}
                       </div>
 
                       {(c.status === 'pending' || c.status === 'confirmed') && (
@@ -1895,6 +1913,117 @@ export default function StudentDashboard() {
                         </button>
                       )}
                     </div>
+
+                    {/* ── Proof of Evidence ─────────────────────────────── */}
+                    {c.status !== 'cancelled' && (
+                      <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                        {c.proof_of_evidence ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Proof Submitted
+                            </span>
+                            {c.proof_type === 'link' ? (
+                              <a href={c.proof_of_evidence} target="_blank" rel="noopener noreferrer"
+                                className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                View Link →
+                              </a>
+                            ) : (
+                              <a href={`${API_URL}/api/consultations/${c.id}/proof`}
+                                target="_blank" rel="noopener noreferrer"
+                                className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                View File →
+                              </a>
+                            )}
+                            <button
+                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); }}
+                              className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                              Replace
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              isDark
+                                ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20'
+                                : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'
+                            }`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            Submit Proof of Evidence
+                          </button>
+                        )}
+
+                        {/* Expandable proof submission panel */}
+                        {proofPanelId === c.id && (
+                          <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                              Proof of Evidence
+                            </p>
+
+                            {/* Mode tabs */}
+                            <div className={`flex gap-1 p-1 rounded-lg mb-3 w-fit ${isDark ? 'bg-[#1a1a1a]' : 'bg-gray-200'}`}>
+                              {(['file', 'link'] as const).map(m => (
+                                <button key={m} onClick={() => setProofMode(m)}
+                                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                                    proofMode === m
+                                      ? 'bg-violet-500 text-white shadow-sm'
+                                      : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                                  }`}>
+                                  {m === 'file' ? 'Upload File' : 'Paste Link'}
+                                </button>
+                              ))}
+                            </div>
+
+                            {proofMode === 'file' ? (
+                              <button
+                                onClick={() => { proofUploadForId.current = c.id; proofFileRef.current?.click(); }}
+                                disabled={submittingProofId === c.id}
+                                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-medium border-2 border-dashed transition-colors disabled:opacity-50 ${
+                                  isDark
+                                    ? 'border-white/10 text-gray-400 hover:border-violet-500/40 hover:text-violet-400 hover:bg-violet-500/5'
+                                    : 'border-gray-300 text-gray-500 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50'
+                                }`}>
+                                {submittingProofId === c.id ? (
+                                  <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                  </svg>
+                                )}
+                                {submittingProofId === c.id ? 'Uploading…' : 'Choose File (PDF, JPG, PNG · max 10 MB)'}
+                              </button>
+                            ) : (
+                              <div className="flex gap-2">
+                                <input
+                                  type="url"
+                                  value={proofLinkValue}
+                                  onChange={e => setProofLinkValue(e.target.value)}
+                                  placeholder="https://drive.google.com/…"
+                                  className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
+                                    isDark
+                                      ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
+                                      : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
+                                  }`}
+                                />
+                                <button
+                                  onClick={() => handleProofLinkSubmit(c.id)}
+                                  disabled={submittingProofId === c.id || !proofLinkValue.trim()}
+                                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                                  {submittingProofId === c.id
+                                    ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                                    : 'Submit'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
