@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useNotifications, type LiveNotif } from '@/hooks/useNotifications';
 
 export type NavItem = { key: string; label: string };
 
@@ -66,6 +67,44 @@ function fmtNotifDate(date: string, time: string | null, timeStart: string): str
   return `${dow}, ${mon}${t12}`;
 }
 
+// ── Live notification helpers ──────────────────────────────────────────────────
+
+function liveNotifIcon(type: string): string {
+  switch (type) {
+    case 'new_slot':         return '📅';
+    case 'new_booking':      return '👤';
+    case 'new_request':      return '🔔';
+    case 'status_update':    return '✅';
+    case 'cancelled':        return '❌';
+    case 'new_registration': return '🧑‍💻';
+    default:                 return '🔔';
+  }
+}
+
+function liveNotifTitle(type: string): string {
+  switch (type) {
+    case 'new_slot':         return 'New slot available';
+    case 'new_booking':      return 'New booking';
+    case 'new_request':      return 'New request';
+    case 'status_update':    return 'Status update';
+    case 'cancelled':        return 'Consultation cancelled';
+    case 'new_registration': return 'New registration';
+    default:                 return 'Notification';
+  }
+}
+
+function liveNotifDot(type: string): string {
+  switch (type) {
+    case 'new_slot':         return 'bg-blue-500';
+    case 'new_booking':      return 'bg-green-500';
+    case 'new_request':      return 'bg-amber-500';
+    case 'status_update':    return 'bg-emerald-500';
+    case 'cancelled':        return 'bg-red-500';
+    case 'new_registration': return 'bg-purple-500';
+    default:                 return 'bg-blue-500';
+  }
+}
+
 // ── Nav icons ──────────────────────────────────────────────────────────────────
 
 function NavIcon({ tabKey }: { tabKey: string }) {
@@ -123,6 +162,16 @@ export default function LeftSidebar({
   const [_mounted, setMounted] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [token, setToken] = useState<string | null>(null);
+
+  const {
+    notifs: liveNotifs,
+    unreadCount: liveUnread,
+    markAllRead: markLiveAllRead,
+    markRead: markLiveRead,
+    toast: liveToast,
+    dismissToast,
+  } = useNotifications(token);
 
   const notifRef       = useRef<HTMLDivElement>(null); // desktop bell button area
   const notifPanelRef  = useRef<HTMLDivElement>(null); // desktop dropdown panel
@@ -133,6 +182,7 @@ export default function LeftSidebar({
     setMounted(true);
     try { setReadIds(new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'))); } catch { /* */ }
     try { setDismissedIds(new Set(JSON.parse(localStorage.getItem(storageKey + '_dismissed') || '[]'))); } catch { /* */ }
+    setToken(localStorage.getItem('token') || null);
   }, [storageKey]);
 
   const persistRead = (ids: Set<string>) => {
@@ -161,13 +211,18 @@ export default function LeftSidebar({
   ].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
     .filter(n => !dismissedIds.has(n.key));
 
-  const unreadCount = notifications.filter(n => n.kind === 'consultation' && !readIds.has(n.key)).length;
+  const propUnreadCount = notifications.filter(n => n.kind === 'consultation' && !readIds.has(n.key)).length;
+  const unreadCount = propUnreadCount + liveUnread;
   const unreadConsultCount = unreadCount;
+
+  const consultNotifs = notifications.filter(n => n.kind === 'consultation');
+  const annNotifs     = notifications.filter(n => n.kind === 'announcement');
 
   const markAllRead = () => {
     const next = new Set(readIds);
     notifications.forEach(n => next.add(n.key));
     persistRead(next);
+    markLiveAllRead();
   };
 
   useEffect(() => {
@@ -178,6 +233,8 @@ export default function LeftSidebar({
       if (n.kind === 'consultation' && !next.has(n.key)) { next.add(n.key); changed = true; }
     });
     if (changed) persistRead(next);
+    // Also mark live notifications read when panel is opened
+    if (liveUnread > 0) markLiveAllRead();
   }, [notifOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -240,7 +297,7 @@ export default function LeftSidebar({
     <div className={`flex flex-col h-full ${sbBg}`}>
 
       {/* ── Logo ── */}
-      <div className="flex items-center gap-3 px-4 py-4 flex-shrink-0" style={{ backgroundColor: '#CC0000', borderBottom: '1px solid rgba(0,0,0,0.15)' }}>
+      <div className="flex items-center gap-3 px-4 py-4 flex-shrink-0" style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)', borderBottom: '1px solid rgba(0,0,0,0.15)' }}>
         <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white flex items-center justify-center overflow-hidden">
           <img src="/consulta-logo.png" alt="Consulta" className="h-8 w-auto object-contain" />
         </div>
@@ -267,7 +324,7 @@ export default function LeftSidebar({
           </svg>
           <span className="flex-1">Notifications</span>
           {unreadCount > 0 && (
-            <span className="text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full bg-[#CC0000] text-white flex items-center justify-center">
+            <span className={`text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full text-white flex items-center justify-center bg-[#0EA5E9]`}>
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -285,9 +342,7 @@ export default function LeftSidebar({
               onClick={() => handleTabChange(item.key)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left group ${
                 isActive
-                  ? (role === 'student'
-                      ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                      : 'bg-[#CC0000] text-white shadow-sm shadow-red-900/30')
+                  ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                   : `${sbText} ${sbHover}`
               }`}
             >
@@ -295,7 +350,7 @@ export default function LeftSidebar({
               <span className="flex-1 truncate">{item.label}</span>
               {hasBadge && (
                 <span className={`text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-[#CC0000] text-white'
+                  isActive ? 'bg-white/20 text-white' : 'bg-[#0EA5E9] text-white'
                 }`}>
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
@@ -336,7 +391,7 @@ export default function LeftSidebar({
 
       {/* ── Profile footer ── */}
       <div className={`flex items-center gap-3 px-4 py-3 flex-shrink-0 border-t ${sbBdr} ${sbBg}`}>
-        <div className="w-8 h-8 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ring-2 ring-[#CC0000]/20">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ring-2 bg-[#0369A1] ring-[#0EA5E9]/30`}>
           {profileAvatar && !profileAvatar.startsWith('/uploads/')
             ? <img src={profileAvatar} alt={profileName} className="w-full h-full object-cover" />
             : initials}
@@ -371,7 +426,7 @@ export default function LeftSidebar({
         </button>
         <img src="/consulta-logo.png" alt="Consulta" className="h-9 w-auto object-contain" />
         <p className={`font-bold text-sm ${sbName}`}>Consulta</p>
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold border border-[#CC0000]/40 text-[#CC0000]">
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold border border-[#0EA5E9]/40 text-[#0EA5E9]`}>
           {role.toUpperCase()}
         </span>
         <div className="flex-1" />
@@ -436,14 +491,47 @@ export default function LeftSidebar({
               </button>
             </div>
           </div>
-          <div className="overflow-y-auto max-h-72">
-            {notifications.length === 0 ? (
+          <div className="overflow-y-auto max-h-80">
+            {/* ── Live (real-time) notifications ── */}
+            {liveNotifs.length > 0 && liveNotifs.slice(0, 5).map((ln: LiveNotif) => {
+              const liveDivider = isDark ? 'border-white/5' : 'border-gray-100';
+              const liveHover   = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50';
+              const liveTitleCls = isDark ? 'text-gray-200' : 'text-gray-800';
+              const liveSubCls   = isDark ? 'text-gray-500' : 'text-gray-400';
+              const liveRoute = ln.metadata?.route as string | undefined;
+              return (
+                <div key={`live-${ln.id}`} className={`border-b ${liveDivider} ${!ln.is_read ? (isDark ? 'bg-white/[0.03]' : 'bg-sky-50/50') : ''}`}>
+                  <button
+                    onClick={() => { markLiveRead(ln.id); setNotifOpen(false); if (liveRoute) onTabChange(liveRoute); }}
+                    className={`w-full flex items-start gap-3 px-4 py-3 text-left ${liveHover} transition-colors`}
+                  >
+                    <span className="text-base flex-shrink-0 mt-0.5">{liveNotifIcon(ln.type)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium leading-snug ${liveTitleCls}`}>{ln.message}</p>
+                      <p className={`text-[11px] mt-0.5 ${liveSubCls}`}>{relTime(ln.created_at)}</p>
+                    </div>
+                    {!ln.is_read && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${liveNotifDot(ln.type)}`} />}
+                  </button>
+                </div>
+              );
+            })}
+            {/* Divider between live and prop-based consultation notifications */}
+            {liveNotifs.length > 0 && consultNotifs.length > 0 && (
+              <div className={`px-4 py-1 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Pending Requests</span>
+              </div>
+            )}
+            {/* Empty state — only when all sections are empty */}
+            {liveNotifs.length === 0 && notifications.length === 0 && (
               <div className="px-4 py-8 text-center">
                 <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No notifications</p>
               </div>
-            ) : notifications.map(n => {
-              const isUnread = !readIds.has(n.key);
-              const unreadBg  = isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/60') : '';
+            )}
+
+            {/* ── Consultation notifications ── */}
+            {consultNotifs.map(n => {
+              const isUnread   = !readIds.has(n.key);
+              const unreadBg   = isUnread ? (isDark ? 'bg-white/[0.03]' : 'bg-blue-50/60') : '';
               const dividerCls = isDark ? 'border-white/5' : 'border-gray-100';
               const hoverCls   = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50';
               const titleCls   = isDark ? 'text-gray-200' : 'text-gray-800';
@@ -455,43 +543,61 @@ export default function LeftSidebar({
                   className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded hover:text-red-400 hover:bg-red-500/10 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
                 >×</button>
               );
-              if (n.kind === 'consultation') {
-                const isStudentNotif = !!n.consult.professor_name;
-                const consultEmoji = !isStudentNotif ? '📅'
-                  : n.consult.status === 'confirmed' ? '✅'
-                  : n.consult.status === 'rescheduled' ? '🔄'
-                  : n.consult.status === 'cancelled' ? '❌' : '📅';
-                const consultDot = !isStudentNotif ? 'bg-[#CC0000]'
-                  : n.consult.status === 'confirmed' ? 'bg-blue-500'
-                  : n.consult.status === 'rescheduled' ? 'bg-orange-400'
-                  : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]';
-                const displayName = isStudentNotif ? n.consult.professor_name! : n.consult.student_name;
-                const actionText = !isStudentNotif ? 'booked a consultation'
-                  : n.consult.status === 'confirmed' ? 'confirmed your consultation'
-                  : n.consult.status === 'rescheduled' ? 'rescheduled your consultation'
-                  : n.consult.status === 'cancelled' ? 'cancelled your consultation'
-                  : 'updated your consultation';
-                return (
-                  <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
-                    <button
-                      onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange(isStudentNotif ? 'my' : 'consultations'); }}
-                      className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
-                    >
-                      <span className="text-base flex-shrink-0 mt-0.5">{consultEmoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium leading-snug ${titleCls}`}>
-                          <span className="font-semibold">{displayName}</span> {actionText}
-                        </p>
-                        <p className={`text-[11px] mt-0.5 ${subCls}`}>
-                          {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
-                        </p>
-                      </div>
-                      {isUnread && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${consultDot}`} />}
-                    </button>
-                    {dismissBtn}
-                  </div>
-                );
-              }
+              const isStudentNotif = !!n.consult.professor_name;
+              const consultEmoji = !isStudentNotif ? '📅'
+                : n.consult.status === 'confirmed' ? '✅'
+                : n.consult.status === 'rescheduled' ? '🔄'
+                : n.consult.status === 'cancelled' ? '❌' : '📅';
+              const consultDot = !isStudentNotif ? 'bg-[#CC0000]'
+                : n.consult.status === 'confirmed' ? 'bg-blue-500'
+                : n.consult.status === 'rescheduled' ? 'bg-orange-400'
+                : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]';
+              const displayName = isStudentNotif ? n.consult.professor_name! : n.consult.student_name;
+              const actionText = !isStudentNotif ? 'booked a consultation'
+                : n.consult.status === 'confirmed' ? 'confirmed your consultation'
+                : n.consult.status === 'rescheduled' ? 'rescheduled your consultation'
+                : n.consult.status === 'cancelled' ? 'cancelled your consultation'
+                : 'updated your consultation';
+              return (
+                <div key={n.key} className={`relative group border-b ${dividerCls} ${unreadBg}`}>
+                  <button
+                    onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); setNotifOpen(false); onTabChange(isStudentNotif ? 'my' : 'consultations'); }}
+                    className={`w-full flex items-start gap-3 px-4 py-3 pr-8 text-left ${hoverCls} transition-colors`}
+                  >
+                    <span className="text-base flex-shrink-0 mt-0.5">{consultEmoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium leading-snug ${titleCls}`}>
+                        <span className="font-semibold">{displayName}</span> {actionText}
+                      </p>
+                      <p className={`text-[11px] mt-0.5 ${subCls}`}>
+                        {fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}
+                      </p>
+                    </div>
+                    {isUnread && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${consultDot}`} />}
+                  </button>
+                  {dismissBtn}
+                </div>
+              );
+            })}
+
+            {/* ── Announcements section ── */}
+            {annNotifs.length > 0 && (
+              <div className={`px-4 py-1 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Announcements</span>
+              </div>
+            )}
+            {annNotifs.map(n => {
+              const dividerCls = isDark ? 'border-white/5' : 'border-gray-100';
+              const hoverCls   = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50';
+              const titleCls   = isDark ? 'text-gray-200' : 'text-gray-800';
+              const subCls     = isDark ? 'text-gray-500' : 'text-gray-400';
+              const dismissBtn = (
+                <button
+                  onClick={(e) => dismissNotif(e, n.key)}
+                  title="Dismiss"
+                  className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center rounded hover:text-red-400 hover:bg-red-500/10 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
+                >×</button>
+              );
               const expanded = expandedAnn === n.ann.id;
               return (
                 <div key={n.key} className={`relative group border-b ${dividerCls}`}>
@@ -535,48 +641,65 @@ export default function LeftSidebar({
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
-          <div className="overflow-y-auto max-h-64">
-            {notifications.length === 0 ? (
+          <div className="overflow-y-auto max-h-72">
+            {/* Live notifications (mobile) */}
+            {liveNotifs.length > 0 && liveNotifs.slice(0, 4).map((ln: LiveNotif) => {
+              const liveRoute = ln.metadata?.route as string | undefined;
+              return (
+                <div key={`mlive-${ln.id}`} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'} ${!ln.is_read ? (isDark ? 'bg-white/[0.03]' : 'bg-sky-50/50') : ''}`}>
+                  <button
+                    onClick={() => { markLiveRead(ln.id); setNotifOpen(false); if (liveRoute) onTabChange(liveRoute); }}
+                    className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
+                  >
+                    <span className="text-sm flex-shrink-0 mt-0.5">{liveNotifIcon(ln.type)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-medium leading-snug line-clamp-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{ln.message}</p>
+                      <p className={`text-[10px] mt-0.5 ${sbSub}`}>{relTime(ln.created_at)}</p>
+                    </div>
+                    {!ln.is_read && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${liveNotifDot(ln.type)}`} />}
+                  </button>
+                </div>
+              );
+            })}
+            {liveNotifs.length > 0 && consultNotifs.length > 0 && (
+              <div className={`px-4 py-1 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Pending</span>
+              </div>
+            )}
+            {liveNotifs.length === 0 && notifications.length === 0 && (
               <p className={`px-4 py-8 text-center text-sm ${sbSub}`}>No notifications</p>
-            ) : notifications.slice(0, 8).map(n => {
+            )}
+
+            {/* ── Consultation notifications (mobile) ── */}
+            {consultNotifs.slice(0, 6).map(n => {
               const isUnread = !readIds.has(n.key);
-              const isStudentNotif = n.kind === 'consultation' && !!n.consult.professor_name;
-              const mobileEmoji = n.kind !== 'consultation'
-                ? (n.ann.type === 'warning' ? '⚠️' : '📢')
-                : !isStudentNotif ? '📅'
+              const isStudentNotif = !!n.consult.professor_name;
+              const mobileEmoji = !isStudentNotif ? '📅'
                 : n.consult.status === 'confirmed' ? '✅'
                 : n.consult.status === 'rescheduled' ? '🔄'
                 : n.consult.status === 'cancelled' ? '❌' : '📅';
-              const mobileDot = n.kind === 'consultation'
-                ? (!isStudentNotif ? 'bg-[#CC0000]'
-                  : n.consult.status === 'confirmed' ? 'bg-blue-500'
-                  : n.consult.status === 'rescheduled' ? 'bg-orange-400'
-                  : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]')
-                : '';
+              const mobileDot = !isStudentNotif ? 'bg-[#CC0000]'
+                : n.consult.status === 'confirmed' ? 'bg-blue-500'
+                : n.consult.status === 'rescheduled' ? 'bg-orange-400'
+                : n.consult.status === 'cancelled' ? 'bg-red-500' : 'bg-[#CC0000]';
               return (
                 <div key={n.key} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'} ${
-                  n.kind === 'consultation' && isUnread
+                  isUnread
                     ? (isStudentNotif && n.consult.status === 'confirmed' ? 'bg-blue-500/5' : isDark ? 'bg-white/[0.03]' : 'bg-blue-50/40')
                     : ''
                 }`}>
                   <button
-                    onClick={() => {
-                      if (n.kind === 'consultation') {
-                        const nx = new Set(readIds); nx.add(n.key); persistRead(nx);
-                        onTabChange(isStudentNotif ? 'my' : 'consultations');
-                      }
-                      setNotifOpen(false);
-                    }}
+                    onClick={() => { const nx = new Set(readIds); nx.add(n.key); persistRead(nx); onTabChange(isStudentNotif ? 'my' : 'consultations'); setNotifOpen(false); }}
                     className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
                   >
                     <span className="text-sm flex-shrink-0 mt-0.5">{mobileEmoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium leading-snug line-clamp-2 ${
-                        isStudentNotif && n.kind === 'consultation' && n.consult.status === 'confirmed'
+                        isStudentNotif && n.consult.status === 'confirmed'
                           ? (isDark ? 'text-blue-300' : 'text-blue-600')
                           : sbName
                       }`}>
-                        {n.kind === 'consultation' ? (() => {
+                        {(() => {
                           const dn = isStudentNotif ? n.consult.professor_name! : n.consult.student_name;
                           const at = !isStudentNotif
                             ? (n.consult.status === 'confirmed' ? ' — approved' : ' booked a consultation')
@@ -585,22 +708,63 @@ export default function LeftSidebar({
                             : n.consult.status === 'cancelled' ? ' cancelled your consultation'
                             : ' updated your consultation';
                           return <><span className="font-semibold">{dn}</span>{at}</>;
-                        })() : n.ann.title || n.ann.body.slice(0, 60)}
+                        })()}
                       </p>
-                      <p className={`text-[10px] mt-0.5 ${sbSub}`}>
-                        {n.kind === 'consultation'
-                          ? fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)
-                          : relTime(n.ann.created_at)}
-                      </p>
+                      <p className={`text-[10px] mt-0.5 ${sbSub}`}>{fmtNotifDate(n.consult.date, n.consult.time, n.consult.time_start)}</p>
                     </div>
-                    {n.kind === 'consultation' && isUnread && (
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${mobileDot}`} />
-                    )}
+                    {isUnread && <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${mobileDot}`} />}
                   </button>
                 </div>
               );
             })}
+
+            {/* ── Announcements section (mobile) ── */}
+            {annNotifs.length > 0 && (
+              <div className={`px-4 py-1 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Announcements</span>
+              </div>
+            )}
+            {annNotifs.slice(0, 4).map(n => (
+              <div key={n.key} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                <button
+                  onClick={() => setNotifOpen(false)}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
+                >
+                  <span className="text-sm flex-shrink-0 mt-0.5">{n.ann.type === 'warning' ? '⚠️' : '📢'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-medium leading-snug line-clamp-2 ${sbName}`}>
+                      {n.ann.title || n.ann.body.slice(0, 60)}
+                    </p>
+                    <p className={`text-[10px] mt-0.5 ${sbSub}`}>{relTime(n.ann.created_at)}</p>
+                  </div>
+                </button>
+              </div>
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Real-time toast notification ── */}
+      {liveToast && (
+        <div
+          className={`fixed top-4 right-4 z-[200] max-w-sm w-full flex items-start gap-3 px-4 py-3 rounded-xl border shadow-2xl toast-enter cursor-pointer ${
+            isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.15)]'
+          }`}
+          onClick={dismissToast}
+        >
+          <span className="text-lg flex-shrink-0 mt-0.5">{liveNotifIcon(liveToast.type)}</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              {liveNotifTitle(liveToast.type)}
+            </p>
+            <p className={`text-[11px] mt-0.5 leading-snug ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              {liveToast.message}
+            </p>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); dismissToast(); }}
+            className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-base leading-none ${isDark ? 'text-gray-600 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}
+          >×</button>
         </div>
       )}
     </>

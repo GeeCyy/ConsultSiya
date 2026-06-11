@@ -10,30 +10,24 @@ import { Label } from '@/components/ui/label';
 
 const PROGRAMS = [
   'BS Computer Science',
+  'BS Entertainment and Multimedia Computing',
   'BS Information Technology',
-  'BS Computer Engineering',
-  'BS Electronics Engineering',
-  'BS Electrical Engineering',
-  'BS Industrial Engineering',
-  'BS Mechanical Engineering',
-  'BS Civil Engineering',
-  'BS Chemical Engineering',
-  'Other',
+  'BS Information Systems',
+  'BS Data Science',
+  'BS Cybersecurity',
+  'Others',
 ];
 
 const YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
 
 const DEPARTMENTS = [
-  'Computer Science',
-  'Information Technology',
-  'Computer Engineering',
-  'Electronics Engineering',
-  'Electrical Engineering',
-  'Industrial Engineering',
-  'Mechanical Engineering',
-  'Civil Engineering',
-  'Chemical Engineering',
-  'Other',
+  'BS Computer Science',
+  'BS Entertainment and Multimedia Computing',
+  'BS Information Technology',
+  'BS Information Systems',
+  'BS Data Science',
+  'BS Cybersecurity',
+  'Others',
 ];
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -101,10 +95,11 @@ export default function RegisterPage() {
       setError('All student fields are required.');
       return;
     }
-    if (role === 'professor' && !form.department) {
-      setError('Department is required.');
+    if (role === 'student' && !/^\d{10}$/.test(form.student_number)) {
+      setError('Student number must be exactly 10 digits.');
       return;
     }
+
 
     setLoading(true);
 
@@ -229,7 +224,14 @@ export default function RegisterPage() {
             <>
               <div className="space-y-1">
                 <Label className={labelCls}>Student Number</Label>
-                <Input placeholder="2021XXXXX" value={form.student_number} onChange={set('student_number')} className={inputCls} />
+                <Input
+                  placeholder="2021XXXXXX"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={form.student_number}
+                  onChange={e => setForm(f => ({ ...f, student_number: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                  className={inputCls}
+                />
               </div>
 
               <div className="space-y-1">
@@ -250,16 +252,6 @@ export default function RegisterPage() {
             </>
           )}
 
-          {/* Professor-specific */}
-          {role === 'professor' && (
-            <div className="space-y-1">
-              <Label className={labelCls}>Department</Label>
-              <select value={form.department} onChange={set('department')} className={selectCls}>
-                <option value="">Select department…</option>
-                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-          )}
 
           <Button
             className="w-full text-white font-semibold mt-2 bg-[#CC0000] hover:bg-[#aa0000]"

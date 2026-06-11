@@ -730,15 +730,15 @@ export default function AdminDashboard() {
     { key: 'calendar',      label: 'Calendar' },
   ];
 
-  const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600';
+  const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600';
 
-  const btnPrimary = 'bg-[linear-gradient(135deg,#C8102E,#9B0E24)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(200,16,46,0.4)] shadow-[0_2px_8px_rgba(200,16,46,0.2)]';
-  const btnSecondary = 'border-2 border-[#C8102E] text-[#C8102E] bg-transparent font-medium rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#C8102E,#9B0E24)] hover:text-white hover:border-transparent';
+  const btnPrimary = 'bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(14,165,233,0.4)] shadow-[0_2px_8px_rgba(14,165,233,0.2)]';
+  const btnSecondary = 'border-2 border-[#0EA5E9] text-[#0EA5E9] bg-transparent font-medium rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] hover:text-white hover:border-transparent';
   const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]';
   const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
 
   return (
-    <div className={`min-h-screen flex ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
+    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
 
       <LeftSidebar
         role="admin"
@@ -753,10 +753,10 @@ export default function AdminDashboard() {
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <div className="lg:hidden h-14 flex-shrink-0" />
-        <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#313338]' : 'bg-[#f5f5f5]'}`}>
+        <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="w-8 h-8 border-2 border-[#CC0000] border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
             <p className="text-gray-600 text-sm">Loading...</p>
           </div>
         ) : (
@@ -782,7 +782,7 @@ export default function AdminDashboard() {
                     <button key={t.key} onClick={() => setStatusFilter(t.key)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         statusFilter === t.key
-                          ? 'bg-[#CC0000] text-white shadow-sm'
+                          ? 'bg-[#0EA5E9] text-white shadow-sm shadow-sky-500/30'
                           : `text-gray-500 hover:text-gray-200 hover:bg-white/5`
                       }`}>
                       {t.label}
@@ -803,7 +803,7 @@ export default function AdminDashboard() {
                     placeholder="Search by name, date, or ID…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-lg text-white text-sm bg-[#161616] border border-white/5 focus:outline-none focus:border-[#CC0000]/30 placeholder-gray-600"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg text-white text-sm bg-[#161616] border border-white/5 focus:outline-none focus:border-[#0EA5E9]/30 placeholder-gray-600"
                   />
                 </div>
 
@@ -881,14 +881,14 @@ export default function AdminDashboard() {
                     <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Admin Accounts ({admins.length}/2)</p>
                     {admins.length < 2 && (
                       <button onClick={() => setShowTransfer(true)}
-                        className="text-xs text-[#CC0000] hover:text-red-400 transition-colors">
+                        className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
                         Promote user to admin →
                       </button>
                     )}
                   </div>
                   <div className="space-y-2">
                     {admins.map(a => (
-                      <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#CC0000]/5 ring-1 ring-[#CC0000]/20">
+                      <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-sky-500/5 ring-1 ring-sky-500/20">
                         <div className="flex items-center gap-3">
                           <Avatar name={a.email} />
                           <div>
@@ -896,7 +896,7 @@ export default function AdminDashboard() {
                             <p className="text-gray-600 text-xs">Admin · joined {fmtDateTime(a.created_at)}</p>
                           </div>
                         </div>
-                        <span className="text-[10px] text-[#CC0000] font-semibold uppercase tracking-wide">Admin</span>
+                        <span className="text-[10px] text-sky-400 font-semibold uppercase tracking-wide">Admin</span>
                       </div>
                     ))}
                   </div>
@@ -916,7 +916,9 @@ export default function AdminDashboard() {
                               <Avatar name={u.full_name || u.email} avatarUrl={u.avatar} />
                             </button>
                             <div>
-                              <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{u.full_name}</p>
+                              <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {u.full_name || <span className="italic text-gray-500">(No name)</span>}
+                              </p>
                               <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>{u.email} · {u.role}</p>
                               {u.role === 'student' && u.student_number && (
                                 <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>{u.student_number} {u.program ? `· ${u.program}` : ''}</p>
@@ -977,7 +979,9 @@ export default function AdminDashboard() {
                           </button>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-white text-sm font-medium">{u.full_name}</p>
+                              <p className="text-white text-sm font-medium">
+                                {u.full_name || <span className="italic text-gray-500">(No name)</span>}
+                              </p>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 u.role === 'professor' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'
                               }`}>
@@ -1067,7 +1071,7 @@ export default function AdminDashboard() {
                           {['student', 'professor'].map(r => (
                             <button key={r} onClick={() => setAddForm(f => ({ ...f, role: r }))}
                               className={`py-2 rounded-lg text-sm font-medium transition-colors ${
-                                addForm.role === r ? 'bg-[#CC0000] text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                                addForm.role === r ? 'bg-[#0EA5E9] text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
                               }`}>
                               {r.charAt(0).toUpperCase() + r.slice(1)}
                             </button>
@@ -1200,7 +1204,7 @@ export default function AdminDashboard() {
                   {([['', 'All Time'], ['week', 'This Week'], ['semester', 'This Semester'], ['year', 'This Year']] as [ReportPeriod, string][]).map(([val, label]) => (
                     <button key={val} onClick={() => setReportPeriod(val)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        reportPeriod === val ? 'bg-[#CC0000] text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                        reportPeriod === val ? 'bg-[#0EA5E9] text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200'
                       }`}>
                       {label}
                     </button>
@@ -1348,10 +1352,10 @@ export default function AdminDashboard() {
 
                 {/* Term stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="md:col-span-2 rounded-2xl p-6 border border-white/5 bg-[#161616] flex items-center gap-6">
-                    <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center bg-[#CC0000]">
+                  <div className="md:col-span-2 rounded-2xl p-6 border border-white/5 bg-[#161616] flex items-center gap-6 shadow-[0_10px_40px_rgba(0,0,0,0.60)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75)] hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] shadow-lg shadow-sky-900/30">
                       <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                      <span className="text-red-200 text-[10px] font-semibold uppercase tracking-wider mt-0.5">Week</span>
+                      <span className="text-sky-100 text-[10px] font-semibold uppercase tracking-wider mt-0.5">Week</span>
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Current Academic Week</p>
@@ -1390,15 +1394,53 @@ export default function AdminDashboard() {
 
                 {/* Countdown cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  {[
-                    { label: 'Days to Finals', value: daysToFinals, color: 'text-amber-400', ring: 'ring-amber-500/20' },
-                    { label: 'Days to End', value: daysToEnd, color: 'text-red-400', ring: 'ring-red-500/20' },
-                    { label: 'Weeks Left', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : '–', color: 'text-blue-400', ring: 'ring-blue-500/20' },
-                    { label: 'Progress', value: `${Math.round(termProgress)}%`, color: 'text-emerald-400', ring: 'ring-emerald-500/20' },
-                  ].map(({ label, value, color, ring }) => (
-                    <div key={label} className={`rounded-2xl p-5 border border-white/5 bg-[#161616] ring-1 ${ring} flex flex-col items-center justify-center text-center`}>
-                      <p className={`text-3xl font-black ${color}`}>{value}</p>
-                      <p className="text-xs text-gray-500 mt-1 font-medium">{label}</p>
+                  {([
+                    {
+                      label: 'Days to Finals', value: daysToFinals,
+                      numColor: '#EA580C', darkNumColor: '#FDBA74',
+                      lightBg: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)', lightBorder: '#FED7AA',
+                      darkBg: 'linear-gradient(135deg, rgba(234,88,12,0.25), rgba(234,88,12,0.12))', darkBorder: 'rgba(251,146,60,0.2)',
+                      shadow: '0 10px 40px rgba(234,88,12,0.20), 0 4px 12px rgba(234,88,12,0.12)',
+                      hoverShadow: '0 20px 60px rgba(234,88,12,0.30), 0 8px 20px rgba(234,88,12,0.18)',
+                    },
+                    {
+                      label: 'Days to End', value: daysToEnd,
+                      numColor: '#DB2777', darkNumColor: '#F9A8D4',
+                      lightBg: 'linear-gradient(135deg, #FDF2F8, #FCE7F3)', lightBorder: '#FBCFE8',
+                      darkBg: 'linear-gradient(135deg, rgba(219,39,119,0.25), rgba(219,39,119,0.12))', darkBorder: 'rgba(249,168,212,0.2)',
+                      shadow: '0 10px 40px rgba(219,39,119,0.20), 0 4px 12px rgba(219,39,119,0.12)',
+                      hoverShadow: '0 20px 60px rgba(219,39,119,0.30), 0 8px 20px rgba(219,39,119,0.18)',
+                    },
+                    {
+                      label: 'Weeks Left', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : '–',
+                      numColor: '#0EA5E9', darkNumColor: '#7DD3FC',
+                      lightBg: 'linear-gradient(135deg, #EEF2FF, #DBEAFE)', lightBorder: '#BFDBFE',
+                      darkBg: 'linear-gradient(135deg, rgba(14,165,233,0.25), rgba(14,165,233,0.12))', darkBorder: 'rgba(56,189,248,0.2)',
+                      shadow: '0 10px 40px rgba(14,165,233,0.20), 0 4px 12px rgba(14,165,233,0.12)',
+                      hoverShadow: '0 20px 60px rgba(14,165,233,0.30), 0 8px 20px rgba(14,165,233,0.18)',
+                    },
+                    {
+                      label: 'Progress', value: `${Math.round(termProgress)}%`,
+                      numColor: '#059669', darkNumColor: '#6EE7B7',
+                      lightBg: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)', lightBorder: '#A7F3D0',
+                      darkBg: 'linear-gradient(135deg, rgba(5,150,105,0.25), rgba(5,150,105,0.12))', darkBorder: 'rgba(52,211,153,0.2)',
+                      shadow: '0 10px 40px rgba(5,150,105,0.20), 0 4px 12px rgba(5,150,105,0.12)',
+                      hoverShadow: '0 20px 60px rgba(5,150,105,0.30), 0 8px 20px rgba(5,150,105,0.18)',
+                    },
+                  ] as const).map(s => (
+                    <div
+                      key={s.label}
+                      className="rounded-2xl p-3 border transition-all duration-200 hover:-translate-y-0.5 flex flex-col items-center justify-center text-center"
+                      style={{
+                        background: isDark ? s.darkBg : s.lightBg,
+                        borderColor: isDark ? s.darkBorder : s.lightBorder,
+                        boxShadow: s.shadow,
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = s.hoverShadow; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = s.shadow; }}
+                    >
+                      <p className="text-2xl sm:text-3xl font-black leading-none tracking-tight" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</p>
+                      <p className={`text-xs font-semibold mt-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{s.label}</p>
                     </div>
                   ))}
                 </div>
@@ -1416,7 +1458,7 @@ export default function AdminDashboard() {
                     <span>End</span>
                   </div>
                   <div className="relative h-3 rounded-full overflow-hidden bg-white/5">
-                    <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700 bg-[#CC0000]" style={{ width: `${termProgress}%` }} />
+                    <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700 bg-gradient-to-r from-[#0369A1] to-[#0EA5E9]" style={{ width: `${termProgress}%` }} />
                     <div className="absolute top-0 h-full w-0.5 bg-amber-400/60" style={{ left: `${((term.midtermWeek - 1) / term.totalWeeks) * 100}%` }} />
                     <div className="absolute top-0 h-full w-0.5 bg-orange-400/60" style={{ left: `${((term.finalsWeek - 1) / term.totalWeeks) * 100}%` }} />
                   </div>
@@ -1444,7 +1486,7 @@ export default function AdminDashboard() {
                         value={termForm.term_label}
                         onChange={e => setTermForm(f => ({ ...f, term_label: e.target.value }))}
                         placeholder="e.g. 3rd Trimester, A.Y. 2025–2026"
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-600"
+                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600"
                       />
                     </div>
                     <div>
@@ -1453,7 +1495,7 @@ export default function AdminDashboard() {
                         type="date"
                         value={termForm.term_start}
                         onChange={e => setTermForm(f => ({ ...f, term_start: e.target.value }))}
-                        className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-[#CC0000]/50 ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 [color-scheme:dark]' : 'text-gray-900 bg-white border-gray-300 [color-scheme:light]'}`}
+                        className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-[#0EA5E9]/50 ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 [color-scheme:dark]' : 'text-gray-900 bg-white border-gray-300 [color-scheme:light]'}`}
                       />
                     </div>
                     <div>
@@ -1462,7 +1504,7 @@ export default function AdminDashboard() {
                         type="number" min={1} max={52}
                         value={termForm.term_total_weeks}
                         onChange={e => setTermForm(f => ({ ...f, term_total_weeks: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50"
+                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50"
                       />
                     </div>
                     <div>
@@ -1471,7 +1513,7 @@ export default function AdminDashboard() {
                         type="number" min={1} max={parseInt(termForm.term_total_weeks) || 52}
                         value={termForm.term_midterm_week}
                         onChange={e => setTermForm(f => ({ ...f, term_midterm_week: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50"
+                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50"
                       />
                     </div>
                     <div>
@@ -1480,7 +1522,7 @@ export default function AdminDashboard() {
                         type="number" min={1} max={parseInt(termForm.term_total_weeks) || 52}
                         value={termForm.term_finals_week}
                         onChange={e => setTermForm(f => ({ ...f, term_finals_week: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50"
+                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50"
                       />
                     </div>
                   </div>
@@ -1565,7 +1607,7 @@ export default function AdminDashboard() {
                                 className={`relative flex flex-col items-center justify-center min-h-[38px] pb-0.5 rounded-lg text-xs ${cellBg}`}
                               >
                                 {isToday ? (
-                                  <span className="w-6 h-6 rounded-full bg-[#CC0000] flex items-center justify-center text-[11px] font-bold text-white shadow shadow-red-900/50">
+                                  <span className="w-6 h-6 rounded-full bg-[#0EA5E9] flex items-center justify-center text-[11px] font-bold text-white shadow shadow-sky-900/50">
                                     {date.getDate()}
                                   </span>
                                 ) : (
@@ -1659,14 +1701,14 @@ export default function AdminDashboard() {
                           </span>
                         </button>
                         <input
-                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700"
+                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-700"
                           placeholder="Title *"
                           value={annForm.title}
                           onChange={e => setAnnForm(f => ({ ...f, title: e.target.value }))}
                         />
                         <textarea
                           rows={3}
-                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#CC0000]/50 placeholder-gray-700 resize-none"
+                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-700 resize-none"
                           placeholder="Body / message *"
                           value={annForm.body}
                           onChange={e => setAnnForm(f => ({ ...f, body: e.target.value }))}
@@ -1780,8 +1822,8 @@ export default function AdminDashboard() {
 
             {/* ── Leaderboards ── */}
             {tab === 'home' && (
-              <div className="px-4 sm:px-6 pb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="px-4 sm:px-6 pt-6 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <LeaderboardCard title="Top Professors" items={lbProfs} isDark={isDark} />
                   <LeaderboardCard title="Top Students"   items={lbStudents} isDark={isDark} />
                   <LeaderboardCard title="Top Topics"     items={lbTopics} isDark={isDark} />
@@ -1885,7 +1927,7 @@ export default function AdminDashboard() {
                       <p className={`${c.sub} text-sm mt-0.5`}>
                         {CURRENT_TERM.label} · {CURRENT_TERM.totalWeeks} weeks
                         {calSelectedArr.length > 0 && (
-                          <span className="ml-2 text-[#CC0000] font-medium">· {calSelectedArr.length} date{calSelectedArr.length !== 1 ? 's' : ''} selected</span>
+                          <span className="ml-2 text-sky-400 font-medium">· {calSelectedArr.length} date{calSelectedArr.length !== 1 ? 's' : ''} selected</span>
                         )}
                       </p>
                     </div>
@@ -1944,7 +1986,7 @@ export default function AdminDashboard() {
                           </button>
                         ))}
                         <span className={`flex items-center gap-1.5 text-[10px] ${c.label}`}>
-                          <span className="w-5 h-5 rounded-full bg-[#CC0000] flex items-center justify-center text-[9px] text-white font-bold leading-none">T</span>
+                          <span className="w-5 h-5 rounded-full bg-[#0EA5E9] flex items-center justify-center text-[9px] text-white font-bold leading-none">T</span>
                           Today
                         </span>
                         <span className={`ml-auto text-[10px] ${c.sub} hidden lg:block`}>Ctrl+click multi · Shift+click range · W# selects week</span>
@@ -2023,12 +2065,12 @@ export default function AdminDashboard() {
                                       }
                                     }}
                                     className={`relative flex flex-col items-center min-h-[72px] pt-2.5 pb-1.5 px-0.5 border-r ${c.cellBorder} last:border-0 transition-all ${cellBg} ${
-                                      isSelected ? 'ring-2 ring-inset ring-[#CC0000]/60 brightness-125 z-10' : ''
-                                    } ${!inMonth ? 'opacity-20 cursor-default' : isSunday ? 'cursor-default' : 'cursor-pointer hover:brightness-125 hover:z-10'}`}
+                                      isSelected ? 'ring-2 ring-inset ring-sky-400/80 bg-sky-500/20 z-10' : ''
+                                    } ${!inMonth ? 'opacity-20 cursor-default' : isSunday ? 'cursor-default' : 'cursor-pointer hover:bg-sky-500/10 hover:z-10'}`}
                                     title={inMonth ? `${dStr}${dWeek ? ` · W${dWeek}` : ''}${dateLabelMap.get(dStr) ? ` · ${dateLabelMap.get(dStr)}` : ''}` : undefined}
                                   >
                                     {isToday ? (
-                                      <span className="w-7 h-7 rounded-full bg-[#CC0000] flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-red-900/50">
+                                      <span className="w-7 h-7 rounded-full bg-[#0EA5E9] flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-sky-900/50">
                                         {date.getDate()}
                                       </span>
                                     ) : (
@@ -2043,7 +2085,7 @@ export default function AdminDashboard() {
                                       );
                                     })()}
                                     {isSelected && !isToday && (
-                                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#CC0000]" />
+                                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-sky-400" />
                                     )}
                                   </button>
                                 );
@@ -2066,7 +2108,7 @@ export default function AdminDashboard() {
                           <div className={`divide-y ${c.divider}`}>
                             {blockedDates.map((o: CalendarOverride) => (
                               <div key={o.id}
-                                className={`px-5 py-3 flex items-center justify-between gap-4 cursor-pointer ${c.rowHover} transition-colors ${o.date && calSelectedDates.has(o.date) ? 'bg-[#CC0000]/5' : ''}`}
+                                className={`px-5 py-3 flex items-center justify-between gap-4 cursor-pointer ${c.rowHover} transition-colors ${o.date && calSelectedDates.has(o.date) ? 'bg-sky-500/5' : ''}`}
                                 onClick={() => {
                                   if (o.date) {
                                     const d = new Date(o.date + 'T12:00:00');
@@ -2137,7 +2179,7 @@ export default function AdminDashboard() {
                           (detailIsBlocked && calPendingBlockReason.trim() !== savedBlockReason);
                         return (
                           <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
-                            <div className={`px-5 py-4 border-b ${c.cellBorder} bg-[#CC0000]/5`}>
+                            <div className={`px-5 py-4 border-b ${c.cellBorder} bg-sky-500/5`}>
                               <p className={`${c.heading} font-bold text-sm leading-snug`}>{displayDate}</p>
                               {detailWeek ? (
                                 <p className={`${c.sub} text-xs mt-0.5`}>Week {detailWeek} of {CURRENT_TERM.totalWeeks}</p>
@@ -2155,7 +2197,7 @@ export default function AdminDashboard() {
                                       <button
                                         onClick={() => { setCalLabelEditing(true); setCalPendingLabel(savedLabel); setCalPendingColor(savedColor); }}
                                         disabled={isSaving}
-                                        className="text-[10px] text-[#CC0000]/70 hover:text-[#CC0000] transition-colors disabled:opacity-40"
+                                        className="text-[10px] text-sky-400/70 hover:text-sky-400 transition-colors disabled:opacity-40"
                                       >Edit</button>
                                     )}
                                     {calLabelEditing && (
@@ -2189,7 +2231,7 @@ export default function AdminDashboard() {
                                         maxLength={40}
                                         disabled={isSaving}
                                         autoFocus={calLabelEditing || !savedLabel}
-                                        className={`w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-[#CC0000]/50 disabled:opacity-40 ${c.input}`}
+                                        className={`w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-[#0EA5E9]/50 disabled:opacity-40 ${c.input}`}
                                       />
                                       {/* Color picker */}
                                       <div className="flex items-center gap-2">
@@ -2315,7 +2357,7 @@ export default function AdminDashboard() {
                         const isSaving = calSaving !== null;
                         return (
                           <div className={`rounded-2xl border ${c.panelBorder} ${c.panelBg} overflow-hidden`}>
-                            <div className={`px-5 py-4 border-b ${c.cellBorder} bg-[#CC0000]/5`}>
+                            <div className={`px-5 py-4 border-b ${c.cellBorder} bg-sky-500/5`}>
                               <p className={`${c.heading} font-bold text-sm`}>{calSelectedArr.length} dates selected</p>
                               <p className={`${c.sub} text-xs mt-0.5`}>{selectedWeeks.length} week{selectedWeeks.length !== 1 ? 's' : ''} affected</p>
                             </div>
@@ -2350,7 +2392,7 @@ export default function AdminDashboard() {
                                   placeholder="Label (optional)"
                                   value={calBulkLabel}
                                   onChange={e => setCalBulkLabel(e.target.value)}
-                                  className={`w-full px-3 py-2 mb-2 rounded-lg text-xs border focus:outline-none focus:border-[#CC0000]/50 ${c.input}`}
+                                  className={`w-full px-3 py-2 mb-2 rounded-lg text-xs border focus:outline-none focus:border-[#0EA5E9]/50 ${c.input}`}
                                 />
                                 <div className="grid grid-cols-2 gap-2">
                                   <button

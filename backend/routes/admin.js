@@ -53,7 +53,7 @@ router.post('/users', authenticate, authorize('admin'), async (req, res) => {
   if (!['student', 'professor'].includes(role)) {
     return res.status(400).json({ error: 'Role must be student or professor.' });
   }
-  if (!email || !full_name) {
+  if (!email || !full_name || !full_name.trim()) {
     return res.status(400).json({ error: 'Email and full name are required.' });
   }
   try {
@@ -64,7 +64,7 @@ router.post('/users', authenticate, authorize('admin'), async (req, res) => {
     );
     const userId = userResult.rows[0].id;
     if (role === 'student') {
-      if (!student_number) return res.status(400).json({ error: 'Student number is required.' });
+      if (!student_number || !/^\d{10}$/.test(student_number)) return res.status(400).json({ error: 'Student number must be exactly 10 digits.' });
       await pool.query(
         `INSERT INTO students (user_id, full_name, student_number, program, year_level) VALUES ($1, $2, $3, $4, $5)`,
         [userId, full_name, student_number, program || null, year_level ? parseInt(year_level) : null]

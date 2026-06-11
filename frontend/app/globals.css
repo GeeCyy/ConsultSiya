@@ -35,6 +35,13 @@ html, body {
   color: var(--text-normal);
 }
 
+/* Native select option readability in dark mode */
+[data-theme="dark"] select option,
+:not([data-theme="light"]) select option {
+  background-color: #252535;
+  color: #e2e8f0;
+}
+
 /* Smooth theme transitions for main content and sidebar */
 main,
 main .rounded-2xl,
@@ -220,4 +227,13 @@ aside.w-60 * {
 
 .notif-dropdown {
   animation: notif-slide-in 0.18s ease-out both;
+}
+
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateX(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0)    scale(1);    }
+}
+
+.toast-enter {
+  animation: toast-slide-in 0.22s ease-out both;
 }
