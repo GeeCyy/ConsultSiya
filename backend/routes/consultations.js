@@ -3,6 +3,31 @@ const router = express.Router();
 const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const notifModule = require('./notifications');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// ── Proof-of-evidence upload setup ───────────────────────────────────────────
+const proofUploadDir = path.join(__dirname, '../uploads/proofs');
+if (!fs.existsSync(proofUploadDir)) fs.mkdirSync(proofUploadDir, { recursive: true });
+
+const proofStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, proofUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `proof-${req.params.id}-${Date.now()}${ext}`);
+  },
+});
+
+const proofUpload = multer({
+  storage: proofStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+    if (allowed.includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
+    else cb(new Error('Only PDF, JPG, and PNG files are allowed.'));
+  },
+});
 
 const DAY_MAP = {
   Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
@@ -650,6 +675,95 @@ router.patch('/:id/reschedule', authenticate, authorize('professor'), async (req
     );
 
     res.json({ message: 'Consultation marked as rescheduled.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Student submits proof of evidence (file upload OR external link)
+router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) => {
+  const ct = req.headers['content-type'] || '';
+  if (ct.includes('multipart/form-data')) {
+    proofUpload.single('proof')(req, res, next);
+  } else {
+    next();
+  }
+}, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = await pool.query(
+      `SELECT c.student_id, c.status, c.proof_of_evidence, c.proof_type
+       FROM consultations c WHERE c.id = $1`, [id]
+    );
+    if (!row.rows[0]) return res.status(404).json({ error: 'Consultation not found.' });
+    const c = row.rows[0];
+
+    if (c.status === 'cancelled') {
+      return res.status(400).json({ error: 'Cannot submit proof for a cancelled consultation.' });
+    }
+
+    const student = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [req.user.id]);
+    if (!student.rows[0] || student.rows[0].id !== c.student_id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    if (req.file) {
+      // Remove old file proof if it exists
+      if (c.proof_type === 'file' && c.proof_of_evidence) {
+        const oldPath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      await pool.query(
+        `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'file' WHERE id = $2`,
+        [req.file.filename, id]
+      );
+      return res.json({ proof_of_evidence: req.file.filename, proof_type: 'file' });
+    }
+
+    const link = (req.body?.link || '').trim();
+    if (!link) return res.status(400).json({ error: 'A file or link is required.' });
+
+    await pool.query(
+      `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'link' WHERE id = $2`,
+      [link, id]
+    );
+    res.json({ proof_of_evidence: link, proof_type: 'link' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Professor / student / admin downloads a file proof
+router.get('/:id/proof', authenticate, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = await pool.query(
+      `SELECT student_id, professor_id, proof_of_evidence, proof_type FROM consultations WHERE id = $1`, [id]
+    );
+    if (!row.rows[0]) return res.status(404).json({ error: 'Consultation not found.' });
+    const c = row.rows[0];
+
+    if (c.proof_type !== 'file' || !c.proof_of_evidence) {
+      return res.status(404).json({ error: 'No file proof for this consultation.' });
+    }
+
+    if (req.user.role === 'student') {
+      const student = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [req.user.id]);
+      if (!student.rows[0] || student.rows[0].id !== c.student_id) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+    } else if (req.user.role === 'professor') {
+      const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+      if (!prof.rows[0] || prof.rows[0].id !== c.professor_id) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+    }
+
+    const filePath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
+    res.download(filePath);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

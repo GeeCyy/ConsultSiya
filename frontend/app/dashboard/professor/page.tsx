@@ -100,6 +100,8 @@ type Consultation = {
   location?: string;
   meeting_link?: string | null;
   student_avatar?: string | null;
+  proof_of_evidence: string | null;
+  proof_type: 'file' | 'link' | null;
 };
 
 type TimeRange = { time_start: string; time_end: string };
@@ -1213,6 +1215,12 @@ export default function ProfessorDashboard() {
       ? `${exportDateFrom || '—'} to ${exportDateTo || '—'}`
       : 'All dates';
 
+    const proofLabel = (c: Consultation): string => {
+      if (!c.proof_of_evidence) return '—';
+      if (c.proof_type === 'link') return c.proof_of_evidence;
+      return c.proof_of_evidence; // filename
+    };
+
     const tableData = rows.map(c => [
       c.student_name,
       c.student_number,
@@ -1223,9 +1231,10 @@ export default function ProfessorDashboard() {
       natureLabel(c),
       actionLabel(c.action_taken, c.referral, c.referral_specify),
       c.status.charAt(0).toUpperCase() + c.status.slice(1),
+      proofLabel(c),
     ]);
 
-    const headers = ['Student Name', 'Student No.', 'Program', 'Date', 'Time', 'Mode', 'Nature of Advising', 'Action Taken', 'Status'];
+    const headers = ['Student Name', 'Student No.', 'Program', 'Date', 'Time', 'Mode', 'Nature of Advising', 'Action Taken', 'Status', 'Proof of Evidence'];
 
     if (format === 'pdf') {
       const doc = new jsPDF({ orientation: exportOrientation, unit: 'pt', format: 'letter' });
@@ -1254,15 +1263,16 @@ export default function ProfessorDashboard() {
         headStyles: { fillColor: [204, 0, 0], textColor: 255, fontStyle: 'bold', fontSize: 8 },
         alternateRowStyles: { fillColor: [248, 248, 248] },
         columnStyles: {
-          0: { cellWidth: 90 },
-          1: { cellWidth: 68 },
-          2: { cellWidth: 68 },
-          3: { cellWidth: 68 },
-          4: { cellWidth: 68 },
-          5: { cellWidth: 42 },
+          0: { cellWidth: 80 },
+          1: { cellWidth: 60 },
+          2: { cellWidth: 55 },
+          3: { cellWidth: 60 },
+          4: { cellWidth: 55 },
+          5: { cellWidth: 38 },
           6: { cellWidth: 'auto' },
-          7: { cellWidth: 72 },
-          8: { cellWidth: 60 },
+          7: { cellWidth: 65 },
+          8: { cellWidth: 52 },
+          9: { cellWidth: 80 },
         },
         margin: { left: 40, right: 40 },
       });
@@ -1271,7 +1281,7 @@ export default function ProfessorDashboard() {
     } else {
       const wsData = [headers, ...tableData];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [20, 14, 14, 14, 10, 8, 30, 16, 12].map(w => ({ wch: w }));
+      ws['!cols'] = [20, 14, 14, 14, 10, 8, 30, 16, 12, 40].map(w => ({ wch: w }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Advising Records');
       XLSX.writeFile(wb, `advising-report-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}.xlsx`);
@@ -2298,6 +2308,31 @@ export default function ProfessorDashboard() {
                                 }
                                 Student Form
                               </button>
+                            )}
+                            {c.proof_of_evidence && (
+                              c.proof_type === 'link' ? (
+                                <a
+                                  href={c.proof_of_evidence}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                  </svg>
+                                  View Proof
+                                </a>
+                              ) : (
+                                <a
+                                  href={`${API_URL}/api/consultations/${c.id}/proof`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors">
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                  </svg>
+                                  View Proof
+                                </a>
+                              )
                             )}
                           </div>
 

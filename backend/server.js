@@ -38,7 +38,9 @@ app.use(cookieParser());
 // ── Static uploads ─────────────────────────────────────────────────────────────
 // Avatars are public-facing (profile pictures in UI) so served as static assets.
 // Form uploads stay gated — authenticated access only via /api/forms/download/:id.
+// Proof files are served statically; filenames include consultation ID + timestamp.
 app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
+app.use('/uploads/proofs', express.static(path.join(__dirname, 'uploads/proofs')));
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
@@ -249,6 +251,14 @@ app.listen(PORT, '0.0.0.0', () => {
   `)
     .then(r => r.rowCount > 0 && console.log(`[startup] migrated ${r.rowCount} professor department(s) to Others`))
     .catch(err => console.error('[startup] professor department migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS proof_of_evidence TEXT`)
+    .then(() => console.log('[startup] consultations.proof_of_evidence column ready'))
+    .catch(err => console.error('[startup] consultations.proof_of_evidence migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS proof_type TEXT`)
+    .then(() => console.log('[startup] consultations.proof_type column ready'))
+    .catch(err => console.error('[startup] consultations.proof_type migration failed:', err.message));
 
   pool.query(`
     CREATE TABLE IF NOT EXISTS notifications (
