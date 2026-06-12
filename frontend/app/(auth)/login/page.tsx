@@ -72,7 +72,8 @@ function LoginContent() {
 
   useEffect(() => {
     if (searchParams.get('registered') === '1') {
-      setSuccess('Account created! Please wait for admin approval before logging in.');
+      // setSuccess('Account created! Please wait for admin approval before logging in.');
+      setSuccess('Account created! You can now log in.');
       const timer = setTimeout(() => setSuccess(''), 5000);
       return () => clearTimeout(timer);
     }
