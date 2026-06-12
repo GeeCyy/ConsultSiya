@@ -45,8 +45,10 @@ router.post(
       const password_hash = await bcrypt.hash(password, 12);
 
       const userResult = await pool.query(
+        // `INSERT INTO users (email, password_hash, role, is_approved)
+        //  VALUES ($1, $2, $3, false) RETURNING id`,
         `INSERT INTO users (email, password_hash, role, is_approved)
-         VALUES ($1, $2, $3, false) RETURNING id`,
+         VALUES ($1, $2, $3, true) RETURNING id`,
         [email, password_hash, role]
       );
 
@@ -150,11 +152,11 @@ router.post(
       }
 
       // ── Approval check ────────────────────────────────────────────────────
-      if (!user.is_approved) {
-        return res.status(403).json({
-          error: 'Your account is pending admin approval. Please wait for approval before logging in.',
-        });
-      }
+      // if (!user.is_approved) {
+      //   return res.status(403).json({
+      //     error: 'Your account is pending admin approval. Please wait for approval before logging in.',
+      //   });
+      // }
 
       // ── Deactivation check ────────────────────────────────────────────────
       if (user.is_active === false) {
