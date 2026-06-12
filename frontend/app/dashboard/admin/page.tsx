@@ -18,6 +18,7 @@ import {
 import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar, { type NavItem } from '@/components/LeftSidebar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
+import { Ban, Trash2 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -734,7 +735,8 @@ export default function AdminDashboard() {
 
   const btnPrimary = 'bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(14,165,233,0.4)] shadow-[0_2px_8px_rgba(14,165,233,0.2)]';
   const btnSecondary = 'border-2 border-[#0EA5E9] text-[#0EA5E9] bg-transparent font-medium rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] hover:text-white hover:border-transparent';
-  const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]';
+  const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] shadow-sm';
+  const btnDeactivate = 'bg-[linear-gradient(135deg,#F97316,#EA580C)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] shadow-sm';
   const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
 
   return (
@@ -1014,8 +1016,8 @@ export default function AdminDashboard() {
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />Deactivated
                             </span>
                           ) : u.is_approved ? (
-                            <span className="text-xs text-emerald-500 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Approved
+                            <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Approved
                             </span>
                           ) : (
                             <span className="text-xs text-amber-500 flex items-center gap-1">
@@ -1036,7 +1038,8 @@ export default function AdminDashboard() {
                           )}
                           {u.is_active ? (
                             <button onClick={() => handleDeactivate(u.id, u.full_name)}
-                              className={`px-2.5 py-1 text-xs ${btnDanger}`}>
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs ${btnDeactivate}`}>
+                              <Ban className="w-3.5 h-3.5" />
                               Deactivate
                             </button>
                           ) : (
@@ -1046,7 +1049,8 @@ export default function AdminDashboard() {
                             </button>
                           )}
                           <button onClick={() => handleDeleteUser(u.id, u.full_name)}
-                            className={`px-2.5 py-1 text-xs ${btnDanger}`}>
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs ${btnDanger}`}>
+                            <Trash2 className="w-3.5 h-3.5" />
                             Delete
                           </button>
                         </div>
