@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS consultations (
   mode VARCHAR(10) CHECK (mode IN ('F2F', 'OL')),
   uploaded_form_path VARCHAR(255),
   meeting_link TEXT,
+  notes TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
