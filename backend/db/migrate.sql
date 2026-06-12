@@ -108,6 +108,9 @@ CREATE TABLE IF NOT EXISTS professor_blocked_times (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Student notes on consultation bookings
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS notes TEXT;
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,
