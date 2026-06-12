@@ -1121,7 +1121,11 @@ export default function ProfessorDashboard() {
     }
   };
 
-  const handleViewProof = async (id: number) => {
+  const handleViewProof = async (id: number, proofType: string | null, proofOfEvidence: string | null) => {
+    if (proofType === 'link') {
+      if (proofOfEvidence) window.open(proofOfEvidence, '_blank');
+      return;
+    }
     setViewingProof(id);
     try {
       const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
@@ -2338,7 +2342,7 @@ export default function ProfessorDashboard() {
                                 </a>
                               ) : (
                                 <button
-                                  onClick={() => handleViewProof(c.id)}
+                                  onClick={() => handleViewProof(c.id, c.proof_type, c.proof_of_evidence)}
                                   disabled={viewingProof === c.id}
                                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors disabled:opacity-50">
                                   {viewingProof === c.id

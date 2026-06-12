@@ -551,8 +551,14 @@ export default function BookProfPage() {
                 <p className={`text-xs text-center py-4 ${ts}`}>Select a date to view available time slots.</p>
               ) : (
                 <div className="space-y-4">
-                  {timeRanges.map((range, ri) => {
-                    const slots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
+                  {(() => {
+                    const now = new Date();
+                    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                    const isToday = bookForm.date === todayStr;
+                    return timeRanges.map((range, ri) => {
+                    let slots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
+                    if (isToday) slots = slots.filter(t => t > currentTimeStr);
                     const session = parseInt(range.time_start.slice(0, 2), 10) < 12 ? 'Morning' : 'Afternoon';
                     return (
                       <div key={ri}>
@@ -621,7 +627,8 @@ export default function BookProfPage() {
                         </div>
                       </div>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               )}
               {bookForm.time && takenInfo.booked[bookForm.time] && !takenInfo.blocked.includes(bookForm.time) && (

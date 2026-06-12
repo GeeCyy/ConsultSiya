@@ -308,15 +308,6 @@ router.get('/my-topics', authenticate, async (req, res) => {
 // Get consultations (professors see their own, students see their own, admin sees all)
 router.get('/', authenticate, async (req, res) => {
   try {
-    // Auto-mark overdue consultations before returning data so the list is always fresh.
-    // Professor: scope to their own; student/admin: mark all overdue globally.
-    if (req.user.role === 'professor') {
-      const profRow = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
-      if (profRow.rows[0]) await autoMarkMissed(profRow.rows[0].id);
-    } else {
-      await autoMarkMissed();
-    }
-
     let result;
 
     if (req.user.role === 'professor') {
