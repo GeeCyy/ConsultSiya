@@ -61,6 +61,7 @@ function LoginContent() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [annLoading, setAnnLoading] = useState(true);
   const [expandedAnn, setExpandedAnn] = useState<number | null>(null);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem('consulta-theme-v2')) {
@@ -123,10 +124,10 @@ function LoginContent() {
   };
 
   // Theme tokens
-  const pageBg      = isDark ? '#1a1a1a' : '#f2f3f5';
+  const pageBg      = isDark ? '#1a1a1a' : '#EEF2FF';
   const cardBg      = isDark ? '#252525' : '#ffffff';
   const cardBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
-  const headerBg    = isDark ? '#1a1a1a' : '#f0f0f0';
+  const headerBg    = isDark ? '#1e1e1e' : '#f8f8f8';
   const headerBorder= isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const inputBg     = isDark ? '#2d2d2d' : '#f5f5f5';
   const inputBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.14)';
@@ -136,22 +137,22 @@ function LoginContent() {
   const subText     = isDark ? 'text-gray-400' : 'text-gray-500';
   const muteText    = isDark ? 'text-gray-500' : 'text-gray-400';
   const eyeCls      = isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600';
-  const badgeBg     = isDark ? '#2d2d2d' : '#ebebeb';
   const dividerClr  = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)';
   const itemText    = isDark ? 'text-gray-400' : 'text-gray-600';
   const updateTitle = isDark ? 'text-white' : 'text-gray-900';
+  const headingCls  = isDark ? 'text-white' : 'text-gray-900';
   const toggleCls   = isDark
     ? 'text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 hover:border-white/20'
     : 'text-gray-600 hover:text-gray-900 hover:bg-black/8 border border-black/10 hover:border-black/20';
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-3 sm:px-4 py-8 sm:py-10 transition-colors duration-200" style={{ backgroundColor: pageBg }}>
+    <div className="min-h-screen flex transition-colors duration-200" style={{ backgroundColor: pageBg }}>
 
-      {/* Theme toggle — top right */}
+      {/* Theme toggle — fixed top right */}
       <button
         onClick={toggleTheme}
         title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-        className={`fixed top-3 right-3 sm:top-4 sm:right-4 p-2.5 sm:p-3 rounded-xl transition-all duration-200 ${toggleCls}`}
+        className={`fixed top-3 right-3 sm:top-4 sm:right-4 p-2.5 sm:p-3 rounded-xl transition-all duration-200 z-50 ${toggleCls}`}
       >
         {isDark ? (
           <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
@@ -164,187 +165,226 @@ function LoginContent() {
         )}
       </button>
 
-      <div className="flex flex-col lg:flex-row w-full max-w-4xl gap-4 sm:gap-6">
+      {/* ── COL 1: Left branding panel (~33%) ── */}
+      <div className="hidden lg:flex w-[33%] flex-col items-center justify-center bg-[#4F6BED] relative overflow-hidden min-h-screen flex-shrink-0">
+        {/* Decorative circles */}
+        <div className="absolute -top-28 -right-28 w-96 h-96 rounded-full bg-white/10" />
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white/10" />
+        <div className="absolute top-1/2 right-10 w-28 h-28 rounded-full bg-white/5" />
+        <div className="absolute top-16 left-12 w-16 h-16 rounded-full bg-white/5" />
 
-        {/* ── Login Form ──────────────────────────────────────────────────── */}
-        <div
-          className="w-full lg:max-w-md flex-shrink-0 px-5 sm:px-8 py-8 sm:py-10 rounded-2xl flex flex-col justify-center transition-colors duration-200"
-          style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
-        >
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-2">
-              <img
-                src="/consulta-logo.png"
-                alt="Consulta"
-                className="w-full object-contain"
-                style={{ maxHeight: '320px' }}
-              />
-            </div>
-            <p className={`text-sm mt-1 ${subText}`}>SOIT Academic Consultation System</p>
-            <p className={`text-xs mt-1 ${muteText}`}>Mapúa University</p>
-          </div>
-
-          {success && (
-            <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#003a0e', color: '#6bff9e' }}>
-              {success}
-            </div>
-          )}
-          {error && (
-            <div className="mb-4 px-4 py-3 rounded-xl text-sm border" style={{ backgroundColor: '#3a0000', color: '#ff6b6b', borderColor: '#7f1d1d' }}>
-              {locked && <p className="font-semibold mb-0.5">Account Locked</p>}
-              {error}
-            </div>
-          )}
-
-          <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleLogin(); }}>
-            <div className="space-y-1">
-              <Label htmlFor="email" className={labelCls}>Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={`border ${inputText} ${placeholderCls}`}
-                style={{ backgroundColor: inputBg, borderColor: inputBorder }}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="password" className={labelCls}>Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`border ${inputText} ${placeholderCls} pr-10`}
-                  style={{ backgroundColor: inputBg, borderColor: inputBorder }}
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPassword(v => !v)}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeCls}`}
-                >
-                  <EyeIcon open={showPassword} />
-                </button>
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full text-white font-semibold mt-2"
-              style={{ backgroundColor: '#CC0000' }}
-              disabled={loading}
-            >
-              {loading ? 'Logging in...' : 'Sign In'}
-            </Button>
-          </form>
-
-          <p className="text-center text-sm mt-3">
-            <Link href="/forgot-password" className={`hover:text-[#CC0000] transition-colors text-xs ${muteText}`}>
-              Forgot password?
-            </Link>
-          </p>
-
-          <p className={`text-center text-sm mt-3 ${subText}`}>
-            No account yet?{' '}
-            <Link href="/register" className="text-[#CC0000] hover:underline">Register</Link>
-          </p>
-          <p className={`text-center text-xs mt-4 ${muteText}`}>© 2026 Mapúa University SOIT</p>
+        {/* Logo in white card */}
+        <div className="bg-white rounded-2xl p-10 mb-8 shadow-2xl relative z-10">
+          <img
+            src="/consulta-logo.png"
+            alt="Consulta Logo"
+            style={{ height: '180px', width: 'auto' }}
+          />
         </div>
 
-        {/* ── System Updates Board — hidden on mobile ─────────────────────── */}
-        <div
-          className="hidden lg:flex flex-col flex-1 rounded-2xl overflow-hidden transition-colors duration-200"
-          style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
-        >
-          {/* Header */}
-          <div
-            className="px-6 py-4 flex items-center gap-3 transition-colors duration-200"
-            style={{ backgroundColor: headerBg, borderBottom: `1px solid ${headerBorder}` }}
-          >
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: '#CC0000' }}
-            >
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className={`text-base font-bold ${updateTitle}`}>Announcements</p>
-              <p className={`text-xs ${muteText}`}>Latest updates from SOIT</p>
-            </div>
-            <span
-              className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: '#CC0000', color: 'white' }}
-            >
-              LIVE
-            </span>
-          </div>
+        <h1 className="text-5xl font-bold text-white mb-4 relative z-10 tracking-tight">Consulta</h1>
+        <p className="text-white/75 text-base text-center max-w-[280px] relative z-10 leading-relaxed">
+          Book consultations with your professors seamlessly.
+        </p>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-            {annLoading ? (
-              <p className={`text-sm text-center py-8 ${muteText}`}>Loading…</p>
-            ) : announcements.length === 0 ? (
-              <p className={`text-sm text-center py-8 ${muteText}`}>No announcements at this time.</p>
-            ) : (
-              announcements.map(ann => {
-                const isExpanded = expandedAnn === ann.id;
-                return (
-                  <div key={ann.id} style={{ borderBottom: `1px solid ${dividerClr}`, paddingBottom: '1rem' }}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className={`text-base font-bold leading-snug ${updateTitle}`}>{ann.title}</p>
-                      {ann.type === 'warning' && (
-                        <span
-                          className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
-                          style={{ backgroundColor: '#7f1d1d', color: '#fca5a5' }}
-                        >
-                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 5a1 1 0 011 1v5a1 1 0 11-2 0V8a1 1 0 011-1zm0 10a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 17z"/>
-                          </svg>
-                          Important
-                        </span>
-                      )}
-                    </div>
-                    <p className={`text-base leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-4'} ${itemText}`}>{ann.body}</p>
-                    {ann.body.length > 120 && (
-                      <button
-                        onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
-                        className={`text-[11px] font-medium mt-1 flex items-center gap-0.5 transition-opacity hover:opacity-70 ${muteText}`}
-                      >
-                        {isExpanded ? 'Show less' : 'Show more'}
-                        <svg
-                          className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                    )}
-                    <p className={`text-[11px] mt-1.5 ${muteText}`}>{timeAgo(ann.created_at)}</p>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Footer */}
-          <div
-            className="px-6 py-3 flex items-center justify-between transition-colors duration-200"
-            style={{ backgroundColor: headerBg, borderTop: `1px solid ${headerBorder}` }}
-          >
-            <span className={`text-[10px] ${muteText}`}>Consulta © 2026 Mapúa University SOIT</span>
-            <span className={`text-[10px] ${muteText}`}>Build 2026.05</span>
-          </div>
+        <div className="mt-10 flex items-center gap-2 relative z-10">
+          <div className="w-4 h-px bg-white/30 rounded" />
+          <p className="text-white/40 text-xs tracking-widest uppercase">Mapúa University SOIT</p>
+          <div className="w-4 h-px bg-white/30 rounded" />
         </div>
-
       </div>
+
+      {/* ── Right panel: single column, pageBg, cards stacked ── */}
+      <div className="flex-1 flex flex-col min-h-screen overflow-y-auto" style={{ backgroundColor: pageBg }}>
+
+        {/* Mobile-only header */}
+        <div className="lg:hidden text-center px-5 pt-10 pb-4">
+          <img
+            src="/consulta-logo.png"
+            alt="Consulta Logo"
+            className="mx-auto mb-3"
+            style={{ height: '90px', width: 'auto' }}
+          />
+          <p className={`text-base font-medium ${subText}`}>SOIT Academic Consultation System</p>
+          <p className={`text-xs mt-0.5 ${muteText}`}>Mapúa University</p>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-5">
+
+          {/* Login form card */}
+          <div
+            className="w-full max-w-md rounded-2xl px-7 py-14 transition-colors duration-200"
+            style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
+          >
+            <div className="mb-7">
+              <h2 className={`text-2xl font-bold ${headingCls}`}>Welcome back</h2>
+              <p className={`text-sm mt-1 ${subText}`}>Sign in to your account to continue</p>
+            </div>
+
+            {success && (
+              <div className="mb-4 px-4 py-2 rounded-md text-sm" style={{ backgroundColor: '#003a0e', color: '#6bff9e' }}>
+                {success}
+              </div>
+            )}
+            {error && (
+              <div className="mb-4 px-4 py-3 rounded-xl text-sm border" style={{ backgroundColor: '#3a0000', color: '#ff6b6b', borderColor: '#7f1d1d' }}>
+                {locked && <p className="font-semibold mb-0.5">Account Locked</p>}
+                {error}
+              </div>
+            )}
+
+            <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleLogin(); }}>
+              <div className="space-y-1">
+                <Label htmlFor="email" className={labelCls}>Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`border ${inputText} ${placeholderCls}`}
+                  style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="password" className={labelCls}>Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`border ${inputText} ${placeholderCls} pr-10`}
+                    style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowPassword(v => !v)}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeCls}`}
+                  >
+                    <EyeIcon open={showPassword} />
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full text-white font-semibold mt-2"
+                style={{ backgroundColor: '#4F6BED' }}
+                disabled={loading}
+              >
+                {loading ? 'Logging in...' : 'Sign In'}
+              </Button>
+            </form>
+
+            <p className="text-center text-sm mt-3">
+              <Link href="/forgot-password" className={`hover:text-[#4F6BED] transition-colors text-xs ${muteText}`}>
+                Forgot password?
+              </Link>
+            </p>
+
+            <p className={`text-center text-sm mt-3 ${subText}`}>
+              No account yet?{' '}
+              <Link href="/register" className="text-[#4F6BED] hover:underline">Register</Link>
+            </p>
+
+            <p className={`text-center text-xs mt-5 ${muteText}`}>© 2026 Mapúa University SOIT</p>
+          </div>
+
+          {/* Announcements toggle */}
+          <button
+            onClick={() => setShowAnnouncements(v => !v)}
+            className={`flex items-center gap-2 text-xs font-medium transition-colors hover:opacity-80 ${muteText}`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {showAnnouncements ? 'Hide announcements' : 'View announcements'}
+            <svg className={`w-3 h-3 transition-transform duration-200 ${showAnnouncements ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showAnnouncements && (
+          <div
+            className="w-full max-w-md rounded-2xl overflow-hidden transition-colors duration-200"
+            style={{ border: `1px solid ${cardBorder}` }}
+          >
+            {/* Header */}
+            <div
+              className="px-5 py-3 flex items-center gap-3 flex-shrink-0"
+              style={{ backgroundColor: headerBg, borderBottom: `1px solid ${headerBorder}` }}
+            >
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#4F6BED' }}>
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className={`text-sm font-bold ${updateTitle}`}>Announcements</p>
+                <p className={`text-[11px] ${muteText}`}>Latest updates from SOIT</p>
+              </div>
+              <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#4F6BED', color: 'white' }}>
+                LIVE
+              </span>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto max-h-64 px-5 py-4 space-y-3 break-words" style={{ backgroundColor: cardBg }}>
+              {annLoading ? (
+                <p className={`text-sm text-center py-4 ${muteText}`}>Loading…</p>
+              ) : announcements.length === 0 ? (
+                <p className={`text-sm text-center py-4 ${muteText}`}>No announcements at this time.</p>
+              ) : (
+                announcements.map(ann => {
+                  const isExpanded = expandedAnn === ann.id;
+                  return (
+                    <div key={ann.id} style={{ borderBottom: `1px solid ${dividerClr}`, paddingBottom: '0.75rem' }}>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className={`text-sm font-bold leading-snug ${updateTitle}`}>{ann.title}</p>
+                        {ann.type === 'warning' && (
+                          <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ backgroundColor: '#7f1d1d', color: '#fca5a5' }}>
+                            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 5a1 1 0 011 1v5a1 1 0 11-2 0V8a1 1 0 011-1zm0 10a1.25 1.25 0 110-2.5A1.25 1.25 0 0112 17z"/>
+                            </svg>
+                            Important
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'} ${itemText}`}>{ann.body}</p>
+                      {ann.body.length > 120 && (
+                        <button
+                          onClick={() => setExpandedAnn(isExpanded ? null : ann.id)}
+                          className={`text-[11px] font-medium mt-1 flex items-center gap-0.5 transition-opacity hover:opacity-70 ${muteText}`}
+                        >
+                          {isExpanded ? 'Show less' : 'Show more'}
+                          <svg className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      )}
+                      <p className={`text-[11px] mt-1 ${muteText}`}>{timeAgo(ann.created_at)}</p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-2.5 flex items-center justify-between flex-shrink-0" style={{ backgroundColor: headerBg, borderTop: `1px solid ${headerBorder}` }}>
+              <span className={`text-[10px] ${muteText}`}>Consulta © 2026 Mapúa University SOIT</span>
+              <span className={`text-[10px] ${muteText}`}>Build 2026.05</span>
+            </div>
+          </div>
+          )}
+
+        </div>
+      </div>
+
     </div>
   );
 }
