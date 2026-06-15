@@ -95,19 +95,21 @@ type Announcement = {
   updated_at: string;
 };
 
-const STATUS_STYLES: Record<string, { ring: string; text: string; dot: string; label: string }> = {
-  pending:     { ring: 'ring-amber-500/30',   text: 'text-amber-400',   dot: 'bg-amber-400',   label: 'Pending' },
-  confirmed:   { ring: 'ring-blue-500/30',    text: 'text-blue-400',    dot: 'bg-blue-400',    label: 'Confirmed' },
-  completed:   { ring: 'ring-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Completed' },
-  cancelled:   { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Cancelled' },
-  missed:      { ring: 'ring-red-500/30',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'Missed' },
-  rescheduled: { ring: 'ring-orange-500/30',  text: 'text-orange-400',  dot: 'bg-orange-400',  label: 'Rescheduled' },
+const STATUS_STYLES: Record<string, { darkBg: string; lightBg: string; darkText: string; lightText: string; dot: string; label: string }> = {
+  pending:     { darkBg: 'bg-amber-500/15',   lightBg: 'bg-amber-50',    darkText: 'text-amber-400',    lightText: 'text-amber-700',    dot: 'bg-amber-400',    label: 'Pending' },
+  confirmed:   { darkBg: 'bg-blue-500/15',    lightBg: 'bg-blue-50',     darkText: 'text-blue-400',     lightText: 'text-blue-700',     dot: 'bg-blue-500',     label: 'Confirmed' },
+  completed:   { darkBg: 'bg-emerald-500/15', lightBg: 'bg-emerald-50',  darkText: 'text-emerald-400',  lightText: 'text-emerald-700',  dot: 'bg-emerald-500',  label: 'Completed' },
+  cancelled:   { darkBg: 'bg-red-500/15',     lightBg: 'bg-red-50',      darkText: 'text-red-400',      lightText: 'text-red-700',      dot: 'bg-red-500',      label: 'Cancelled' },
+  missed:      { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
+  rescheduled: { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLES[status] ?? { ring: 'ring-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400', label: status };
+function StatusBadge({ status, isDark }: { status: string; isDark?: boolean }) {
+  const s = STATUS_STYLES[status] ?? { darkBg: 'bg-gray-500/15', lightBg: 'bg-gray-100', darkText: 'text-gray-400', lightText: 'text-gray-600', dot: 'bg-gray-400', label: status };
+  const bg   = isDark ? s.darkBg   : s.lightBg;
+  const text = isDark ? s.darkText : s.lightText;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/5 ring-1 ${s.ring} ${s.text}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${bg} ${text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -768,28 +770,28 @@ export default function AdminDashboard() {
             {tab === 'consultations' && (
               <>
                 <div className="mb-6">
-                  <h1 className="text-white text-2xl font-bold">Consultations</h1>
-                  <p className="text-gray-500 text-sm mt-1">All consultation records across the system</p>
+                  <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Consultations</h1>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>All consultation records across the system</p>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex items-center gap-1 mb-5 bg-[#161616] border border-white/5 rounded-xl p-1 w-full sm:w-fit overflow-x-auto">
+                <div className={`flex items-center gap-1 mb-5 rounded-xl p-1 w-full sm:w-fit overflow-x-auto border ${isDark ? 'bg-[#161616] border-white/5' : 'bg-white border-gray-200'}`}>
                   {([
-                    { key: 'all',       label: 'All',       color: 'text-white'       },
-                    { key: 'pending',   label: 'Pending',   color: 'text-amber-400'   },
-                    { key: 'missed',    label: 'Missed',    color: 'text-red-400'     },
-                    { key: 'completed', label: 'Completed', color: 'text-emerald-400' },
-                    { key: 'cancelled', label: 'Cancelled', color: 'text-rose-400'    },
+                    { key: 'all',       label: 'All'       },
+                    { key: 'pending',   label: 'Pending'   },
+                    { key: 'missed',    label: 'Missed'    },
+                    { key: 'completed', label: 'Completed' },
+                    { key: 'cancelled', label: 'Cancelled' },
                   ] as const).map(t => (
                     <button key={t.key} onClick={() => setStatusFilter(t.key)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         statusFilter === t.key
                           ? 'bg-[#0EA5E9] text-white shadow-sm shadow-sky-500/30'
-                          : `text-gray-500 hover:text-gray-200 hover:bg-white/5`
+                          : isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                       }`}>
                       {t.label}
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${
-                        statusFilter === t.key ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-600'
+                        statusFilter === t.key ? 'bg-white/20 text-white' : isDark ? 'bg-white/5 text-gray-600' : 'bg-gray-100 text-gray-500'
                       }`}>
                         {consultTabCounts[t.key]}
                       </span>
@@ -799,60 +801,88 @@ export default function AdminDashboard() {
 
                 {/* Search */}
                 <div className="relative mb-4">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" /></svg>
+                  <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" /></svg>
                   <input
                     type="text"
                     placeholder="Search by name, date, or ID…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-lg text-white text-sm bg-[#161616] border border-white/5 focus:outline-none focus:border-[#0EA5E9]/30 placeholder-gray-600"
+                    className={`w-full pl-9 pr-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-[#0EA5E9]/50 ${isDark ? 'bg-[#161616] text-white border-white/5 placeholder-gray-600 focus:border-[#0EA5E9]/30' : 'bg-white text-gray-900 border-gray-200 placeholder-gray-400'}`}
                   />
                 </div>
 
-                <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
+                <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                   {filteredConsultations.length} record{filteredConsultations.length !== 1 ? 's' : ''}
                 </p>
 
                 {filteredConsultations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-white/5 bg-[#161616]">
-                    <p className="text-gray-400 font-medium text-sm">No records found</p>
-                    <p className="text-gray-600 text-xs mt-1">Try adjusting your filters</p>
+                  <div className={`flex flex-col items-center justify-center py-20 rounded-2xl border ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white'}`}>
+                    <p className={`font-medium text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No records found</p>
+                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Try adjusting your filters</p>
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filteredConsultations.map(c => (
-                      <div key={c.id} className="rounded-2xl border border-white/5 bg-[#161616] px-5 py-4 hover:border-white/10 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <Avatar name={c.student_name} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-white font-semibold text-sm">{c.student_name}</span>
-                                  <span className="text-gray-600 text-xs">·</span>
-                                  <span className="text-gray-500 text-xs">{c.student_number}</span>
-                                  {c.program && <><span className="text-gray-600 text-xs">·</span><span className="text-gray-500 text-xs">{c.program}</span></>}
-                                </div>
-                                <p className="text-gray-600 text-xs mt-0.5">with {c.professor_name}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-gray-600 text-xs">#{c.id}</span>
-                                <StatusBadge status={c.status} />
-                              </div>
+                      <div key={c.id} className={`rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col ${
+                        isDark ? 'bg-[#1a1b1e] border-white/[0.08]' : 'bg-white border-gray-200'
+                      }`}>
+
+                        {/* Card top: id + status */}
+                        <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                          <span className={`text-[11px] font-mono font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>#{c.id}</span>
+                          <StatusBadge status={c.status} isDark={isDark} />
+                        </div>
+
+                        {/* Card body */}
+                        <div className="p-4 flex flex-col gap-3 flex-1">
+
+                          {/* Avatar + name */}
+                          <div className="flex items-center gap-3">
+                            <Avatar name={c.student_name} />
+                            <div className="min-w-0">
+                              <p className={`font-semibold text-sm leading-tight truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.student_name}</p>
+                              <p className={`text-[11px] mt-0.5 truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                                {c.student_number}{c.program ? ` · ${c.program}` : ''}
+                              </p>
                             </div>
-                            <div className="mt-3 flex flex-wrap gap-4">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>
-                                {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                <span className="text-gray-700">·</span>
-                                {c.day} {formatTime(c.time_start)}–{formatTime(c.time_end)}
-                              </div>
-                              <span className={`inline-flex items-center gap-1 text-xs ${c.mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
+                          </div>
+
+                          {/* Divider */}
+                          <div className={`border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`} />
+
+                          {/* Details */}
+                          <div className="space-y-1.5">
+                            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" />
+                              </svg>
+                              <span className="truncate">with {c.professor_name}</span>
+                            </div>
+                            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
+                              </svg>
+                              <span>{new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              <span className={isDark ? 'text-gray-700' : 'text-gray-300'}>·</span>
+                              <span className="truncate">{c.day}</span>
+                            </div>
+                            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0z" />
+                              </svg>
+                              <span>{formatTime(c.time_start)}–{formatTime(c.time_end)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
+                              <span className={`text-xs font-medium ${c.mode === 'F2F' ? (isDark ? 'text-purple-400' : 'text-purple-600') : (isDark ? 'text-cyan-400' : 'text-cyan-600')}`}>
                                 {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
                               </span>
-                              <span className="text-gray-500 text-xs line-clamp-1">{natureLabel(c)}</span>
                             </div>
+                          </div>
+
+                          {/* Topics */}
+                          <div className={`mt-auto pt-3 border-t text-xs line-clamp-2 ${isDark ? 'border-white/5 text-gray-500' : 'border-gray-100 text-gray-500'}`}>
+                            {natureLabel(c)}
                           </div>
                         </div>
                       </div>
@@ -1331,7 +1361,7 @@ export default function AdminDashboard() {
                                     <td className="px-4 py-3">
                                       <ActionBadge action_taken={c.action_taken} referral={c.referral} referral_specify={c.referral_specify} />
                                     </td>
-                                    <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                                    <td className="px-4 py-3"><StatusBadge status={c.status} isDark={isDark} /></td>
                                   </tr>
                                 ))}
                               </tbody>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -63,6 +63,22 @@ export default function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem('consulta-theme-v2')) {
+      localStorage.setItem('consulta-theme-v2', '1');
+      localStorage.setItem('consulta-theme', 'light');
+    }
+    setIsDark(localStorage.getItem('consulta-theme') === 'dark');
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    localStorage.setItem('consulta-theme', next ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
+    setIsDark(next);
+  };
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }));
@@ -100,7 +116,6 @@ export default function RegisterPage() {
       return;
     }
 
-
     setLoading(true);
 
     const payload: Record<string, string> = {
@@ -129,145 +144,265 @@ export default function RegisterPage() {
     router.push('/login?registered=1');
   };
 
-  const inputCls = 'bg-[#2a2a2a] border-[#3a3a3a] text-white placeholder-gray-600 focus:border-[#CC0000] focus:ring-0';
-  const labelCls = 'text-gray-300 text-sm';
-  const selectCls = `w-full rounded-md border px-3 py-2 text-sm ${inputCls} appearance-none`;
+  // Theme tokens
+  const pageBg      = isDark ? '#1a1a1a' : '#EEF2FF';
+  const cardBg      = isDark ? '#252525' : '#ffffff';
+  const cardBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+  const inputBg     = isDark ? '#2d2d2d' : '#f5f5f5';
+  const inputBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.14)';
+  const inputText   = isDark ? 'text-white' : 'text-gray-900';
+  const labelCls    = isDark ? 'text-gray-300' : 'text-gray-700';
+  const placeholderCls = isDark ? 'placeholder-gray-500' : 'placeholder-gray-400';
+  const subText     = isDark ? 'text-gray-400' : 'text-gray-500';
+  const muteText    = isDark ? 'text-gray-500' : 'text-gray-400';
+  const eyeCls      = isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600';
+  const toggleCls   = isDark
+    ? 'text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 hover:border-white/20'
+    : 'text-gray-600 hover:text-gray-900 hover:bg-black/8 border border-black/10 hover:border-black/20';
+  const tabBorder   = isDark ? 'border-white/10' : 'border-black/10';
+  const tabInactive = isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-700';
+  const headingCls  = isDark ? 'text-white' : 'text-gray-900';
+
+  const inputCls = `border ${inputText} ${placeholderCls} focus:border-[#4F6BED] focus:ring-0`;
+  const selectCls = `w-full rounded-md border px-3 py-2 text-sm appearance-none focus:outline-none focus:border-[#4F6BED] ${inputText}`;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a] px-3 sm:px-4 py-8 sm:py-10">
-      <div className="w-full max-w-md px-5 sm:px-8 py-8 sm:py-10 rounded-xl bg-[#222222]">
+    <div className="min-h-screen flex transition-colors duration-200" style={{ backgroundColor: pageBg }}>
 
-        {/* Header */}
-        <div className="text-center mb-7">
-          <h1 className="text-3xl font-bold text-[#CC0000]">Consulta</h1>
-          <p className="text-gray-400 text-sm mt-1">Create your account</p>
-          <p className="text-gray-600 text-xs mt-0.5">Mapúa University SOIT</p>
-        </div>
-
-        {/* Role toggle */}
-        <div className="flex rounded-lg overflow-hidden border border-[#3a3a3a] mb-6">
-          {(['student', 'professor'] as const).map(r => (
-            <button
-              key={r}
-              onClick={() => setRole(r)}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                role === r ? 'bg-[#CC0000] text-white' : 'bg-transparent text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              {r.charAt(0).toUpperCase() + r.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="mb-4 px-4 py-2 rounded-md text-sm bg-[#3a0000] text-[#ff6b6b]">
-            {error}
-          </div>
+      {/* Theme toggle — top right */}
+      <button
+        onClick={toggleTheme}
+        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        className={`fixed top-3 right-3 sm:top-4 sm:right-4 p-2.5 sm:p-3 rounded-xl transition-all duration-200 z-50 ${toggleCls}`}
+      >
+        {isDark ? (
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" />
+          </svg>
         )}
+      </button>
 
-        <div className="space-y-4">
-          {/* Common fields */}
-          <div className="space-y-1">
-            <Label className={labelCls}>Full Name</Label>
-            <Input placeholder="Juan dela Cruz" value={form.full_name} onChange={set('full_name')} className={inputCls} />
-          </div>
+      {/* ── Left branding panel (desktop only) ── */}
+      <div className="hidden lg:flex w-[42%] flex-col items-center justify-center bg-[#4F6BED] relative overflow-hidden min-h-screen">
+        {/* Decorative circles */}
+        <div className="absolute -top-28 -right-28 w-96 h-96 rounded-full bg-white/10" />
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white/10" />
+        <div className="absolute top-1/2 right-10 w-28 h-28 rounded-full bg-white/5" />
+        <div className="absolute top-16 left-12 w-16 h-16 rounded-full bg-white/5" />
 
-          <div className="space-y-1">
-            <Label className={labelCls}>Email</Label>
-            <Input type="email" placeholder="you@mymapua.edu.ph" value={form.email} onChange={set('email')} className={inputCls} />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className={labelCls}>Password</Label>
-              <div className="relative">
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={set('password')}
-                  className={`${inputCls} pr-10`}
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-                  <EyeIcon open={showPassword} />
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className={labelCls}>Confirm</Label>
-              <div className="relative">
-                <Input
-                  type={showConfirm ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={form.confirm_password}
-                  onChange={set('confirm_password')}
-                  className={`${inputCls} pr-10`}
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowConfirm(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-                  <EyeIcon open={showConfirm} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Student-specific */}
-          {role === 'student' && (
-            <>
-              <div className="space-y-1">
-                <Label className={labelCls}>Student Number</Label>
-                <Input
-                  placeholder="2021XXXXXX"
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={form.student_number}
-                  onChange={e => setForm(f => ({ ...f, student_number: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                  className={inputCls}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className={labelCls}>Program</Label>
-                <select value={form.program} onChange={set('program')} className={selectCls}>
-                  <option value="">Select program…</option>
-                  {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className={labelCls}>Year Level</Label>
-                <select value={form.year_level} onChange={set('year_level')} className={selectCls}>
-                  <option value="">Select year…</option>
-                  {YEAR_LEVELS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </>
-          )}
-
-
-          <Button
-            className="w-full text-white font-semibold mt-2 bg-[#CC0000] hover:bg-[#aa0000]"
-            onClick={handleRegister}
-            disabled={loading}
-          >
-            {loading ? 'Creating account…' : 'Create Account'}
-          </Button>
+        {/* Logo in white card */}
+        <div className="bg-white rounded-2xl p-8 mb-8 shadow-2xl relative z-10">
+          <img
+            src="/consulta-logo.png"
+            alt="Consulta Logo"
+            style={{ height: '140px', width: 'auto' }}
+          />
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-5">
-          Already have an account?{' '}
-          <Link href="/login" className="text-[#CC0000] hover:underline">Sign in</Link>
+        <h1 className="text-5xl font-bold text-white mb-4 relative z-10 tracking-tight">Consulta</h1>
+        <p className="text-white/75 text-base text-center max-w-[280px] relative z-10 leading-relaxed">
+          Book consultations with your professors seamlessly.
         </p>
 
-        <p className="text-center text-gray-600 text-xs mt-4">© 2026 Mapúa University SOIT</p>
+        <div className="mt-10 flex items-center gap-3 relative z-10">
+          <div className="w-8 h-px bg-white/30 rounded" />
+          <p className="text-white/40 text-xs tracking-widest uppercase">Mapúa University SOIT</p>
+          <div className="w-8 h-px bg-white/30 rounded" />
+        </div>
+      </div>
+
+      {/* ── Right form panel ── */}
+      <div className="flex-1 flex items-center justify-center px-5 sm:px-10 py-10 overflow-y-auto">
+        <div className="w-full max-w-md">
+
+          {/* Mobile-only header */}
+          <div className="lg:hidden text-center mb-6">
+            <img
+              src="/consulta-logo.png"
+              alt="Consulta Logo"
+              className="mx-auto mb-3"
+              style={{ height: '90px', width: 'auto' }}
+            />
+            <p className={`text-base font-medium ${subText}`}>Create your account</p>
+            <p className={`text-xs mt-0.5 ${muteText}`}>Mapúa University SOIT</p>
+          </div>
+
+          {/* Desktop form heading */}
+          <div className="hidden lg:block mb-7">
+            <h2 className={`text-2xl font-bold ${headingCls}`}>Create your account</h2>
+            <p className={`text-sm mt-1 ${subText}`}>Fill in your details to get started</p>
+          </div>
+
+          {/* Role toggle */}
+          <div className={`flex rounded-lg overflow-hidden border ${tabBorder} mb-6`}>
+            {(['student', 'professor'] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => setRole(r)}
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                  role === r ? 'bg-[#4F6BED] text-white' : `bg-transparent ${tabInactive}`
+                }`}
+              >
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="mb-4 px-4 py-2 rounded-md text-sm bg-[#3a0000] text-[#ff6b6b]">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {/* Common fields */}
+            <div className="space-y-1">
+              <Label className={labelCls}>Full Name</Label>
+              <Input
+                placeholder="Juan dela Cruz"
+                value={form.full_name}
+                onChange={set('full_name')}
+                className={inputCls}
+                style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className={labelCls}>Email</Label>
+              <Input
+                type="email"
+                placeholder="you@mymapua.edu.ph"
+                value={form.email}
+                onChange={set('email')}
+                className={inputCls}
+                style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className={labelCls}>Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChange={set('password')}
+                    className={`${inputCls} pr-10`}
+                    style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowPassword(v => !v)}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeCls}`}>
+                    <EyeIcon open={showPassword} />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className={labelCls}>Confirm</Label>
+                <div className="relative">
+                  <Input
+                    type={showConfirm ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={form.confirm_password}
+                    onChange={set('confirm_password')}
+                    className={`${inputCls} pr-10`}
+                    style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowConfirm(v => !v)}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${eyeCls}`}>
+                    <EyeIcon open={showConfirm} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Student-specific */}
+            {role === 'student' && (
+              <>
+                <div className="space-y-1">
+                  <Label className={labelCls}>Student Number</Label>
+                  <Input
+                    placeholder="2021XXXXXX"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={form.student_number}
+                    onChange={e => setForm(f => ({ ...f, student_number: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                    className={inputCls}
+                    style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className={labelCls}>Program</Label>
+                  <select
+                    value={form.program}
+                    onChange={set('program')}
+                    className={selectCls}
+                    style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                  >
+                    <option value="">Select program…</option>
+                    {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className={labelCls}>Year Level</Label>
+                  <select
+                    value={form.year_level}
+                    onChange={set('year_level')}
+                    className={selectCls}
+                    style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                  >
+                    <option value="">Select year…</option>
+                    {YEAR_LEVELS.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* Professor-specific */}
+            {role === 'professor' && (
+              <div className="space-y-1">
+                <Label className={labelCls}>Department</Label>
+                <select
+                  value={form.department}
+                  onChange={set('department')}
+                  className={selectCls}
+                  style={{ backgroundColor: inputBg, borderColor: inputBorder }}
+                >
+                  <option value="">Select department…</option>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            )}
+
+            <Button
+              className="w-full text-white font-semibold mt-2 bg-[#4F6BED] hover:bg-[#3D57D6]"
+              onClick={handleRegister}
+              disabled={loading}
+            >
+              {loading ? 'Creating account…' : 'Create Account'}
+            </Button>
+          </div>
+
+          <p className={`text-center text-sm mt-5 ${subText}`}>
+            Already have an account?{' '}
+            <Link href="/login" className="text-[#4F6BED] hover:underline">Sign in</Link>
+          </p>
+
+          <p className={`text-center text-xs mt-4 ${muteText}`}>© 2026 Mapúa University SOIT</p>
+        </div>
       </div>
     </div>
   );
