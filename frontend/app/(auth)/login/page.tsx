@@ -189,7 +189,7 @@ function LoginContent() {
 
         <div className="mt-10 flex items-center gap-2 relative z-10">
           <div className="w-4 h-px bg-white/30 rounded" />
-          <p className="text-white/40 text-xs tracking-widest uppercase">Mapúa University SOIT</p>
+          <p className="text-red-400 text-xs tracking-widest uppercase">Mapúa University SOIT</p>
           <div className="w-4 h-px bg-white/30 rounded" />
         </div>
       </div>
