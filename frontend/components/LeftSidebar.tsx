@@ -306,8 +306,7 @@ export default function LeftSidebar({
           <p className="text-[10px] mt-0.5 leading-none" style={{ color: 'rgba(255,255,255,0.75)' }}>MAPUA SOIT</p>
         </div>
         <span
-          className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0 text-white ${role === 'student' ? 'bg-gradient-to-r from-blue-500 to-cyan-400' : ''}`}
-          style={role !== 'student' ? { border: '1px solid rgba(255,255,255,0.45)' } : undefined}
+          className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0 text-white bg-gradient-to-r from-orange-500 to-amber-400"
         >
           {role.toUpperCase()}
         </span>
