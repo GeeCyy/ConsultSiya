@@ -1534,7 +1534,8 @@ export default function StudentDashboard() {
               const bookedProfIds = new Set<number>(consultations.map(c => c.professor_id));
 
               // Department categorisation
-              const deptCat = (dept: string): 'IT' | 'CS' | 'Other' => {
+              const deptCat = (dept: string | null): 'IT' | 'CS' | 'Other' => {
+                if (!dept) return 'Other';
                 const d = dept.toLowerCase();
                 if (d.includes('information technology')) return 'IT';
                 if (d.includes('computer science')) return 'CS';
