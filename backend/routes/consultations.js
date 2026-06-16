@@ -186,6 +186,16 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       }
     }
 
+    // Reject bookings for a date/time that has already passed — the frontend only
+    // hides past slots visually, so this must be enforced server-side too.
+    const pastCheck = await pool.query(
+      `SELECT ($1::date + COALESCE($2::time, '23:59:59'::time)) < (NOW() AT TIME ZONE 'Asia/Manila') AS is_past`,
+      [date, time || null]
+    );
+    if (pastCheck.rows[0].is_past) {
+      return res.status(400).json({ error: 'This time slot has already passed. Please select an upcoming time.' });
+    }
+
     const natureValue = Array.isArray(nature_of_advising)
       ? JSON.stringify(nature_of_advising)
       : (nature_of_advising || null);

@@ -1148,6 +1148,15 @@ export default function ProfessorDashboard() {
       if (!r.time_start || !r.time_end) { setSchedError('Please fill in all time range fields.'); return; }
       if (r.time_start >= r.time_end) { setSchedError('End time must be after start time in each range.'); return; }
     }
+    const nowManila = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Manila', hour12: false });
+    const [todayStr, currentTimeStr] = nowManila.split(', ');
+    if (newSchedDate === todayStr) {
+      const allPast = newSched.time_ranges.every(r => r.time_end && r.time_end.slice(0, 5) <= currentTimeStr.slice(0, 5));
+      if (allPast) {
+        setSchedError('Cannot add a slot with a time that has already passed.');
+        return;
+      }
+    }
     const resolvedLocation = newSchedMode === 'Online' ? 'Online Only' : newSched.location;
     setPendingSched({ ...newSched, location: resolvedLocation });
     setShowConfirmSched(true);
