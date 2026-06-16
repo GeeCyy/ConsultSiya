@@ -11,6 +11,7 @@ import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar from '@/components/LeftSidebar';
 import MatrixCalendar from '@/components/MatrixCalendar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
+import CustomSelect from '@/components/CustomSelect';
 
 export type ProfessorTab = 'home' | 'schedules' | 'calendar' | 'consultations' | 'export' | 'history';
 
@@ -362,23 +363,31 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
   };
   const HOURS = ['1','2','3','4','5','6','7','8','9','10','11','12'];
   const MINS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
-  const sel = dark
-    ? 'bg-[#1e1e1e] border border-white/15 text-white text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#0EA5E9]/50 cursor-pointer hover:border-white/30 transition-colors'
-    : 'bg-white border border-gray-300 text-gray-900 text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-[#0EA5E9]/60 cursor-pointer hover:border-gray-400 transition-colors';
+  const selCls = 'text-sm px-2.5 py-2 w-[4.5rem]';
   return (
     <div className="flex items-center gap-1.5">
-      <select value={h} onChange={e => emit(e.target.value, m, ampm)} className={`${sel} w-[4.5rem]`}>
-        <option value="">--</option>
-        {HOURS.map(hr => <option key={hr} value={hr}>{hr}</option>)}
-      </select>
+      <CustomSelect
+        value={h}
+        onChange={v => emit(v, m, ampm)}
+        isDark={dark}
+        className={selCls}
+        options={[{ value: '', label: '--' }, ...HOURS.map(hr => ({ value: hr, label: hr }))]}
+      />
       <span className={`text-sm font-bold select-none ${dark ? 'text-gray-600' : 'text-gray-400'}`}>:</span>
-      <select value={m} onChange={e => emit(h, e.target.value, ampm)} className={`${sel} w-[4.5rem]`}>
-        {MINS.map(mn => <option key={mn} value={mn}>{mn}</option>)}
-      </select>
-      <select value={ampm} onChange={e => emit(h, m, e.target.value)} className={`${sel} w-[4.5rem]`}>
-        <option value="AM">AM</option>
-        <option value="PM">PM</option>
-      </select>
+      <CustomSelect
+        value={m}
+        onChange={v => emit(h, v, ampm)}
+        isDark={dark}
+        className={selCls}
+        options={MINS.map(mn => ({ value: mn, label: mn }))}
+      />
+      <CustomSelect
+        value={ampm}
+        onChange={v => emit(h, m, v)}
+        isDark={dark}
+        className={selCls}
+        options={[{ value: 'AM', label: 'AM' }, { value: 'PM', label: 'PM' }]}
+      />
     </div>
   );
 }
@@ -2150,15 +2159,19 @@ export default function ProfessorDashboard() {
                 ))}
               </div>
               {/* Sort */}
-              <select
-                value={consultSortBy}
-                onChange={e => setConsultSortBy(e.target.value as typeof consultSortBy)}
-                className={`rounded-xl text-xs py-2 px-3 flex-shrink-0 ${fieldCls}`}
-              >
-                <option value="date">Sort: Date</option>
-                <option value="name">Sort: Name</option>
-                <option value="status">Sort: Status</option>
-              </select>
+              <div className="flex-shrink-0">
+                <CustomSelect
+                  value={consultSortBy}
+                  onChange={v => setConsultSortBy(v as typeof consultSortBy)}
+                  isDark={isDark}
+                  className="text-xs py-2 px-3"
+                  options={[
+                    { value: 'date', label: 'Sort: Date' },
+                    { value: 'name', label: 'Sort: Name' },
+                    { value: 'status', label: 'Sort: Status' },
+                  ]}
+                />
+              </div>
             </div>
 
             {/* ── Bulk action toolbar ── */}
@@ -2739,16 +2752,18 @@ export default function ProfessorDashboard() {
                     className="bg-transparent outline-none placeholder-gray-400 w-36 text-sm"
                   />
                 </div>
-                <select
+                <CustomSelect
                   value={histStatus}
-                  onChange={e => setHistStatus(e.target.value as typeof histStatus)}
-                  className={`px-3 py-2 rounded-xl border text-sm outline-none cursor-pointer ${isDark ? 'bg-[#252535] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-gray-700'}`}
-                >
-                  <option value="all">All statuses</option>
-                  <option value="completed">Completed</option>
-                  <option value="rescheduled">Rescheduled</option>
-                  <option value="missed">Missed</option>
-                </select>
+                  onChange={v => setHistStatus(v as typeof histStatus)}
+                  isDark={isDark}
+                  className="px-3 py-2 text-sm"
+                  options={[
+                    { value: 'all', label: 'All statuses' },
+                    { value: 'completed', label: 'Completed' },
+                    { value: 'rescheduled', label: 'Rescheduled' },
+                    { value: 'missed', label: 'Missed' },
+                  ]}
+                />
               </div>
             </div>
 
@@ -3116,13 +3131,20 @@ export default function ProfessorDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={labelCls}>Status</label>
-                    <select value={exportStatus} onChange={e => setExportStatus(e.target.value as typeof exportStatus)} className={inputCls}>
-                      <option value="all">All Statuses</option>
-                      <option value="pending">Pending</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                    <CustomSelect
+                      value={exportStatus}
+                      onChange={v => setExportStatus(v as typeof exportStatus)}
+                      isDark={isDark}
+                      wrapperClassName="w-full"
+                      className="w-full px-3 py-2 text-sm"
+                      options={[
+                        { value: 'all', label: 'All Statuses' },
+                        { value: 'pending', label: 'Pending' },
+                        { value: 'confirmed', label: 'Confirmed' },
+                        { value: 'completed', label: 'Completed' },
+                        { value: 'cancelled', label: 'Cancelled' },
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>PDF Orientation</label>

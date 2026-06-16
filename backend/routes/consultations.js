@@ -145,6 +145,17 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
     }
     const student_id = studentResult.rows[0].id;
 
+    const profAvailResult = await pool.query(
+      `SELECT is_available FROM professors WHERE id = $1`,
+      [professor_id]
+    );
+    if (profAvailResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Professor not found.' });
+    }
+    if (profAvailResult.rows[0].is_available === false) {
+      return res.status(403).json({ error: 'This professor is not currently accepting new bookings.' });
+    }
+
     const scheduleResult = await pool.query(
       `SELECT id, day, date::text AS date, time_start, time_end, time_ranges FROM schedules WHERE id = $1`,
       [schedule_id]

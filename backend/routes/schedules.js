@@ -65,7 +65,8 @@ router.get('/', authenticate, async (req, res) => {
        FROM schedules s
        JOIN professors p ON s.professor_id = p.id
        JOIN users u ON p.user_id = u.id
-       WHERE s.date IS NULL OR s.date >= CURRENT_DATE
+       WHERE (s.date IS NULL OR s.date >= CURRENT_DATE)
+         AND COALESCE(p.is_available, true) = true
        ORDER BY s.date NULLS LAST, s.day, s.time_start`
     );
     res.json(result.rows);
