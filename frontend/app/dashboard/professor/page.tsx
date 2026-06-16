@@ -2516,7 +2516,7 @@ export default function ProfessorDashboard() {
               );
             })()}
           </div>
-          <div className="w-64 flex-shrink-0 hidden xl:flex flex-col h-full bg-[#4F6BED] min-h-screen" />
+          <div className="w-64 flex-shrink-0 hidden xl:block" />
           </div>
 
         ) : tab === 'schedules' ? (
