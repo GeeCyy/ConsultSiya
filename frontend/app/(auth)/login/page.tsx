@@ -209,11 +209,11 @@ function LoginContent() {
           <p className={`text-xs mt-0.5 ${muteText}`}>Mapúa University</p>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-5">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-6 sm:py-8 gap-5">
 
           {/* Login form card */}
           <div
-            className="w-full max-w-md rounded-2xl px-7 py-14 transition-colors duration-200"
+            className="w-full max-w-md rounded-2xl px-5 sm:px-7 py-10 sm:py-14 transition-colors duration-200"
             style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}` }}
           >
             <div className="mb-7">

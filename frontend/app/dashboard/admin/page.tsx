@@ -784,7 +784,7 @@ export default function AdminDashboard() {
                     { key: 'cancelled', label: 'Cancelled' },
                   ] as const).map(t => (
                     <button key={t.key} onClick={() => setStatusFilter(t.key)}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                         statusFilter === t.key
                           ? 'bg-[#0EA5E9] text-white shadow-sm shadow-sky-500/30'
                           : isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -828,13 +828,13 @@ export default function AdminDashboard() {
                       }`}>
 
                         {/* Card top: id + status */}
-                        <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                        <div className={`flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
                           <span className={`text-[11px] font-mono font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>#{c.id}</span>
                           <StatusBadge status={c.status} isDark={isDark} />
                         </div>
 
                         {/* Card body */}
-                        <div className="p-4 flex flex-col gap-3 flex-1">
+                        <div className="p-3 sm:p-4 flex flex-col gap-3 flex-1">
 
                           {/* Avatar + name */}
                           <div className="flex items-center gap-3">
