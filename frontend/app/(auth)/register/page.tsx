@@ -20,15 +20,6 @@ const PROGRAMS = [
 
 const YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
 
-const DEPARTMENTS = [
-  'BS Computer Science',
-  'BS Entertainment and Multimedia Computing',
-  'BS Information Technology',
-  'BS Information Systems',
-  'BS Data Science',
-  'BS Cybersecurity',
-  'Others',
-];
 
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
@@ -57,7 +48,6 @@ export default function RegisterPage() {
     student_number: '',
     program: '',
     year_level: '',
-    department: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -129,8 +119,6 @@ export default function RegisterPage() {
       payload.student_number = form.student_number;
       payload.program = form.program;
       payload.year_level = form.year_level;
-    } else {
-      payload.department = form.department;
     }
 
     const data = await api.post('/api/auth/register', payload);
@@ -371,21 +359,6 @@ export default function RegisterPage() {
               </>
             )}
 
-            {/* Professor-specific */}
-            {role === 'professor' && (
-              <div className="space-y-1">
-                <Label className={labelCls}>Department</Label>
-                <select
-                  value={form.department}
-                  onChange={set('department')}
-                  className={selectCls}
-                  style={{ backgroundColor: inputBg, borderColor: inputBorder }}
-                >
-                  <option value="">Select department…</option>
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-            )}
 
             <Button
               className="w-full text-white font-semibold mt-2 bg-[#4F6BED] hover:bg-[#3D57D6]"
