@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import CustomSelect from './CustomSelect';
 
 type Consultation = {
   id: number;
@@ -183,31 +184,35 @@ export default function MatrixCalendar({ consultations, isDark }: MatrixCalendar
           {/* Interval selector */}
           <div className="flex items-center gap-1.5">
             <span className={`text-xs ${tm}`}>Period:</span>
-            <select
-              value={intervalMins}
-              onChange={e => setIntervalMins(Number(e.target.value))}
-              className={`text-xs rounded-lg px-2 py-1 border focus:outline-none transition-colors ${isDark ? 'bg-[#1e1f22] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'}`}
-            >
-              <option value={50}>50 min</option>
-              <option value={60}>60 min</option>
-              <option value={70}>70 min (MAPUA)</option>
-              <option value={90}>90 min</option>
-            </select>
+            <CustomSelect
+              value={String(intervalMins)}
+              onChange={v => setIntervalMins(Number(v))}
+              isDark={isDark}
+              className="text-xs px-2 py-1"
+              options={[
+                { value: '50', label: '50 min' },
+                { value: '60', label: '60 min' },
+                { value: '70', label: '70 min (MAPUA)' },
+                { value: '90', label: '90 min' },
+              ]}
+            />
           </div>
 
           {/* Status filter */}
           <div className="flex items-center gap-1.5">
             <span className={`text-xs ${tm}`}>Show:</span>
-            <select
+            <CustomSelect
               value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className={`text-xs rounded-lg px-2 py-1 border focus:outline-none transition-colors ${isDark ? 'bg-[#1e1f22] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'}`}
-            >
-              <option value="all">Active</option>
-              <option value="pending">Pending only</option>
-              <option value="confirmed">Confirmed only</option>
-              <option value="completed">Completed</option>
-            </select>
+              onChange={setFilterStatus}
+              isDark={isDark}
+              className="text-xs px-2 py-1"
+              options={[
+                { value: 'all', label: 'Active' },
+                { value: 'pending', label: 'Pending only' },
+                { value: 'confirmed', label: 'Confirmed only' },
+                { value: 'completed', label: 'Completed' },
+              ]}
+            />
           </div>
         </div>
       </div>

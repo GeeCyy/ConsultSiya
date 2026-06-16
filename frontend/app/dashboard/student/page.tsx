@@ -9,6 +9,7 @@ import ChatbotWidget from '@/components/ChatbotWidget';
 import { type LeaderboardItem } from '@/components/LeaderboardCard';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import CustomSelect from '@/components/CustomSelect';
 import {
   CURRENT_TERM, buildTermFromConfig, getAcademicWeek, getWeekMode,
   daysUntil, getTermDates, getTermProgress,
@@ -585,6 +586,13 @@ export default function StudentDashboard() {
   // Navigation
   const [tab, setTab]             = useState<StudentTab>('home');
   const [consultTab, setConsultTab] = useState<'active' | 'past'>('active');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  // Quick Stats donut chart
+  const [statsAnimated, setStatsAnimated] = useState(false);
+  const [hoveredSeg, setHoveredSeg] = useState<number | null>(null);
+  const [segTooltip, setSegTooltip] = useState<{ x: number; y: number; label: string; value: number; pct: number } | null>(null);
+  const donutRef = useRef<HTMLDivElement>(null);
 
   // Book tab filters
   const [bookSearch, setBookSearch]       = useState('');
@@ -665,10 +673,23 @@ export default function StudentDashboard() {
     if (!tok)               { router.push('/login');           return; }
     if (role !== 'student') { router.push('/dashboard/home');  return; }
     setToken(tok);
-    const v = new URLSearchParams(window.location.search).get('view');
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get('view');
     if (v && (['home', 'book', 'my', 'history'] as string[]).includes(v)) setTab(v as StudentTab);
+    const f = params.get('filter');
+    if (f) {
+      setStatusFilter(f);
+      if (['pending', 'confirmed'].includes(f)) setConsultTab('active');
+      else if (['completed', 'cancelled', 'missed'].includes(f) && v === 'my') setConsultTab('past');
+    }
     setAuthReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    const t = setTimeout(() => setStatsAnimated(true), 50);
+    return () => clearTimeout(t);
+  }, [authReady]);
 
   useEffect(() => {
     if (!authReady || !token) return;
@@ -968,6 +989,19 @@ export default function StudentDashboard() {
   const handleTabChange = (next: string) => {
     setTab(next as StudentTab);
     router.replace(`?view=${next}`, { scroll: false });
+  };
+
+  const goToStatus = (status: string) => {
+    const target: StudentTab = status === 'completed' || status === 'cancelled' ? 'history' : 'my';
+    if (target === 'my') setConsultTab('active');
+    setStatusFilter(status);
+    setTab(target);
+    router.replace(`?view=${target}&filter=${status}`, { scroll: false });
+  };
+
+  const clearStatusFilter = () => {
+    setStatusFilter(null);
+    router.replace(`?view=${tab}`, { scroll: false });
   };
 
   // ── Auth guard splash ──
@@ -1413,10 +1447,10 @@ export default function StudentDashboard() {
 
                 {(() => {
                   const allSegs = [
-                    { label: 'Completed', value: allConsultsCompleted, color: '#10B981', darkColor: '#34D399' },
-                    { label: 'Confirmed', value: confirmedCount,       color: '#0EA5E9', darkColor: '#38BDF8' },
-                    { label: 'Pending',   value: allConsultsPending,   color: '#F59E0B', darkColor: '#FCD34D' },
-                    { label: 'Cancelled', value: allConsultsCancelled, color: '#EF4444', darkColor: '#F87171' },
+                    { label: 'Completed', status: 'completed', value: allConsultsCompleted, color: '#10B981', darkColor: '#34D399' },
+                    { label: 'Confirmed', status: 'confirmed', value: confirmedCount,       color: '#0EA5E9', darkColor: '#38BDF8' },
+                    { label: 'Pending',   status: 'pending',   value: allConsultsPending,   color: '#F59E0B', darkColor: '#FCD34D' },
+                    { label: 'Cancelled', status: 'cancelled', value: allConsultsCancelled, color: '#EF4444', darkColor: '#F87171' },
                   ];
                   const total = allConsultsTotal;
                   const r = 34, cx = 50, cy = 50;
@@ -1429,21 +1463,42 @@ export default function StudentDashboard() {
                     const dash = Math.max(0, full - segGap);
                     const offset = -acc;
                     acc += full;
-                    return { ...seg, dash, offset };
+                    const pct = total > 0 ? Math.round((seg.value / total) * 100) : 0;
+                    return { ...seg, dash, offset, pct };
                   });
+
+                  const showTooltipFor = (arc: typeof arcs[number], e: React.MouseEvent) => {
+                    const rect = donutRef.current?.getBoundingClientRect();
+                    if (!rect) return;
+                    setSegTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, label: arc.label, value: arc.value, pct: arc.pct });
+                  };
+
                   return (
                     <>
                       <div className="flex items-center justify-center mb-3">
-                        <div className="relative w-28 h-28">
+                        <div ref={donutRef} className="relative w-28 h-28">
                           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                             <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth="13"
                               stroke={isDark ? 'rgba(255,255,255,0.06)' : '#EFF6FF'} />
                             {arcs.map((arc, i) => (
-                              <circle key={i} cx={cx} cy={cy} r={r} fill="none" strokeWidth="13"
+                              <circle key={arc.label} cx={cx} cy={cy} r={r} fill="none" strokeWidth="13"
                                 stroke={isDark ? arc.darkColor : arc.color}
-                                strokeDasharray={`${arc.dash} ${circ}`}
+                                strokeDasharray={`${statsAnimated ? arc.dash : 0} ${circ}`}
                                 strokeDashoffset={arc.offset}
                                 strokeLinecap="butt"
+                                onMouseEnter={(e) => { setHoveredSeg(i); showTooltipFor(arc, e); }}
+                                onMouseMove={(e) => showTooltipFor(arc, e)}
+                                onMouseLeave={() => { setHoveredSeg(null); setSegTooltip(null); }}
+                                onClick={() => goToStatus(arc.status)}
+                                style={{
+                                  cursor: 'pointer',
+                                  pointerEvents: 'stroke',
+                                  transformOrigin: '50% 50%',
+                                  transformBox: 'fill-box',
+                                  transform: hoveredSeg === i ? 'scale(1.07)' : 'scale(1)',
+                                  opacity: hoveredSeg === null || hoveredSeg === i ? 1 : 0.6,
+                                  transition: 'stroke-dasharray 1s ease-out, transform 0.2s ease-out, opacity 0.2s ease-out',
+                                }}
                               />
                             ))}
                           </svg>
@@ -1451,21 +1506,42 @@ export default function StudentDashboard() {
                             <span className={`text-2xl font-black leading-none ${tp}`}>{total}</span>
                             <span className={`text-[10px] font-medium mt-0.5 ${tm}`}>sessions</span>
                           </div>
+                          {segTooltip && (
+                            <div
+                              className={`absolute z-50 px-2.5 py-1.5 rounded-lg shadow-lg pointer-events-none whitespace-nowrap text-center ${isDark ? 'bg-[#2a2a2a] border border-white/10' : 'bg-white border border-gray-200'}`}
+                              style={{ left: segTooltip.x, top: segTooltip.y, transform: 'translate(-50%, -120%)' }}
+                            >
+                              <p className={`text-[11px] font-semibold ${tp}`}>{segTooltip.label}</p>
+                              <p className={`text-[10px] ${tm}`}>{segTooltip.value} session{segTooltip.value !== 1 ? 's' : ''} · {segTooltip.pct}%</p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       <div className="space-y-1.5">
-                        {allSegs.map(seg => (
-                          <div key={seg.label} className="flex items-center gap-2.5">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: isDark ? seg.darkColor : seg.color }} />
-                            <span className={`flex-1 text-xs ${ts}`}>{seg.label}</span>
-                            <span className={`text-xs font-bold tabular-nums ${tp}`}>{seg.value}</span>
-                            <span className={`text-[10px] tabular-nums w-7 text-right ${tm}`}>
-                              {total > 0 ? Math.round((seg.value / total) * 100) : 0}%
-                            </span>
-                          </div>
-                        ))}
+                        {allSegs.map(seg => {
+                          const arcIdx = arcs.findIndex(a => a.label === seg.label);
+                          const disabled = seg.value === 0;
+                          return (
+                            <button key={seg.label} type="button" disabled={disabled}
+                              onClick={() => goToStatus(seg.status)}
+                              onMouseEnter={() => arcIdx >= 0 && setHoveredSeg(arcIdx)}
+                              onMouseLeave={() => setHoveredSeg(null)}
+                              className={`flex items-center gap-2.5 w-full text-left rounded-md px-1 py-0.5 -mx-1 transition-all duration-200 ${disabled ? 'cursor-default' : 'cursor-pointer'} ${
+                                !disabled && hoveredSeg === arcIdx ? (isDark ? 'bg-white/5' : 'bg-gray-50') : ''
+                              }`}
+                              style={{ opacity: hoveredSeg !== null && arcIdx >= 0 && hoveredSeg !== arcIdx ? 0.6 : 1 }}
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: isDark ? seg.darkColor : seg.color }} />
+                              <span className={`flex-1 text-xs ${ts}`}>{seg.label}</span>
+                              <span className={`text-xs font-bold tabular-nums ${tp}`}>{seg.value}</span>
+                              <span className={`text-[10px] tabular-nums w-7 text-right ${tm}`}>
+                                {total > 0 ? Math.round((seg.value / total) * 100) : 0}%
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </>
                   );
@@ -1588,11 +1664,16 @@ export default function StudentDashboard() {
                         </button>
                       )}
                     </div>
-                    <select value={bookSortBy} onChange={e => setBookSortBy(e.target.value as typeof bookSortBy)}
-                      className={`py-2 pl-3 pr-8 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/40 cursor-pointer ${isDark ? 'bg-[#252535] border border-white/8 text-gray-200' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                      <option value="slots">Most Available</option>
-                      <option value="date">Soonest Slot</option>
-                    </select>
+                    <CustomSelect
+                      value={bookSortBy}
+                      onChange={v => setBookSortBy(v as typeof bookSortBy)}
+                      isDark={isDark}
+                      className="py-2 px-3 text-sm"
+                      options={[
+                        { value: 'slots', label: 'Most Available' },
+                        { value: 'date', label: 'Soonest Slot' },
+                      ]}
+                    />
                   </div>
 
                   {/* Dept filter chips */}
@@ -1746,12 +1827,22 @@ export default function StudentDashboard() {
 
         ) : tab === 'history' ? (
           <div className="px-3 sm:px-8 py-5 sm:py-8">
-            <div className="mb-5 sm:mb-7">
-              <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
-              <p className={`text-sm mt-1 ${ts}`}>Past consultations grouped by term</p>
+            <div className="mb-5 sm:mb-7 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
+                <p className={`text-sm mt-1 ${ts}`}>Past consultations grouped by term</p>
+              </div>
+              {statusFilter && ['completed', 'cancelled', 'rescheduled', 'missed'].includes(statusFilter) && (
+                <button onClick={clearStatusFilter}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+                  Filtered: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
             </div>
             {(() => {
-              const historyItems = consultations.filter(c => ['completed', 'cancelled', 'rescheduled', 'missed'].includes(c.status));
+              const historyStatuses = ['completed', 'cancelled', 'rescheduled', 'missed'];
+              const historyItems = consultations.filter(c => historyStatuses.includes(c.status) && (!statusFilter || !historyStatuses.includes(statusFilter) || c.status === statusFilter));
               if (historyItems.length === 0) {
                 return (
                   <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
@@ -1817,9 +1908,18 @@ export default function StudentDashboard() {
         ) : (
           /* My Consultations */
           <div className="px-3 sm:px-8 py-5 sm:py-8">
-            <div className="mb-5 sm:mb-6">
-              <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
-              <p className={`text-sm mt-1 ${ts}`}>{upcomingConsultations.length} upcoming · {activeConsults} active</p>
+            <div className="mb-5 sm:mb-6 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
+                <p className={`text-sm mt-1 ${ts}`}>{upcomingConsultations.length} upcoming · {activeConsults} active</p>
+              </div>
+              {statusFilter && ['pending', 'confirmed', 'rescheduled', 'completed', 'cancelled', 'missed'].includes(statusFilter) && (
+                <button onClick={clearStatusFilter}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+                  Filtered: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
             </div>
 
             {/* Tab switcher */}
@@ -1840,7 +1940,13 @@ export default function StudentDashboard() {
               ))}
             </div>
 
-            {(consultTab === 'active' ? activeTabConsultations : pastTabConsultations).length === 0 ? (
+            {(() => {
+              const displayActive = statusFilter && ['pending', 'confirmed', 'rescheduled'].includes(statusFilter)
+                ? activeTabConsultations.filter(c => c.status === statusFilter) : activeTabConsultations;
+              const displayPast = statusFilter && ['completed', 'cancelled', 'missed'].includes(statusFilter)
+                ? pastTabConsultations.filter(c => c.status === statusFilter) : pastTabConsultations;
+              const shownConsultations = consultTab === 'active' ? displayActive : displayPast;
+              return shownConsultations.length === 0 ? (
               <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
                 {consultTab === 'active' ? (
                   <>
@@ -1856,7 +1962,7 @@ export default function StudentDashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {(consultTab === 'active' ? activeTabConsultations : pastTabConsultations).map(c => (
+                {shownConsultations.map(c => (
                   <div key={c.id} className={`rounded-2xl p-5 ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-gray-300'}`}>
                     <div className="flex items-start gap-4">
                       <button type="button" onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
@@ -2056,7 +2162,8 @@ export default function StudentDashboard() {
                   </div>
                 ))}
               </div>
-            )}
+            );
+            })()}
           </div>
         )}
       </main>

@@ -125,6 +125,18 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] professors.email column ready'))
     .catch(err => console.error('[startup] professors.email migration failed:', err.message));
 
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS bio TEXT`)
+    .then(() => console.log('[startup] professors.bio column ready'))
+    .catch(err => console.error('[startup] professors.bio migration failed:', err.message));
+
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS preferred_mode VARCHAR(20) DEFAULT 'Both'`)
+    .then(() => console.log('[startup] professors.preferred_mode column ready'))
+    .catch(err => console.error('[startup] professors.preferred_mode migration failed:', err.message));
+
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT true`)
+    .then(() => console.log('[startup] professors.is_available column ready'))
+    .catch(err => console.error('[startup] professors.is_available migration failed:', err.message));
+
   pool.query(`
     CREATE TABLE IF NOT EXISTS announcements (
       id         SERIAL PRIMARY KEY,
