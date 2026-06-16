@@ -621,8 +621,9 @@ export default function StudentDashboard() {
   const [proofLinkValue, setProofLinkValue]     = useState('');
   const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
   const [viewingFile, setViewingFile]           = useState<number | null>(null);
+  const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
+  const [proofDragActive, setProofDragActive]     = useState(false);
   const proofFileRef   = useRef<HTMLInputElement>(null);
-  const proofUploadForId = useRef<number | null>(null);
 
   // Profile card popup
   const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
@@ -850,12 +851,34 @@ export default function StudentDashboard() {
     } finally { setUploadingId(null); uploadForId.current = null; }
   };
 
-  const handleProofFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const validateProofFile = (file: File): boolean => {
+    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (!allowedExt.includes(ext)) { toast.error('Only PDF, JPG, and PNG files are allowed.'); return false; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('File must be 10 MB or smaller.'); return false; }
+    return true;
+  };
+
+  const handleProofFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !proofUploadForId.current) return;
-    const id = proofUploadForId.current;
-    setSubmittingProofId(id);
     e.target.value = '';
+    if (!file || !validateProofFile(file)) return;
+    setProofSelectedFile(file);
+  };
+
+  const handleProofDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProofDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !validateProofFile(file)) return;
+    setProofSelectedFile(file);
+  };
+
+  const handleProofSubmitFile = async (id: number) => {
+    const file = proofSelectedFile;
+    if (!file) return;
+    setSubmittingProofId(id);
     const formData = new FormData();
     formData.append('proof', file);
     try {
@@ -866,8 +889,9 @@ export default function StudentDashboard() {
       if (data.error) { toast.error(data.error); return; }
       toast.success('Proof of evidence submitted!');
       setProofPanelId(null);
+      setProofSelectedFile(null);
       await fetchData();
-    } finally { setSubmittingProofId(null); proofUploadForId.current = null; }
+    } finally { setSubmittingProofId(null); }
   };
 
   const handleProofLinkSubmit = async (id: number) => {
@@ -2073,14 +2097,14 @@ export default function StudentDashboard() {
                               </button>
                             )}
                             <button
-                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); }}
+                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); setProofSelectedFile(null); }}
                               className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
                               Replace
                             </button>
                           </div>
                         ) : (
                           <button
-                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); }}
+                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofMode('file'); setProofLinkValue(''); setProofSelectedFile(null); }}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                               isDark
                                 ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20'
@@ -2115,23 +2139,60 @@ export default function StudentDashboard() {
                             </div>
 
                             {proofMode === 'file' ? (
-                              <button
-                                onClick={() => { proofUploadForId.current = c.id; proofFileRef.current?.click(); }}
-                                disabled={submittingProofId === c.id}
-                                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-medium border-2 border-dashed transition-colors disabled:opacity-50 ${
-                                  isDark
-                                    ? 'border-white/10 text-gray-400 hover:border-violet-500/40 hover:text-violet-400 hover:bg-violet-500/5'
-                                    : 'border-gray-300 text-gray-500 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50'
-                                }`}>
-                                {submittingProofId === c.id ? (
-                                  <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              proofSelectedFile ? (
+                                <div className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs ${isDark ? 'bg-white/[0.04] border border-white/10' : 'bg-white border border-gray-200'}`}>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <svg className={`w-4 h-4 shrink-0 ${isDark ? 'text-violet-400' : 'text-violet-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span className={`truncate font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{proofSelectedFile.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      onClick={() => setProofSelectedFile(null)}
+                                      disabled={submittingProofId === c.id}
+                                      className={`px-2 py-1 rounded-lg font-medium transition-colors disabled:opacity-50 ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-white/5' : 'text-red-600 hover:text-red-700 hover:bg-gray-100'}`}>
+                                      Remove
+                                    </button>
+                                    <button
+                                      onClick={() => handleProofSubmitFile(c.id)}
+                                      disabled={submittingProofId === c.id}
+                                      className="px-3 py-1 rounded-lg font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                                      {submittingProofId === c.id
+                                        ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                                        : 'Submit'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                                  onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setProofDragActive(true); }}
+                                  onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setProofDragActive(false); }}
+                                  onDrop={handleProofDrop}
+                                  className={`w-full flex flex-col items-center justify-center gap-1.5 px-4 py-6 rounded-xl text-xs font-medium border-2 border-dashed transition-colors ${
+                                    proofDragActive
+                                      ? isDark ? 'border-violet-400 text-violet-300 bg-violet-500/10' : 'border-violet-500 text-violet-700 bg-violet-50'
+                                      : isDark
+                                        ? 'border-white/10 text-gray-400'
+                                        : 'border-gray-300 text-gray-500'
+                                  }`}>
+                                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                   </svg>
-                                )}
-                                {submittingProofId === c.id ? 'Uploading…' : 'Choose File (PDF, JPG, PNG · max 10 MB)'}
-                              </button>
+                                  <span>Drag & drop your file here</span>
+                                  <span>
+                                    or{' '}
+                                    <button
+                                      type="button"
+                                      onClick={() => proofFileRef.current?.click()}
+                                      className={`font-semibold underline ${isDark ? 'text-violet-400 hover:text-violet-300' : 'text-violet-600 hover:text-violet-700'}`}>
+                                      Browse
+                                    </button>
+                                  </span>
+                                  <span className={`mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>PDF, JPG, PNG · max 10 MB</span>
+                                </div>
+                              )
                             ) : (
                               <div className="flex gap-2">
                                 <input

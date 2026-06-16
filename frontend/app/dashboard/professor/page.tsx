@@ -2417,7 +2417,8 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'calendar' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="flex h-full">
+          <div className="flex-1 min-w-0 px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Booking Calendar</h1>
               <p className="text-gray-500 text-sm mt-1">Matrix view of consultation schedule by time and day</p>
@@ -2514,6 +2515,8 @@ export default function ProfessorDashboard() {
                 </div>
               );
             })()}
+          </div>
+          <div className="w-64 flex-shrink-0 hidden xl:flex flex-col h-full bg-[#4F6BED] min-h-screen" />
           </div>
 
         ) : tab === 'schedules' ? (

@@ -80,7 +80,7 @@ router.get('/booked-dates', authenticate, async (req, res) => {
       const totalSlots = ranges.reduce((sum, r) => {
         const start = timeToMins(r.time_start);
         const end = timeToMins(r.time_end);
-        return sum + Math.max(0, Math.floor((end - start) / 30));
+        return sum + Math.max(0, Math.ceil((end - start) / 30));
       }, 0);
 
       if (totalSlots === 0) return res.json([]);
