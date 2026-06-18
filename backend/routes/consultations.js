@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const notifModule = require('./notifications');
+const { sendBookingPendingEmail, sendBookingConfirmedEmail, sendBookingCompletedEmail, sendBookingCancelledEmail, sendBookingRescheduledEmail, sendNewBookingProfessorEmail, sendBookingCancelledProfessorEmail } = require('../lib/email');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -133,7 +134,7 @@ router.post('/mark-missed', authenticate, async (req, res) => {
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, notes } = req.body;
+  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, preferred_mode, notes } = req.body;
 
   try {
     const studentResult = await pool.query(
@@ -229,26 +230,28 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
 
       // Use a savepoint so a failed INSERT (e.g. missing column) doesn't abort the
       // whole transaction — we can roll back to the savepoint and retry without it.
+      // preferred_mode: student's preference when slot mode is BOTH ('F2F' or 'OL')
+      const preferredModeValue = mode === 'BOTH' ? (preferred_mode || null) : null;
+
       await client.query('SAVEPOINT before_insert');
       let result;
       try {
         result = await client.query(
           `INSERT INTO consultations
-           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null]
+           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes, preferred_mode)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null, preferredModeValue]
         );
         await client.query('RELEASE SAVEPOINT before_insert');
       } catch (colErr) {
         // Roll back the failed statement so the transaction stays healthy
         await client.query('ROLLBACK TO SAVEPOINT before_insert');
         if (colErr.code !== '42703') throw colErr; // re-raise anything that isn't "column does not exist"
-        console.warn('[booking] notes column missing — inserting without it. Run: ALTER TABLE consultations ADD COLUMN IF NOT EXISTS notes TEXT;');
         result = await client.query(
           `INSERT INTO consultations
-           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null]
+           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null]
         );
       }
 
@@ -280,6 +283,30 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
           ));
         }).catch(() => {});
       } catch { /* notifications are best-effort */ }
+
+      // Email student — best-effort
+      try {
+        const eRow = await pool.query(`
+          SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+                 c.date::text AS date, c.time::text AS time, c.mode, sch.location,
+                 sch.meeting_link AS slot_meeting_link,
+                 pu.email AS professor_email
+          FROM consultations c
+          JOIN students s ON c.student_id = s.id
+          JOIN users u ON s.user_id = u.id
+          JOIN professors p ON c.professor_id = p.id
+          JOIN users pu ON p.user_id = pu.id
+          LEFT JOIN schedules sch ON c.schedule_id = sch.id
+          WHERE c.id = $1
+        `, [result.rows[0].id]);
+        if (eRow.rows[0]) {
+          const { email, student_name, professor_name, date: eDate, time: eTime, mode, location, slot_meeting_link, professor_email } = eRow.rows[0];
+          await sendBookingPendingEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, mode, location });
+          if (professor_email) {
+            await sendNewBookingProfessorEmail({ to: professor_email, professorName: professor_name, studentName: student_name, date: eDate, time: eTime, mode, location, meetingLink: null, slotMeetingLink: slot_meeting_link });
+          }
+        }
+      } catch { /* emails are best-effort */ }
 
       res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -340,7 +367,7 @@ router.get('/', authenticate, async (req, res) => {
       }
       result = await pool.query(
         `SELECT c.*, c.date::text AS date, s.full_name AS student_name, s.student_number,
-                s.program, sch.day, sch.time_start, sch.time_end, sch.location,
+                s.program, sch.day, sch.time_start, sch.time_end, sch.location, sch.mode AS slot_mode,
                 cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
                 u.avatar AS student_avatar
          FROM consultations c
@@ -363,7 +390,7 @@ router.get('/', authenticate, async (req, res) => {
       );
       result = await pool.query(
         `SELECT c.*, c.date::text AS date, p.full_name AS professor_name,
-                sch.day, sch.time_start, sch.time_end, sch.location,
+                sch.day, sch.time_start, sch.time_end, sch.location, sch.mode AS slot_mode,
                 cd.action_taken, cd.referral, cd.referral_specify, cd.remarks
          FROM consultations c
          JOIN professors p ON c.professor_id = p.id
@@ -384,7 +411,7 @@ router.get('/', authenticate, async (req, res) => {
       let adminQuery = `
         SELECT c.*, c.date::text AS date, s.full_name AS student_name, p.full_name AS professor_name,
                s.student_number, s.program,
-               sch.day, sch.time_start, sch.time_end, sch.location,
+               sch.day, sch.time_start, sch.time_end, sch.location, sch.mode AS slot_mode,
                cd.action_taken, cd.referral, cd.referral_specify, cd.remarks
         FROM consultations c
         JOIN students s ON c.student_id = s.id
@@ -425,11 +452,30 @@ router.patch('/:id/confirm', authenticate, authorize('professor'), async (req, r
     }
 
     const { meeting_link } = req.body;
-    const link = consultation.rows[0].mode === 'OL' ? (meeting_link || null) : null;
+    const link = (consultation.rows[0].mode === 'OL' || consultation.rows[0].mode === 'BOTH') ? (meeting_link || null) : null;
     const result = await pool.query(
       `UPDATE consultations SET status = 'confirmed', meeting_link = $2 WHERE id = $1 RETURNING *`,
       [id, link]
     );
+
+    // Email student — best-effort
+    try {
+      const eRow = await pool.query(`
+        SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+               c.date::text AS date, c.time::text AS time, c.mode, c.meeting_link, sch.location,
+               sch.mode AS slot_mode, sch.meeting_link AS slot_meeting_link
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN users u ON s.user_id = u.id
+        JOIN professors p ON c.professor_id = p.id
+        LEFT JOIN schedules sch ON c.schedule_id = sch.id
+        WHERE c.id = $1
+      `, [id]);
+      if (eRow.rows[0]) {
+        const { email, student_name, professor_name, date: eDate, time: eTime, mode, meeting_link: eLink, location, slot_mode, slot_meeting_link } = eRow.rows[0];
+        await sendBookingConfirmedEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, mode, location, meetingLink: eLink, slotMode: slot_mode, slotMeetingLink: slot_meeting_link });
+      }
+    } catch { /* emails are best-effort */ }
 
     // Notify student
     try {
@@ -473,8 +519,8 @@ router.patch('/:id/meeting-link', authenticate, authorize('professor'), async (r
     if (consultation.rows[0].status !== 'confirmed') {
       return res.status(400).json({ error: 'Meeting link can only be updated on confirmed consultations.' });
     }
-    if (consultation.rows[0].mode !== 'OL') {
-      return res.status(400).json({ error: 'Meeting link only applies to online consultations.' });
+    if (consultation.rows[0].mode !== 'OL' && consultation.rows[0].mode !== 'BOTH') {
+      return res.status(400).json({ error: 'Meeting link only applies to online or hybrid consultations.' });
     }
 
     const { meeting_link } = req.body;
@@ -552,6 +598,34 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
       }
     } catch { /* best-effort */ }
 
+    // Emails — best-effort
+    try {
+      const eRow = await pool.query(`
+        SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+               c.date::text AS date, c.time::text AS time, c.cancel_reason AS reason,
+               pu.email AS professor_email
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN users u ON s.user_id = u.id
+        JOIN professors p ON c.professor_id = p.id
+        JOIN users pu ON p.user_id = pu.id
+        WHERE c.id = $1
+      `, [id]);
+      if (eRow.rows[0]) {
+        const { email, student_name, professor_name, date: eDate, time: eTime, reason, professor_email } = eRow.rows[0];
+        if (req.user.role === 'student') {
+          // Student cancelled → email student confirmation + email professor
+          await sendBookingCancelledEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, reason });
+          if (professor_email) {
+            await sendBookingCancelledProfessorEmail({ to: professor_email, professorName: professor_name, studentName: student_name, date: eDate, time: eTime, reason });
+          }
+        } else {
+          // Professor cancelled → email student only
+          await sendBookingCancelledEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, reason });
+        }
+      }
+    } catch (e) { console.error('[email:cancelled]', e.message); }
+
     res.json({ message: 'Consultation cancelled.' });
   } catch (err) {
     console.error(err);
@@ -581,6 +655,23 @@ router.patch('/:id/complete', authenticate, authorize('professor'), async (req, 
     }
 
     await pool.query(`UPDATE consultations SET status = 'completed' WHERE id = $1`, [id]);
+
+    // Email student — best-effort
+    try {
+      const eRow = await pool.query(`
+        SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+               c.date::text AS date, c.time::text AS time
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN users u ON s.user_id = u.id
+        JOIN professors p ON c.professor_id = p.id
+        WHERE c.id = $1
+      `, [id]);
+      if (eRow.rows[0]) {
+        const { email, student_name, professor_name, date: eDate, time: eTime } = eRow.rows[0];
+        await sendBookingCompletedEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, actionTaken: action_taken, referral, referralSpecify: referral_specify, remarks });
+      }
+    } catch (e) { console.error('[email:completed]', e.message); }
 
     const result = await pool.query(
       `INSERT INTO consultation_details
@@ -685,6 +776,24 @@ router.patch('/:id/reschedule', authenticate, authorize('professor'), async (req
        VALUES ($1, 'Referred to', $2, $3, $4)`,
       [id, referral || null, referral_specify || null, remarks || null]
     );
+
+    // Email student — best-effort
+    try {
+      const eRow = await pool.query(`
+        SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+               c.date::text AS date, c.time::text AS time, c.mode, sch.location
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN users u ON s.user_id = u.id
+        JOIN professors p ON c.professor_id = p.id
+        LEFT JOIN schedules sch ON c.schedule_id = sch.id
+        WHERE c.id = $1
+      `, [id]);
+      if (eRow.rows[0]) {
+        const { email, student_name, professor_name, date: eDate, time: eTime, mode, location } = eRow.rows[0];
+        await sendBookingRescheduledEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, mode, location });
+      }
+    } catch (e) { console.error('[email:rescheduled]', e.message); }
 
     res.json({ message: 'Consultation marked as rescheduled.' });
   } catch (err) {

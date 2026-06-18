@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Megaphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import UserProfileCard from '@/components/UserProfileCard';
@@ -44,10 +45,21 @@ function parseNature(natureStr: string | null): string[] {
 
 function getQuarterLabel(dateStr: string): string {
   const d = new Date(dateStr);
-  const m = d.getMonth();
+  const m = d.getMonth(); // 0 = Jan
   const y = d.getFullYear();
-  const q = m < 3 ? '1st' : m < 6 ? '2nd' : m < 9 ? '3rd' : '4th';
-  return `${q} Quarter ${y}`;
+  // Mapúa trimester: 1st=Aug–Nov, 2nd=Dec–Mar, 3rd=Apr–Jul
+  let term: string;
+  let ay: string;
+  if (m >= 7 && m <= 10) {
+    term = '1st Trimester'; ay = `A.Y. ${y}–${y + 1}`;
+  } else if (m === 11) {
+    term = '2nd Trimester'; ay = `A.Y. ${y}–${y + 1}`;
+  } else if (m <= 2) {
+    term = '2nd Trimester'; ay = `A.Y. ${y - 1}–${y}`;
+  } else {
+    term = '3rd Trimester'; ay = `A.Y. ${y - 1}–${y}`;
+  }
+  return `${term}, ${ay}`;
 }
 
 function groupByQuarter<T extends { date: string }>(items: T[]): Array<[string, T[]]> {
@@ -90,6 +102,7 @@ type Schedule = {
   location?: string;
   date?: string;
   professor_avatar?: string | null;
+  announcement?: string | null;
 };
 
 type Consultation = {
@@ -103,6 +116,8 @@ type Consultation = {
   nature_of_advising: string;
   nature_of_advising_specify: string | null;
   mode: string;
+  slot_mode?: string | null;
+  preferred_mode?: string | null;
   status: string;
   uploaded_form_path: string | null;
   action_taken: string | null;
@@ -482,7 +497,7 @@ function FullCalendar({
                         <div className="flex-1 min-w-0">
                           <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.professor_name}</p>
                           <p className={`text-[10px] ${tm}`}>
-                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {c.mode === 'F2F' ? 'In-Person' : 'Online'}
+                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode; return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}
                           </p>
                         </div>
                         <StatusBadge status={c.status} isDark={isDark} />
@@ -570,6 +585,29 @@ function FullCalendar({
         )}
 
       </div>{/* /body */}
+    </div>
+  );
+}
+
+function AnnouncementBubble({ ann, slotLabel, isDark }: { ann: string; slotLabel?: string | null; isDark: boolean }) {
+  const isLong = ann.length > 50;
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border ${isDark ? 'bg-violet-500/10 border-violet-500/20' : 'bg-violet-50 border-violet-200'}`}>
+      <Megaphone className={`flex-shrink-0 mt-0.5 ${isDark ? 'text-violet-400' : 'text-violet-500'}`} size={14} strokeWidth={2} />
+      <div className="min-w-0">
+        {slotLabel && <p className={`text-[10px] font-semibold mb-0.5 ${isDark ? 'text-violet-400' : 'text-violet-600'}`}>{slotLabel}</p>}
+        <p className={`text-xs leading-relaxed ${isDark ? 'text-violet-200' : 'text-violet-800'}`}>
+          {isLong && !expanded ? ann.slice(0, 50) + '...' : ann}
+          {isLong && (
+            <>{' '}<button
+              type="button"
+              onClick={() => setExpanded(e => !e)}
+              className={`font-semibold underline underline-offset-2 transition-colors ${isDark ? 'text-violet-400 hover:text-violet-300' : 'text-violet-600 hover:text-violet-800'}`}
+            >{expanded ? 'See less' : 'See more'}</button></>
+          )}
+        </p>
+      </div>
     </div>
   );
 }
@@ -684,6 +722,10 @@ export default function StudentDashboard() {
       else if (['completed', 'cancelled', 'missed'].includes(f) && v === 'my') setConsultTab('past');
     }
     setAuthReady(true);
+
+    const onTabChange = (e: Event) => setTab((e as CustomEvent<string>).detail as StudentTab);
+    window.addEventListener('consulta-tab-change', onTabChange);
+    return () => window.removeEventListener('consulta-tab-change', onTabChange);
   }, []);
 
   useEffect(() => {
@@ -972,9 +1014,22 @@ export default function StudentDashboard() {
     })
     .slice(0, 3);
 
-  // Notification bell: consultations with status updates shown as proper bell notifications
+  // Notification bell: status-update consultations (confirmed/rescheduled/cancelled) for the bell
   const statusNotifConsults = consultations
     .filter(c => ['confirmed', 'rescheduled', 'cancelled'].includes(c.status) && !!c.date)
+    .map(c => ({
+      id: c.id,
+      student_name: '',
+      professor_name: c.professor_name,
+      date: c.date,
+      time: c.time || null,
+      time_start: c.time_start,
+      status: c.status,
+    }));
+
+  // My Consultations nav badge: only genuinely pending bookings awaiting professor confirmation
+  const pendingOnlyConsults = consultations
+    .filter(c => c.status === 'pending' && !!c.date)
     .map(c => ({
       id: c.id,
       student_name: '',
@@ -1063,7 +1118,7 @@ export default function StudentDashboard() {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         announcements={announcements}
-        pendingConsultations={statusNotifConsults}
+        pendingConsultations={pendingOnlyConsults}
         storageKey={`student_notifs_${profile.email || 'default'}`}
       />
 
@@ -1580,7 +1635,7 @@ export default function StudentDashboard() {
                           <span className={`text-[10px] font-mono flex-shrink-0 ${tm}`}>{(c.time || c.time_start)?.slice(0, 5)}</span>
                           <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-sky-400' : 'border-amber-400'}`}>
                             <p className={`text-xs font-medium truncate ${tp}`}>{c.professor_name.split(' ').slice(-1)[0]}</p>
-                            <p className={`text-[10px] ${tm}`}>{c.mode === 'F2F' ? 'In-Person' : 'Online'}</p>
+                            <p className={`text-[10px] ${tm}`}>{(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode; return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}</p>
                           </div>
                         </div>
                       ))}
@@ -1733,8 +1788,10 @@ export default function StudentDashboard() {
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {displayedProfessors.map(prof => {
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                      {[displayedProfessors.filter((_, i) => i % 2 === 0), displayedProfessors.filter((_, i) => i % 2 !== 0)].map((col, colIdx) => (
+                        <div key={colIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minWidth: 0 }}>
+                          {col.map(prof => {
                         const slotsSorted = [...prof.slots].sort((a, b) => {
                           if (a.date && b.date) return a.date.localeCompare(b.date);
                           if (a.date) return -1; if (b.date) return 1;
@@ -1799,6 +1856,26 @@ export default function StudentDashboard() {
                                 )}
                               </div>
 
+                              {/* Announcements — always visible, one per slot that has one */}
+                              {(() => {
+                                const withAnn = slotsSorted.filter(s => s.announcement);
+                                if (withAnn.length === 0) return null;
+                                const multiSlot = slotsSorted.length > 1;
+                                return (
+                                  <div className="mt-3 space-y-2">
+                                    {withAnn.map(s => {
+                                      const dateObj = s.date ? new Date(s.date + 'T12:00:00') : null;
+                                      const slotLabel = multiSlot
+                                        ? (dateObj ? dateObj.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' }) : s.day)
+                                        : null;
+                                      return (
+                                        <AnnouncementBubble key={s.id} ann={s.announcement!} slotLabel={slotLabel} isDark={isDark} />
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+
                               {/* Slot detail panel */}
                               {isExpanded && (
                                 <div className={`mt-3 rounded-xl overflow-hidden divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
@@ -1810,7 +1887,7 @@ export default function StudentDashboard() {
                                     const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
                                       .map(r => `${formatTime12(r.time_start.slice(0, 5))}–${formatTime12(r.time_end.slice(0, 5))}`).join(' · ');
                                     return (
-                                      <div key={s.id} className="flex items-center justify-between px-3 py-2 gap-3">
+                                      <div key={s.id} className="px-3 py-2">
                                         <div className="min-w-0">
                                           <p className={`text-xs font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{dateLabel}</p>
                                           <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{times}</p>
@@ -1841,7 +1918,9 @@ export default function StudentDashboard() {
                             </div>
                           </div>
                         );
-                      })}
+                          })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </>
@@ -1937,13 +2016,22 @@ export default function StudentDashboard() {
                 <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
                 <p className={`text-sm mt-1 ${ts}`}>{upcomingConsultations.length} upcoming · {activeConsults} active</p>
               </div>
-              {statusFilter && ['pending', 'confirmed', 'rescheduled', 'completed', 'cancelled', 'missed'].includes(statusFilter) && (
-                <button onClick={clearStatusFilter}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
-                  Filtered: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <div className="flex items-center gap-2 flex-wrap">
+                {statusFilter && ['pending', 'confirmed', 'rescheduled', 'completed', 'cancelled', 'missed'].includes(statusFilter) && (
+                  <button onClick={clearStatusFilter}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-sky-50 text-sky-700 hover:bg-sky-100'}`}>
+                    Filtered: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+                <button onClick={handleDownloadSlip} disabled={downloadingSlip === -1}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10 ring-1 ring-white/10' : 'bg-white text-gray-600 hover:bg-gray-50 ring-1 ring-gray-200 shadow-sm'}`}>
+                  {downloadingSlip === -1
+                    ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
+                  Download Consultation Form Template
                 </button>
-              )}
+              </div>
             </div>
 
             {/* Tab switcher */}
@@ -2023,33 +2111,32 @@ export default function StudentDashboard() {
                       </div>
                       <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                         <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Meeting</p>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
-                          <span className={`text-sm font-medium ${c.mode === 'F2F' ? (isDark ? 'text-purple-300' : 'text-purple-600') : (isDark ? 'text-cyan-300' : 'text-cyan-600')}`}>
-                            {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
-                          </span>
-                        </div>
-                        {c.mode === 'F2F' && c.location && (
-                          <p className={`text-xs mt-0.5 ${ts}`}>{c.location}</p>
-                        )}
-                        {c.mode === 'OL' && c.status === 'confirmed' && (
-                          c.meeting_link
-                            ? <a href={c.meeting_link} target="_blank" rel="noopener noreferrer" className={`text-xs mt-0.5 block hover:underline truncate ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Join Meeting →</a>
-                            : <p className={`text-xs mt-0.5 italic ${tm}`}>No meeting link added yet</p>
-                        )}
+                        {(() => {
+                          const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
+                          return (
+                            <>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
+                                <span className={`text-sm font-medium ${effMode === 'F2F' ? (isDark ? 'text-purple-300' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-300' : 'text-teal-600') : (isDark ? 'text-cyan-300' : 'text-cyan-600')}`}>
+                                  {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
+                                </span>
+                              </div>
+                              {(effMode === 'F2F' || effMode === 'BOTH') && c.location && (
+                                <p className={`text-xs mt-0.5 ${ts}`}>{c.location}</p>
+                              )}
+                              {(effMode === 'OL' || effMode === 'BOTH') && c.status === 'confirmed' && (
+                                c.meeting_link
+                                  ? <a href={c.meeting_link} target="_blank" rel="noopener noreferrer" className={`text-xs mt-0.5 block hover:underline truncate ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Join Meeting →</a>
+                                  : <p className={`text-xs mt-0.5 italic ${tm}`}>No meeting link added yet</p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
 
                     <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2`}>
                       <div className="flex flex-wrap items-center gap-2">
-                        <button onClick={handleDownloadSlip} disabled={downloadingSlip === -1}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-[#4F6BED] text-white hover:bg-[#3D57D6]' : 'bg-[#4F6BED] text-white hover:bg-[#3D57D6]'}`}>
-                          {downloadingSlip === -1
-                            ? <span className="w-3 h-3 border border-white/60 border-t-transparent rounded-full animate-spin" />
-                            : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
-                          Download Form
-                        </button>
-
                         {c.status === 'completed' && (
                           <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
@@ -2239,9 +2326,9 @@ export default function StudentDashboard() {
         />
       )}
 
-        <ChatbotWidget token={token} role="student" />
       </div>{/* /content area */}
 
+      <ChatbotWidget token={token ?? ''} role="student" />
     </div>
   );
 }

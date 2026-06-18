@@ -237,3 +237,13 @@ aside.w-60 * {
 .toast-enter {
   animation: toast-slide-in 0.22s ease-out both;
 }
+
+/* ── Reduce Motion (accessibility toggle) ────────────────────────────────── */
+.reduce-motion * {
+  animation: none !important;
+  transition-property: background-color, color, border-color, opacity !important;
+}
+.reduce-motion *:hover,
+.reduce-motion *:active {
+  transform: none !important;
+}

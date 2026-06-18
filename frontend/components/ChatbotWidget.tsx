@@ -269,6 +269,37 @@ function FaqAnswer({ text }: { text: string }) {
   );
 }
 
+function parseReply(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#4F6BED;font-weight:500;text-decoration:underline">$1</a>')
+    .replace(/\[([^\]]+)\]\((\/[^)]+)\)/g, '<a href="$2" style="color:#4F6BED;font-weight:500;text-decoration:underline">$1</a>')
+    .replace(/\n/g, '<br>');
+}
+
+type AiStructuredResponse = { message: string; action?: { label: string; route: string } };
+
+function parseAiResponse(content: string): AiStructuredResponse {
+  // Walk the string and extract the first balanced { } block that contains a "message" field
+  let depth = 0, start = -1;
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (content[i] === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try {
+          const parsed = JSON.parse(content.slice(start, i + 1));
+          if (parsed && typeof parsed.message === 'string') return parsed as AiStructuredResponse;
+        } catch {}
+        start = -1;
+      }
+    }
+  }
+  return { message: content };
+}
+
 // ── Widget ────────────────────────────────────────────────────────────────────
 export default function ChatbotWidget({
   token,
@@ -285,6 +316,12 @@ export default function ChatbotWidget({
   const [apiMessage,  setApiMsg]  = useState('');
   const [apiOptions,  setApiOpts] = useState<TreeOption[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const aiScrollRef = useRef<HTMLDivElement>(null);
+  const [isDark, setIsDark] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'faq' | 'ai'>('faq');
 
   // Reset to root on close
   useEffect(() => {
@@ -293,7 +330,38 @@ export default function ChatbotWidget({
     setLoading(false);
     setApiMsg('');
     setApiOpts([]);
+    setChatMessages([]);
+    setChatInput('');
   }, [open]);
+
+  useEffect(() => {
+    if (aiScrollRef.current) {
+      aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, chatLoading]);
+
+  async function sendChatMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || chatLoading) return;
+    const next = [...chatMessages, { role: 'user' as const, content: trimmed }];
+    setChatMessages(next);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/chat/faq`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ messages: next }),
+      });
+      if (!res.ok) throw new Error('request failed');
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
 
   // Scroll answer into view on node change
   useEffect(() => {
@@ -335,7 +403,35 @@ export default function ChatbotWidget({
     setNodeId(opt.next);
   };
 
+  useEffect(() => {
+    setIsDark(localStorage.getItem('consulta-theme') === 'dark');
+    const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
+    window.addEventListener('consulta-theme-change', handler);
+    return () => window.removeEventListener('consulta-theme-change', handler);
+  }, []);
+
   const rootOptionCount = tree['root'].options.length;
+
+  const panelBg      = isDark ? '#1e1f22' : '#ffffff';
+  const panelBorder  = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.10)';
+  const headerBg     = isDark ? '#2b2d31' : '#f8f9fb';
+  const headerBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)';
+  const headerTitle  = isDark ? '#ffffff' : '#111827';
+  const headerSub    = isDark ? '#9ca3af' : '#6b7280';
+  const subtitleTxt  = isDark ? '#9ca3af' : '#6b7280';
+  const answerBg     = isDark ? '#383a40' : '#eaecf0';
+  const answerTxt    = isDark ? '#d1d5db' : '#374151';
+  const topicBg      = isDark ? '#2b2d31' : '#f3f4f6';
+  const topicHover   = isDark ? '#35373c' : '#e5e7eb';
+  const topicTxt     = isDark ? '#dbdee1' : '#1f2937';
+  const footerBg     = isDark ? '#2b2d31' : '#f8f9fb';
+  const footerBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)';
+  const footerTxt    = isDark ? '#6b7280' : '#9ca3af';
+  const aiBubbleBg   = isDark ? '#2a2a3e' : '#ededf5';
+  const aiTxt        = isDark ? '#c4c9d4' : '#374151';
+  const inputBg      = isDark ? '#2b2d31' : '#f5f5f5';
+  const inputTxt     = isDark ? '#dbdee1' : '#111827';
+  const inputBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
   return (
     <div className="fixed bottom-5 right-3 sm:right-5 z-[55] flex flex-col items-end gap-3">
@@ -343,100 +439,369 @@ export default function ChatbotWidget({
       {/* ── FAQ panel ── */}
       {open && (
         <div
-          className="w-[calc(100vw-24px)] sm:w-80 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[480px] sm:max-h-[520px]"
-          style={{ backgroundColor: '#1e1f22', border: '1px solid rgba(255,255,255,0.08)' }}
+          className="w-[calc(100vw-24px)] sm:w-[700px] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ maxHeight: 'min(700px, calc(100vh - 80px))', backgroundColor: panelBg, border: `1px solid ${panelBorder}` }}
         >
-          {/* Header */}
-          <div
-            className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
-            style={{ backgroundColor: '#2b2d31', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <div className="w-8 h-8 rounded-full bg-[#0EA5E9] flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zm-9 5.25h.008v.008H12v-.008z" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white">FAQ</p>
-              <p className="text-[11px] text-gray-400">Choose a topic</p>
-            </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+
+          {/* ── Two-column header ── */}
+          <div className="flex flex-shrink-0" style={{ borderBottom: `1px solid ${headerBorder}` }}>
+
+            {/* Left header: FAQ (desktop only) */}
+            <div
+              className="hidden sm:flex items-center gap-3 px-4 py-3 w-[300px] flex-shrink-0"
+              style={{ backgroundColor: headerBg, borderRight: `1px solid ${headerBorder}` }}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              <div className="w-8 h-8 rounded-full bg-[#0EA5E9] flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zm-9 5.25h.008v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-bold" style={{ color: headerTitle }}>FAQ</p>
+                <p className="text-[11px]" style={{ color: headerSub }}>Choose a topic</p>
+              </div>
+            </div>
+
+            {/* Right header: Ask the AI + close (desktop only) */}
+            <div
+              className="hidden sm:flex items-center gap-3 px-4 py-3 flex-1"
+              style={{ backgroundColor: headerBg }}
+            >
+              <div className="w-8 h-8 rounded-full bg-[#4F6BED] flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold" style={{ color: headerTitle }}>Ask the AI</p>
+                <p className="text-[11px]" style={{ color: headerSub }}>Ask me anything</p>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-black/5'}`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Mobile header: active tab title + close */}
+            <div
+              className="flex sm:hidden items-center gap-3 px-4 py-3 flex-1"
+              style={{ backgroundColor: headerBg }}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${mobileTab === 'faq' ? 'bg-[#0EA5E9]' : 'bg-[#4F6BED]'}`}>
+                {mobileTab === 'faq' ? (
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zm-9 5.25h.008v.008H12v-.008z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold" style={{ color: headerTitle }}>
+                  {mobileTab === 'faq' ? 'FAQ' : 'Ask the AI'}
+                </p>
+                <p className="text-[11px]" style={{ color: headerSub }}>
+                  {mobileTab === 'faq' ? 'Choose a topic' : 'Ask me anything'}
+                </p>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-black/5'}`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* Scrollable body */}
-          <div ref={bodyRef} className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+          {/* Mobile tab switcher */}
+          <div
+            className="flex sm:hidden flex-shrink-0"
+            style={{ borderBottom: `1px solid ${headerBorder}`, backgroundColor: headerBg }}
+          >
+            {(['faq', 'ai'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setMobileTab(tab)}
+                className="flex-1 py-2 text-xs font-semibold transition-colors"
+                style={{
+                  color: mobileTab === tab ? '#4F6BED' : headerSub,
+                  borderBottom: mobileTab === tab ? '2px solid #4F6BED' : '2px solid transparent',
+                  backgroundColor: 'transparent',
+                }}
+              >
+                {tab === 'faq' ? 'FAQ Topics' : 'Ask AI'}
+              </button>
+            ))}
+          </div>
 
-            {/* Root subtitle */}
-            {isRoot && (
-              <p className="px-4 pt-4 pb-2 text-xs text-gray-400">
-                Select a topic to get an instant answer.
-              </p>
-            )}
+          {/* ── Two-column body ── */}
+          <div className="flex flex-row flex-1" style={{ minHeight: 0 }}>
 
-            {/* Answer area — only shown when not at root */}
-            {!isRoot && (
-              <div className="px-4 pt-4 pb-3">
-                <div className="rounded-xl px-3 py-3 text-xs text-gray-300 leading-relaxed"
-                  style={{ backgroundColor: '#383a40' }}>
-                  {loading ? (
-                    <div className="flex items-center gap-1.5 py-1">
-                      {[0, 1, 2].map(n => (
-                        <span key={n} className="w-1.5 h-1.5 rounded-full bg-gray-500 animate-bounce"
-                          style={{ animationDelay: `${n * 150}ms` }} />
+            {/* Left column: FAQ topics */}
+            <div
+              className={`flex-col flex-shrink-0 sm:w-[300px] w-full ${mobileTab === 'faq' ? 'flex' : 'hidden'} sm:flex`}
+              style={{ minHeight: 0, borderRight: `1px solid ${headerBorder}` }}
+            >
+              {/* Scrollable topic area */}
+              <div ref={bodyRef} className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+                {isRoot && (
+                  <p className="px-4 pt-4 pb-2 text-xs" style={{ color: subtitleTxt }}>
+                    Select a topic to get an instant answer.
+                  </p>
+                )}
+                {!isRoot && (
+                  <div className="px-4 pt-4 pb-3">
+                    <div className="rounded-xl px-3 py-3 text-xs leading-relaxed"
+                      style={{ backgroundColor: answerBg, color: answerTxt }}>
+                      {loading ? (
+                        <div className="flex items-center gap-1.5 py-1">
+                          {[0, 1, 2].map(n => (
+                            <span key={n} className="w-1.5 h-1.5 rounded-full bg-gray-500 animate-bounce"
+                              style={{ animationDelay: `${n * 150}ms` }} />
+                          ))}
+                        </div>
+                      ) : displayMsg ? (
+                        <FaqAnswer text={displayMsg} />
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+                {!loading && (
+                  <div className="px-3 pb-3 pt-1 space-y-1.5">
+                    {displayOpts.map(opt => (
+                      <button
+                        key={opt.next}
+                        onClick={() => selectOption(opt)}
+                        className="w-full text-left flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all active:scale-[0.98]"
+                        style={{ backgroundColor: topicBg, color: topicTxt }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = topicHover; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = topicBg; }}
+                      >
+                        <span>{opt.label}</span>
+                        <svg className="w-4 h-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Left column footer */}
+              <div
+                className="px-4 py-2.5 flex items-center justify-between flex-shrink-0"
+                style={{ backgroundColor: footerBg, borderTop: `1px solid ${footerBorder}` }}
+              >
+                <span className="text-[11px]" style={{ color: footerTxt }}>{rootOptionCount} topics available</span>
+                {!isRoot ? (
+                  <button
+                    onClick={() => { setNodeId('root'); setApiMsg(''); setApiOpts([]); }}
+                    className="text-[11px] text-[#CC0000] hover:underline transition-colors"
+                  >
+                    All topics
+                  </button>
+                ) : (
+                  <span className="text-[11px]" style={{ color: footerTxt }}>All topics</span>
+                )}
+              </div>
+            </div>
+
+            {/* Right column: AI chat */}
+            <div
+              className={`flex-col flex-1 ${mobileTab === 'ai' ? 'flex' : 'hidden'} sm:flex`}
+              style={{ minHeight: 0 }}
+            >
+              {/* Messages area */}
+              <div
+                ref={aiScrollRef}
+                className="flex-1 overflow-y-auto px-3 py-3"
+                style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+              >
+                {chatMessages.length === 0 && !chatLoading && (
+                  <p style={{ fontSize: 12, color: isDark ? '#555770' : '#9ca3af', textAlign: 'center', paddingTop: 24 }}>
+                    Ask a question about ConsultSiya…
+                  </p>
+                )}
+                {chatMessages.map((msg, i) => {
+                  const isFirstInAiRun = msg.role === 'assistant' && (i === 0 || chatMessages[i - 1].role === 'user');
+                  return (
+                    <div
+                      key={i}
+                      className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                      style={{ animation: 'chatbot-fadein 0.2s ease-out' }}
+                    >
+                      {isFirstInAiRun && (
+                        <span
+                          className="mb-1"
+                          style={{ fontSize: 10, fontWeight: 600, color: '#fff', backgroundColor: '#4F6BED', padding: '1px 6px', borderRadius: 4, letterSpacing: '0.05em' }}
+                        >
+                          AI
+                        </span>
+                      )}
+                      {msg.role === 'user' ? (
+                        <div
+                          className="max-w-[85%] whitespace-pre-wrap"
+                          style={{
+                            fontSize: 13, lineHeight: 1.6, padding: '7px 11px',
+                            color: '#ffffff', backgroundColor: '#4F6BED',
+                            borderRadius: '12px 12px 3px 12px',
+                          }}
+                        >
+                          {msg.content}
+                        </div>
+                      ) : (() => {
+                        const parsed = parseAiResponse(msg.content);
+                        return (
+                          <>
+                            <div
+                              className="max-w-[85%]"
+                              style={{
+                                fontSize: 13, lineHeight: 1.6, padding: '7px 11px',
+                                color: aiTxt, backgroundColor: aiBubbleBg,
+                                borderRadius: '12px 12px 12px 3px',
+                              }}
+                              dangerouslySetInnerHTML={{ __html: parseReply(parsed.message) }}
+                            />
+                            {parsed.action && (
+                              <button
+                                onClick={() => {
+                                  const route = parsed.action!.route;
+                                  const url = new URL(route, window.location.origin);
+                                  const tab = url.searchParams.get('view');
+                                  if (url.pathname === window.location.pathname) {
+                                    if (tab) {
+                                      window.dispatchEvent(new CustomEvent('consulta-tab-change', { detail: tab }));
+                                    } else {
+                                      // Already on this page with no specific tab — just close
+                                      setOpen(false);
+                                    }
+                                  } else {
+                                    window.location.href = route;
+                                  }
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  cursor: 'pointer',
+                                  border: 'none',
+                                  marginTop: 4,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  padding: '5px 12px',
+                                  backgroundColor: '#4F6BED',
+                                  color: '#fff',
+                                  borderRadius: 9999,
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                {parsed.action.label}
+                                <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                                </svg>
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  );
+                })}
+                {chatLoading && (
+                  <div
+                    className="flex flex-col items-start"
+                    style={{ animation: 'chatbot-fadein 0.2s ease-out' }}
+                  >
+                    <div style={{ padding: '9px 13px', backgroundColor: aiBubbleBg, borderRadius: '12px 12px 12px 3px', display: 'flex', gap: 5, alignItems: 'center' }}>
+                      {[0, 1, 2].map(d => (
+                        <span
+                          key={d}
+                          style={{
+                            width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4F6BED',
+                            display: 'inline-block',
+                            animation: 'chatbot-pulse 1.4s ease-in-out infinite',
+                            animationDelay: `${d * 0.2}s`,
+                          }}
+                        />
                       ))}
                     </div>
-                  ) : displayMsg ? (
-                    <FaqAnswer text={displayMsg} />
-                  ) : null}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Option buttons */}
-            {!loading && (
-              <div className="px-3 pb-3 pt-1 space-y-1.5">
-                {displayOpts.map(opt => (
-                  <button
-                    key={opt.next}
-                    onClick={() => selectOption(opt)}
-                    className="w-full text-left flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all active:scale-[0.98]"
-                    style={{ backgroundColor: '#2b2d31', color: '#dbdee1' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#35373c'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#2b2d31'; }}
-                  >
-                    <span>{opt.label}</span>
-                    <svg className="w-4 h-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div
-            className="px-4 py-2.5 flex items-center justify-between flex-shrink-0"
-            style={{ backgroundColor: '#2b2d31', borderTop: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <span className="text-[11px] text-gray-500">{rootOptionCount} topics available</span>
-            {!isRoot && (
-              <button
-                onClick={() => { setNodeId('root'); setApiMsg(''); setApiOpts([]); }}
-                className="text-[11px] text-[#CC0000] hover:underline transition-colors"
+              {/* Input area */}
+              <div
+                className="flex-shrink-0 flex items-center gap-2 px-3 pb-3 pt-2"
+                style={{ borderTop: `1px solid ${footerBorder}` }}
               >
-                All topics
-              </button>
-            )}
-            {isRoot && <span className="text-[11px] text-gray-500">All topics</span>}
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(chatInput); } }}
+                  placeholder="Ask a question..."
+                  disabled={chatLoading}
+                  style={{
+                    flex: 1,
+                    height: 36,
+                    fontSize: 13,
+                    padding: '0 14px',
+                    borderRadius: 9999,
+                    backgroundColor: inputBg,
+                    color: inputTxt,
+                    border: `1px solid ${inputBorder}`,
+                    outline: 'none',
+                    opacity: chatLoading ? 0.5 : 1,
+                    transition: 'border-color 0.15s',
+                  }}
+                  onFocus={e => (e.currentTarget.style.borderColor = '#4F6BED')}
+                  onBlur={e => (e.currentTarget.style.borderColor = inputBorder)}
+                />
+                <button
+                  onClick={() => sendChatMessage(chatInput)}
+                  disabled={chatLoading || !chatInput.trim()}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    backgroundColor: '#4F6BED',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
+                    transition: 'opacity 0.15s',
+                    border: 'none',
+                    cursor: chatLoading || !chatInput.trim() ? 'default' : 'pointer',
+                  }}
+                  aria-label="Send"
+                >
+                  <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
+
+          <style>{`
+            @keyframes chatbot-fadein {
+              from { opacity: 0; transform: translateY(4px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes chatbot-pulse {
+              0%, 60%, 100% { transform: scale(1);   opacity: 0.5; }
+              30%           { transform: scale(1.35); opacity: 1;   }
+            }
+          `}</style>
         </div>
       )}
 

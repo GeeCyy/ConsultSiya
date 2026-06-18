@@ -18,6 +18,7 @@ import {
 import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar, { type NavItem } from '@/components/LeftSidebar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { Ban, Trash2 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -35,6 +36,7 @@ type Consultation = {
   nature_of_advising: string;
   nature_of_advising_specify: string | null;
   mode: string;
+  slot_mode?: string | null;
   status: string;
   action_taken: string | null;
   referral: string | null;
@@ -128,18 +130,35 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-function getQuarterLabel(dateStr: string): string {
+function getQuarterLabel(dateStr: string, activeTerm?: TermConfig): string {
   const d = new Date(dateStr);
+  d.setHours(12, 0, 0, 0);
+  // If the date falls within the admin-configured active term, use its exact label
+  if (activeTerm) {
+    const termEnd = new Date(activeTerm.start.getTime() + activeTerm.totalWeeks * 7 * 24 * 60 * 60 * 1000);
+    if (d >= activeTerm.start && d < termEnd) return activeTerm.label;
+  }
+  // Fall back to month-based heuristic for older terms
   const m = d.getMonth();
   const y = d.getFullYear();
-  const q = m < 3 ? '1st' : m < 6 ? '2nd' : m < 9 ? '3rd' : '4th';
-  return `${q} Quarter ${y}`;
+  let termName: string;
+  let ay: string;
+  if (m >= 7 && m <= 10) {
+    termName = '1st Trimester'; ay = `A.Y. ${y}–${y + 1}`;
+  } else if (m === 11) {
+    termName = '2nd Trimester'; ay = `A.Y. ${y}–${y + 1}`;
+  } else if (m <= 2) {
+    termName = '2nd Trimester'; ay = `A.Y. ${y - 1}–${y}`;
+  } else {
+    termName = '3rd Trimester'; ay = `A.Y. ${y - 1}–${y}`;
+  }
+  return `${termName}, ${ay}`;
 }
 
-function groupByQuarter<T extends { date: string }>(items: T[]): Array<[string, T[]]> {
+function groupByQuarter<T extends { date: string }>(items: T[], activeTerm?: TermConfig): Array<[string, T[]]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
-    const key = getQuarterLabel(item.date);
+    const key = getQuarterLabel(item.date, activeTerm);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(item);
   }
@@ -230,6 +249,10 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
 
+  // History filters
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('all');
+  const [historySearch, setHistorySearch] = useState('');
+
   // Report period
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>('');
   const [exporting, setExporting] = useState<string | null>(null);
@@ -244,6 +267,13 @@ export default function AdminDashboard() {
   });
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
+
+  // Confirm modal (replaces native confirm()/alert() for destructive account actions)
+  const [confirmModalOpen, setConfirmModalOpen]   = useState(false);
+  const [confirmAction, setConfirmAction]         = useState<(() => Promise<void>) | null>(null);
+  const [confirmTitle, setConfirmTitle]           = useState('');
+  const [confirmMessage, setConfirmMessage]       = useState('');
+  const [confirmModalError, setConfirmModalError] = useState('');
 
   // Admin transfer
   const [showTransfer, setShowTransfer] = useState(false);
@@ -299,9 +329,12 @@ export default function AdminDashboard() {
   const [termError, setTermError] = useState<string | null>(null);
   const [termSuccess, setTermSuccess] = useState(false);
 
-  const [isDark, setIsDark] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const [_isDark, setIsDark] = useState(false);
+  const isDark = mounted ? _isDark : false;
 
   useEffect(() => {
+    setMounted(true);
     const dark = localStorage.getItem('consulta-theme') !== 'light';
     setIsDark(dark);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -408,43 +441,77 @@ export default function AdminDashboard() {
     }
   };
 
+  const openConfirmModal = (title: string, message: string, action: () => Promise<void>) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmAction(() => action);
+    setConfirmModalError('');
+    setConfirmModalOpen(true);
+  };
+
+  const handleConfirmModalExecute = async () => {
+    if (!confirmAction) return;
+    setConfirmModalError('');
+    try {
+      await confirmAction();
+      setConfirmModalOpen(false);
+    } catch (e: unknown) {
+      setConfirmModalError(e instanceof Error ? e.message : 'An error occurred.');
+    }
+  };
+
   const handleApprove = async (id: number) => {
     const data = await api.patch(`/api/admin/users/${id}/approve`, {}, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+    if (data.error) { openConfirmModal('Error', data.error, async () => {}); }
+    else fetchAll();
   };
 
-  const handleReject = async (id: number) => {
-    if (!confirm('Reject this account? The registration will be deleted and the user must re-register.')) return;
-    const data = await api.patch(`/api/admin/users/${id}/reject`, {}, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+  const handleReject = (id: number) => {
+    openConfirmModal(
+      'Reject Account',
+      'Reject this account? The registration will be deleted and the user must re-register.',
+      async () => {
+        const data = await api.patch(`/api/admin/users/${id}/reject`, {}, token!);
+        if (data.error) throw new Error(data.error);
+        fetchAll();
+      }
+    );
   };
 
-  const handleDeleteUser = async (id: number, name: string) => {
-    if (!confirm(`Delete account for "${name}"? This cannot be undone.`)) return;
-    const data = await api.delete(`/api/admin/users/${id}`, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+  const handleDeleteUser = (id: number, name: string) => {
+    openConfirmModal(
+      'Delete Account',
+      `Delete account for "${name}"? This cannot be undone.`,
+      async () => {
+        const data = await api.delete(`/api/admin/users/${id}`, token!);
+        if (data.error) throw new Error(data.error);
+        fetchAll();
+      }
+    );
   };
 
-  const handleDeactivate = async (id: number, name: string) => {
-    if (!confirm(`Deactivate account for "${name}"? They will not be able to log in until reactivated.`)) return;
-    const data = await api.patch(`/api/admin/users/${id}/deactivate`, {}, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+  const handleDeactivate = (id: number, name: string) => {
+    openConfirmModal(
+      'Deactivate Account',
+      `Deactivate account for "${name}"? They will not be able to log in until reactivated.`,
+      async () => {
+        const data = await api.patch(`/api/admin/users/${id}/deactivate`, {}, token!);
+        if (data.error) throw new Error(data.error);
+        fetchAll();
+      }
+    );
   };
 
   const handleActivate = async (id: number) => {
     const data = await api.patch(`/api/admin/users/${id}/activate`, {}, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+    if (data.error) { openConfirmModal('Error', data.error, async () => {}); }
+    else fetchAll();
   };
 
   const handleUnlock = async (id: number) => {
     const data = await api.patch(`/api/admin/users/${id}/unlock`, {}, token!);
-    if (data.error) { alert(data.error); return; }
-    fetchAll();
+    if (data.error) { openConfirmModal('Error', data.error, async () => {}); }
+    else fetchAll();
   };
 
   const handleAddUser = async () => {
@@ -873,10 +940,17 @@ export default function AdminDashboard() {
                               <span>{formatTime(c.time_start)}–{formatTime(c.time_end)}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
-                              <span className={`text-xs font-medium ${c.mode === 'F2F' ? (isDark ? 'text-purple-400' : 'text-purple-600') : (isDark ? 'text-cyan-400' : 'text-cyan-600')}`}>
-                                {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
-                              </span>
+                              {(() => {
+                                const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
+                                return (
+                                  <>
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
+                                    <span className={`text-xs font-medium ${effMode === 'F2F' ? (isDark ? 'text-purple-400' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-400' : 'text-teal-600') : (isDark ? 'text-cyan-400' : 'text-cyan-600')}`}>
+                                      {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -1312,23 +1386,52 @@ export default function AdminDashboard() {
             {/* ── History ── */}
             {tab === 'history' && (
               <>
-                <div className="mb-5 sm:mb-7">
-                  <h1 className="text-white text-2xl font-bold">History</h1>
-                  <p className="text-gray-500 text-sm mt-1">All completed consultation records grouped by term</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-7">
+                  <div>
+                    <h1 className="text-white text-2xl font-bold">History</h1>
+                    <p className="text-gray-500 text-sm mt-1">All consultation records grouped by term</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      placeholder="Search student or adviser…"
+                      value={historySearch}
+                      onChange={e => setHistorySearch(e.target.value)}
+                      className={`h-8 px-3 rounded-lg text-xs border focus:outline-none focus:border-[#0EA5E9]/50 w-48 ${isDark ? 'bg-[#1e1e1e] border-white/10 text-gray-200 placeholder-gray-600' : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'}`}
+                    />
+                    <select
+                      value={historyStatusFilter}
+                      onChange={e => setHistoryStatusFilter(e.target.value)}
+                      className={`h-8 px-3 rounded-lg text-xs border focus:outline-none focus:border-[#0EA5E9]/50 ${isDark ? 'bg-[#1e1e1e] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="missed">Missed</option>
+                      <option value="rescheduled">Rescheduled</option>
+                    </select>
+                  </div>
                 </div>
                 {(() => {
-                  const historyItems = consultations.filter(c => c.status === 'completed' || c.status === 'rescheduled');
+                  const q = historySearch.toLowerCase();
+                  const historyItems = consultations.filter(c => {
+                    if (historyStatusFilter !== 'all' && c.status !== historyStatusFilter) return false;
+                    if (q && !c.student_name?.toLowerCase().includes(q) && !c.professor_name?.toLowerCase().includes(q)) return false;
+                    return true;
+                  });
                   if (historyItems.length === 0) {
                     return (
                       <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-white/5 bg-[#161616]">
-                        <p className="text-gray-400 font-medium text-sm">No history yet</p>
-                        <p className="text-gray-600 text-xs mt-1">Completed consultations will appear here</p>
+                        <p className="text-gray-400 font-medium text-sm">No records found</p>
+                        <p className="text-gray-600 text-xs mt-1">Try adjusting your filters</p>
                       </div>
                     );
                   }
                   return (
                     <div className="space-y-8">
-                      {groupByQuarter(historyItems).map(([quarter, items]) => (
+                      {groupByQuarter(historyItems, term).map(([quarter, items]) => (
                         <div key={quarter}>
                           <div className="flex items-center gap-3 mb-3">
                             <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">{quarter}</p>
@@ -1694,7 +1797,7 @@ export default function AdminDashboard() {
                         ) : (
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                         )}
-                        {annFormOpen ? 'Cancel' : '+ Add'}
+                        {annFormOpen ? 'Cancel' : 'Add'}
                       </button>
                     </div>
 
@@ -2527,6 +2630,17 @@ export default function AdminDashboard() {
           onClose={() => setProfileCard(null)}
         />
       )}
+
+      <ConfirmModal
+        open={confirmModalOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmLabel="Confirm"
+        variant="danger"
+        errorMessage={confirmModalError || undefined}
+        onConfirm={handleConfirmModalExecute}
+        onCancel={() => { setConfirmModalOpen(false); setConfirmModalError(''); }}
+      />
     </div>
   );
 }
