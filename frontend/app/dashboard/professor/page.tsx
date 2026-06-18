@@ -3,8 +3,6 @@
 import { useEffect, useState, useRef, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
@@ -1316,14 +1314,9 @@ export default function ProfessorDashboard() {
     });
   };
 
-  const handleExport = (format: 'excel' | 'pdf') => {
+  const handleExport = async (format: 'excel' | 'pdf') => {
     const rows = getExportRows();
     if (rows.length === 0) { toast.error('No records match the selected filters.'); return; }
-
-    const profName = profile.full_name || 'Professor';
-    const dateLabel = exportDateFrom || exportDateTo
-      ? `${exportDateFrom || '—'} to ${exportDateTo || '—'}`
-      : 'All dates';
 
     const proofLabel = (c: Consultation): string => {
       if (!c.proof_of_evidence) return '—';
@@ -1347,47 +1340,32 @@ export default function ProfessorDashboard() {
     const headers = ['Student Name', 'Student No.', 'Program', 'Date', 'Time', 'Mode', 'Nature of Advising', 'Action Taken', 'Status', 'Proof of Evidence'];
 
     if (format === 'pdf') {
-      const doc = new jsPDF({ orientation: exportOrientation, unit: 'pt', format: 'letter' });
-      const pageW = doc.internal.pageSize.getWidth();
+      try {
+        const params = new URLSearchParams();
+        if (exportDateFrom) params.set('date_from', exportDateFrom);
+        if (exportDateTo)   params.set('date_to',   exportDateTo);
+        if (exportStatus !== 'all') params.set('status', exportStatus);
 
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text('MAPUA UNIVERSITY', pageW / 2, 40, { align: 'center' });
-      doc.setFontSize(11);
-      doc.text('School of Information Technology', pageW / 2, 56, { align: 'center' });
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Faculty Academic Advising Record', pageW / 2, 72, { align: 'center' });
-
-      doc.setFontSize(9);
-      doc.text(`Adviser: ${profName}`, 40, 96);
-      doc.text(`Period: ${dateLabel}`, 40, 110);
-      doc.text(`Status: ${exportStatus === 'all' ? 'All' : exportStatus.charAt(0).toUpperCase() + exportStatus.slice(1)}`, 40, 124);
-      doc.text(`Generated: ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}`, 40, 138);
-
-      autoTable(doc, {
-        head: [headers],
-        body: tableData,
-        startY: 155,
-        styles: { fontSize: 7.5, cellPadding: 4 },
-        headStyles: { fillColor: [204, 0, 0], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-        alternateRowStyles: { fillColor: [248, 248, 248] },
-        columnStyles: {
-          0: { cellWidth: 80 },
-          1: { cellWidth: 60 },
-          2: { cellWidth: 55 },
-          3: { cellWidth: 60 },
-          4: { cellWidth: 55 },
-          5: { cellWidth: 38 },
-          6: { cellWidth: 'auto' },
-          7: { cellWidth: 65 },
-          8: { cellWidth: 52 },
-          9: { cellWidth: 80 },
-        },
-        margin: { left: 40, right: 40 },
-      });
-
-      doc.save(`advising-report-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}.pdf`);
+        const resp = await fetch(`${API_URL}/api/reports/pdf?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          toast.error(err.error || 'Failed to generate PDF.');
+          return;
+        }
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `advising-report-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`PDF downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
+      } catch {
+        toast.error('Failed to generate PDF. Please try again.');
+        return;
+      }
     } else {
       const wsData = [headers, ...tableData];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -1395,8 +1373,8 @@ export default function ProfessorDashboard() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Advising Records');
       XLSX.writeFile(wb, `advising-report-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}.xlsx`);
+      toast.success(`Excel downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
     }
-    toast.success(`${format === 'pdf' ? 'PDF' : 'Excel'} downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
   };
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -2807,10 +2785,16 @@ export default function ProfessorDashboard() {
               {/* ── Right: Slots list ── */}
               <div>
                 {(() => {
-                  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                  const now = new Date();
+                  const getSlotEndDt = (s: Schedule): Date => {
+                    const endTime = s.time_ranges?.length
+                      ? s.time_ranges[s.time_ranges.length - 1].time_end
+                      : s.time_end;
+                    return new Date(`${s.date}T${endTime}`);
+                  };
                   // Include both dated-future slots AND undated (recurring) slots; sort chronologically
                   const activeSlots = schedules
-                    .filter(s => !s.date || s.date >= todayStr)
+                    .filter(s => !s.date || getSlotEndDt(s) >= now)
                     .sort((a, b) => {
                       if (!a.date && !b.date) return 0;
                       if (!a.date) return 1;   // undated recurring slots go after dated ones
@@ -2818,7 +2802,7 @@ export default function ProfessorDashboard() {
                       return a.date.localeCompare(b.date);
                     });
                   const pastSlots = schedules
-                    .filter(s => s.date && s.date < todayStr)
+                    .filter(s => s.date && getSlotEndDt(s) < now)
                     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
                   const renderSlot = (s: Schedule, dimmed = false) => {
