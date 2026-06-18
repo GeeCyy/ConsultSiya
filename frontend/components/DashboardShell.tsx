@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CURRENT_TERM, getAcademicWeek, getWeekMode } from '@/lib/academicCalendar';
-import { FAQ_ROOT, type FaqNode } from '@/lib/faqData';
+import ChatbotWidget from '@/components/ChatbotWidget';
 
 // ── Week badge ────────────────────────────────────────────────────────────────
 
@@ -26,268 +26,6 @@ function WeekBadge() {
         {info.mode}
       </span>
     </div>
-  );
-}
-
-// ── FAQ Panel ─────────────────────────────────────────────────────────────────
-
-// Breadcrumb trail: array of visited nodes leading to current state.
-type Trail = FaqNode[];
-
-function formatAnswer(text: string): React.ReactNode {
-  return text.split('\n').map((line, i) => (
-    <span key={i} className={`block ${line === '' ? 'h-2' : ''}`}>{line}</span>
-  ));
-}
-
-function FaqPanel({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
-  // trail[trail.length - 1] is the currently viewed node (or undefined for root)
-  const [trail, setTrail] = useState<Trail>([]);
-  const bodyRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [trail]);
-
-  const currentNode = trail[trail.length - 1];
-  // What to show as buttons at this level
-  const currentChildren: FaqNode[] =
-    currentNode
-      ? currentNode.children ?? []
-      : FAQ_ROOT;
-
-  const isRoot = trail.length === 0;
-  const isLeaf = currentNode && (!currentNode.children || currentNode.children.length === 0);
-
-  const goInto = (node: FaqNode) => setTrail(t => [...t, node]);
-  const goBack = () => setTrail(t => t.slice(0, -1));
-  const goRoot = () => setTrail([]);
-
-  return (
-    <div
-      className="fixed bottom-20 right-6 z-50 flex flex-col rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
-      style={{ width: 340, height: 480, backgroundColor: '#2b2d31' }}
-    >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between px-4 py-3 flex-shrink-0 border-b border-white/10"
-        style={{ backgroundColor: '#1e1f22' }}
-      >
-        <div className="flex items-center gap-2">
-          {!isRoot && (
-            <button
-              onClick={goBack}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors mr-1"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}
-          >
-            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white leading-tight">FAQ</p>
-            <p className="text-[10px] text-gray-500 truncate">
-              {isRoot ? 'Choose a topic' : currentNode?.label}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          {!isRoot && (
-            <button
-              onClick={goRoot}
-              title="Back to topics"
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/10 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/10 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Breadcrumb ──────────────────────────────────────────────────────── */}
-      {!isRoot && (
-        <div className="flex items-center gap-1 px-4 py-2 flex-shrink-0 border-b border-white/5 overflow-x-auto">
-          <button onClick={goRoot} className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors whitespace-nowrap">
-            Topics
-          </button>
-          {trail.map((node, i) => (
-            <span key={node.id} className="flex items-center gap-1">
-              <svg className="w-2.5 h-2.5 text-gray-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-              <button
-                onClick={() => setTrail(trail.slice(0, i + 1))}
-                className={`text-[10px] whitespace-nowrap transition-colors ${
-                  i === trail.length - 1 ? 'text-white font-medium' : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                {node.label.length > 28 ? node.label.slice(0, 28) + '…' : node.label}
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* ── Body ───────────────────────────────────────────────────────────── */}
-      <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-
-        {/* Root view — topic buttons */}
-        {isRoot && (
-          <>
-            <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">
-              Select a topic to get an instant answer.
-            </p>
-            {FAQ_ROOT.map(node => (
-              <button
-                key={node.id}
-                onClick={() => goInto(node)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium text-white hover:bg-white/10 transition-colors border border-white/5 hover:border-white/10"
-                style={{ backgroundColor: '#383a40' }}
-              >
-                <span className="leading-snug">{node.label}</span>
-                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ))}
-          </>
-        )}
-
-        {/* Branch view — sub-topic buttons */}
-        {!isRoot && currentNode && !isLeaf && (
-          <>
-            {currentNode.answer && (
-              <div className="text-sm text-gray-300 leading-relaxed mb-3 pb-3 border-b border-white/10">
-                {formatAnswer(currentNode.answer)}
-              </div>
-            )}
-            {currentChildren.map(child => (
-              <button
-                key={child.id}
-                onClick={() => goInto(child)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium text-white hover:bg-white/10 transition-colors border border-white/5 hover:border-white/10"
-                style={{ backgroundColor: '#383a40' }}
-              >
-                <span className="leading-snug">{child.label}</span>
-                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ))}
-          </>
-        )}
-
-        {/* Leaf view — answer + action buttons */}
-        {isLeaf && currentNode.answer && (
-          <>
-            <div
-              className="rounded-xl px-4 py-3 text-sm text-gray-300 leading-relaxed border border-white/5"
-              style={{ backgroundColor: '#383a40' }}
-            >
-              {formatAnswer(currentNode.answer)}
-            </div>
-
-            {currentNode.actions && currentNode.actions.length > 0 && (
-              <div className="space-y-2 pt-1">
-                {currentNode.actions.map(action => (
-                  action.route ? (
-                    <button
-                      key={action.label}
-                      onClick={() => { router.push(action.route!); onClose(); }}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors hover:opacity-90"
-                      style={{ backgroundColor: '#CC0000' }}
-                    >
-                      {action.label}
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <div
-                      key={action.label}
-                      className="w-full py-2.5 px-4 rounded-xl text-sm text-gray-400 border border-white/10 text-center"
-                    >
-                      {action.label}
-                    </div>
-                  )
-                ))}
-              </div>
-            )}
-
-            <button
-              onClick={goBack}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors mt-1"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to previous topic
-            </button>
-          </>
-        )}
-
-        {/* Leaf with no answer (shouldn't happen if data is correct) */}
-        {isLeaf && !currentNode.answer && (
-          <p className="text-sm text-gray-500 text-center py-6">No answer configured for this topic.</p>
-        )}
-      </div>
-
-      {/* ── Footer hint ─────────────────────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 px-4 py-2 border-t border-white/5 flex items-center justify-between"
-        style={{ backgroundColor: '#1e1f22' }}
-      >
-        <span className="text-[10px] text-gray-600">
-          {isRoot ? `${FAQ_ROOT.length} topics available` : 'Tap any topic for an answer'}
-        </span>
-        <button onClick={goRoot} className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
-          All topics
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── DashboardShell (public export) ────────────────────────────────────────────
-
-function FaqButton({ onClick, open }: { onClick: () => void; open: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      title="FAQ"
-      aria-label={open ? 'Close FAQ' : 'Open FAQ'}
-      className="fixed bottom-6 right-6 z-50 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 hover:-translate-y-0.5"
-      style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)', width: 52, height: 52, boxShadow: '0 4px 20px rgba(14,165,233,0.4), 0 2px 8px rgba(14,165,233,0.2)' }}
-    >
-      {open ? (
-        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      ) : (
-        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )}
-    </button>
   );
 }
 
@@ -315,7 +53,7 @@ export default function DashboardShell({
   onMenuToggle?: () => void;
 }) {
   const router = useRouter();
-  const [faqOpen, setFaqOpen] = useState(false);
+  const [token, setToken] = useState('');
   const [isDark, setIsDark] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [navAvatar, setNavAvatar] = useState<string | null>(null);
@@ -338,6 +76,15 @@ export default function DashboardShell({
     }
     setNavName(localStorage.getItem('consulta-name') || '');
     setNavRole(localStorage.getItem('role') || '');
+    setToken(localStorage.getItem('token') || '');
+
+    const savedMotion = localStorage.getItem('consulta-reduce-motion') === 'true';
+    document.body.classList.toggle('reduce-motion', savedMotion);
+    const onMotionChange = (e: Event) => {
+      const val = (e as CustomEvent<boolean>).detail;
+      document.body.classList.toggle('reduce-motion', val);
+    };
+    window.addEventListener('consulta-reduce-motion-change', onMotionChange);
 
     const onAvatarChange = (e: Event) => {
       const url = (e as CustomEvent<{ url: string }>).detail?.url ?? null;
@@ -362,6 +109,7 @@ export default function DashboardShell({
     return () => {
       window.removeEventListener('consulta-avatar-change', onAvatarChange);
       window.removeEventListener('consulta-name-change', onNameChange);
+      window.removeEventListener('consulta-reduce-motion-change', onMotionChange);
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('keydown', onKeyDown);
     };
@@ -466,7 +214,7 @@ export default function DashboardShell({
                 </button>
 
                 <button
-                  onClick={() => { setFaqOpen(true); close(); }}
+                  onClick={() => { router.push('/dashboard/help'); close(); }}
                   className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors text-left ${isDark ? 'text-gray-300 hover:text-white hover:bg-white/5' : 'text-gray-700 hover:text-gray-900 hover:bg-black/5'}`}
                 >
                   <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
@@ -499,8 +247,7 @@ export default function DashboardShell({
         {children}
       </div>
 
-      <FaqButton onClick={() => setFaqOpen(v => !v)} open={faqOpen} />
-      {faqOpen && <FaqPanel onClose={() => setFaqOpen(false)} />}
+      <ChatbotWidget token={token} role={navRole as 'professor' | 'student'} />
     </div>
   );
 }

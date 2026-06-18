@@ -6,6 +6,7 @@ interface ConfirmModalProps {
   message: string;
   confirmLabel?: string;
   variant?: 'danger' | 'default';
+  errorMessage?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -16,6 +17,7 @@ export function ConfirmModal({
   message,
   confirmLabel = 'Confirm',
   variant = 'danger',
+  errorMessage,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -30,7 +32,10 @@ export function ConfirmModal({
         onClick={e => e.stopPropagation()}
       >
         <h3 className="text-white font-bold text-base mb-2">{title}</h3>
-        <p className="text-gray-400 text-sm leading-relaxed mb-6">{message}</p>
+        <p className="text-gray-400 text-sm leading-relaxed mb-4">{message}</p>
+        {errorMessage && (
+          <p className="text-red-400 text-xs mb-4 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">{errorMessage}</p>
+        )}
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}

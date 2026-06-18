@@ -1,8 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardShell from '@/components/DashboardShell';
+
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+const QUICK_CHIPS = [
+  'How do I book a consultation?',
+  'What is an Advising Slip?',
+  'How do I reset my password?',
+  'What happens after I submit a booking?',
+];
 
 const FAQS = [
   {
@@ -138,7 +147,15 @@ export default function HelpPage() {
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState('about');
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
+
+  // Chat widget state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -153,6 +170,46 @@ export default function HelpPage() {
     window.addEventListener('consulta-theme-change', onThemeChange);
     return () => window.removeEventListener('consulta-theme-change', onThemeChange);
   }, []);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, chatLoading]);
+
+  async function sendMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || chatLoading) return;
+
+    const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: trimmed }];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setChatLoading(true);
+    setChatError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${apiBase}/api/chat/faq`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Something went wrong.');
+      }
+
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+    } catch (err: unknown) {
+      setChatError(err instanceof Error ? err.message : 'Failed to reach the assistant.');
+    } finally {
+      setChatLoading(false);
+    }
+  }
 
   if (!mounted) return null;
 
@@ -392,6 +449,178 @@ export default function HelpPage() {
           </div>
         </div>
       </div>
+      {/* ── Floating AI chat widget ──────────────────────────────────────────── */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+
+        {/* Chat panel */}
+        {chatOpen && (
+          <div
+            className={`flex flex-col rounded-2xl shadow-2xl overflow-hidden border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
+            style={{ width: 360, height: 520, backgroundColor: isDark ? '#2b2d31' : '#ffffff' }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ backgroundColor: '#4F6BED' }}>
+              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.357 2.059l.046.02A2.25 2.25 0 0118 13.137V15M15 3.186A24.32 24.32 0 0119.5 3.5m0 0V15m0 0a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 15V9.75" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-sm leading-tight">ConsultSiya Assistant</p>
+                <p className="text-white/70 text-xs">AI-powered</p>
+              </div>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="text-white/70 hover:text-white transition-colors ml-1 flex-shrink-0"
+                aria-label="Close chat"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+              {chatMessages.length === 0 && (
+                <div className="space-y-4">
+                  <p className={`text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Ask me anything about the Consulta system.
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {QUICK_CHIPS.map(chip => (
+                      <button
+                        key={chip}
+                        onClick={() => sendMessage(chip)}
+                        className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+                        style={{
+                          borderColor: '#4F6BED',
+                          color: '#4F6BED',
+                          backgroundColor: isDark ? 'rgba(79,107,237,0.1)' : 'rgba(79,107,237,0.05)',
+                        }}
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.role === 'assistant' && (
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-0.5" style={{ backgroundColor: '#4F6BED' }}>
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.357 2.059l.046.02A2.25 2.25 0 0118 13.137V15M15 3.186A24.32 24.32 0 0119.5 3.5m0 0V15m0 0a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 15V9.75" />
+                      </svg>
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'text-white rounded-br-sm'
+                        : `rounded-bl-sm ${isDark ? 'text-gray-200' : 'text-gray-800'}`
+                    }`}
+                    style={
+                      msg.role === 'user'
+                        ? { backgroundColor: '#4F6BED' }
+                        : { backgroundColor: isDark ? '#383a40' : '#f0f0f0' }
+                    }
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing indicator */}
+              {chatLoading && (
+                <div className="flex justify-start items-center gap-2">
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#4F6BED' }}>
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.357 2.059l.046.02A2.25 2.25 0 0118 13.137V15M15 3.186A24.32 24.32 0 0119.5 3.5m0 0V15m0 0a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 15V9.75" />
+                    </svg>
+                  </div>
+                  <div className="px-3 py-2.5 rounded-2xl rounded-bl-sm" style={{ backgroundColor: isDark ? '#383a40' : '#f0f0f0' }}>
+                    <span className="flex gap-1 items-center h-4">
+                      {[0, 1, 2].map(d => (
+                        <span
+                          key={d}
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{
+                            backgroundColor: '#4F6BED',
+                            animation: 'chat-bounce 1.2s ease-in-out infinite',
+                            animationDelay: `${d * 0.2}s`,
+                          }}
+                        />
+                      ))}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {chatError && (
+                <p className="text-xs text-red-400 text-center px-2">{chatError}</p>
+              )}
+
+              <div ref={chatBottomRef} />
+            </div>
+
+            {/* Input bar */}
+            <div className={`flex items-center gap-2 px-3 py-3 border-t flex-shrink-0 ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput); } }}
+                placeholder="Ask a question…"
+                disabled={chatLoading}
+                className={`flex-1 text-sm px-3 py-2 rounded-xl outline-none border transition-colors disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-[#383a40] text-white placeholder-gray-500 border-white/10 focus:border-[#4F6BED]'
+                    : 'bg-gray-100 text-gray-900 placeholder-gray-400 border-gray-200 focus:border-[#4F6BED]'
+                }`}
+              />
+              <button
+                onClick={() => sendMessage(chatInput)}
+                disabled={chatLoading || !chatInput.trim()}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white transition-opacity disabled:opacity-40 flex-shrink-0"
+                style={{ backgroundColor: '#4F6BED' }}
+                aria-label="Send"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Toggle button */}
+        <button
+          onClick={() => setChatOpen(v => !v)}
+          className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95"
+          style={{ backgroundColor: '#4F6BED' }}
+          aria-label="Toggle AI assistant"
+        >
+          {chatOpen ? (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {/* Bounce animation for typing indicator */}
+      <style>{`
+        @keyframes chat-bounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-4px); }
+        }
+      `}</style>
     </DashboardShell>
   );
 }

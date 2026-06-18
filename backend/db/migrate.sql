@@ -111,6 +111,21 @@ CREATE TABLE IF NOT EXISTS professor_blocked_times (
 -- Student notes on consultation bookings
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS notes TEXT;
 
+-- Student-expressed preferred mode for BOTH slots (F2F or OL; null for non-BOTH slots)
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS preferred_mode VARCHAR(3);
+
+-- Announcement text on individual consultation slots (optional professor note to students)
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS announcement TEXT;
+
+-- Meeting link on schedule slots (for online consultation slots, set at creation/edit time)
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS meeting_link TEXT;
+
+-- Mode column on schedule slots (FF=Face-to-Face, OL=Online, BOTH=Both)
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS mode VARCHAR(10);
+UPDATE schedules SET mode = 'OL' WHERE location = 'Online Only' AND mode IS NULL;
+UPDATE schedules SET mode = 'FF' WHERE mode IS NULL;
+UPDATE schedules SET location = NULL WHERE location = 'Online Only';
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

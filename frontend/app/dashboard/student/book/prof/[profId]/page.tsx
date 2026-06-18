@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { Megaphone } from 'lucide-react';
 
 const NATURE_OPTIONS = [
   'Thesis/Design Subject concerns',
@@ -34,6 +35,8 @@ type Schedule = {
   location?: string;
   date?: string;
   professor_avatar?: string | null;
+  announcement?: string | null;
+  mode?: string | null;
 };
 
 type BookingSlotInfo = { booked_count: number; topics: string[] };
@@ -186,6 +189,7 @@ export default function BookProfPage() {
     nature_of_advising: [] as string[],
     nature_of_advising_specify: '',
     mode: 'F2F',
+    preferredMode: '' as 'F2F' | 'OL' | '',
     date: '',
     time: '',
     notes: '',
@@ -265,6 +269,9 @@ export default function BookProfPage() {
     }
     if (!bookForm.date) { setBookError('Please select a date.'); return; }
     if (!bookForm.time) { setBookError('Please select a preferred time.'); return; }
+    if (selectedSlot.mode === 'BOTH' && !bookForm.preferredMode) {
+      setBookError('Please select your preferred consultation mode.'); return;
+    }
     setIsBooking(true);
     try {
       const data = await api.post('/api/consultations', {
@@ -275,6 +282,7 @@ export default function BookProfPage() {
         nature_of_advising: bookForm.nature_of_advising,
         nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
         mode: bookForm.mode,
+        preferred_mode: bookForm.mode === 'BOTH' ? (bookForm.preferredMode || undefined) : undefined,
         notes: bookForm.notes.trim() || undefined,
       }, token!);
       if (data.error) { setBookError(data.error); return; }
@@ -459,41 +467,103 @@ export default function BookProfPage() {
             {/* Mode */}
             <div className={`rounded-2xl border p-5 ${card}`}>
               <h3 className={`text-sm font-bold mb-3 ${tp}`}>Consultation Mode</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {([
+              {(() => {
+                const slotMode = selectedSlot?.mode;
+                const allModes = [
                   { value: 'F2F', label: 'Face-to-Face', icon: (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0z" /></svg>
                   )},
                   { value: 'OL', label: 'Online', icon: (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75z" /></svg>
                   )},
-                ] as const).map(m => {
-                  const active = bookForm.mode === m.value;
+                ] as const;
+                if (slotMode === 'BOTH') {
                   return (
-                    <button key={m.value} type="button" onClick={() => setBookForm(f => ({ ...f, mode: m.value }))}
-                      className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 font-medium text-sm transition-all ${
-                        active
-                          ? 'border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0EA5E9]'
-                          : isDark ? 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-gray-200' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`}>
-                      {m.icon}
-                      {m.label}
-                    </button>
+                    <>
+                      <div className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border mb-3 ${isDark ? 'border-teal-500/25 bg-teal-500/10' : 'border-teal-200 bg-teal-50'}`}>
+                        <span className="w-2 h-2 rounded-full bg-teal-400 flex-shrink-0" />
+                        <span className={`text-sm font-medium ${isDark ? 'text-teal-300' : 'text-teal-700'}`}>Face-to-Face &amp; Online</span>
+                        <span className={`text-xs ml-auto ${isDark ? 'text-teal-400/70' : 'text-teal-600/70'}`}>Both available</span>
+                      </div>
+
+                      {/* Student preference picker for BOTH slots */}
+                      <p className={`text-xs font-semibold mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Preferred Consultation Mode <span className="text-red-400">*</span>
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: 'F2F' as const, label: 'Face-to-Face', icon: (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0z" /></svg>
+                          )},
+                          { value: 'OL' as const, label: 'Online', icon: (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9A2.25 2.25 0 0 0 4.5 18.75z" /></svg>
+                          )},
+                        ].map(m => {
+                          const active = bookForm.preferredMode === m.value;
+                          return (
+                            <button key={m.value} type="button" onClick={() => setBookForm(f => ({ ...f, preferredMode: m.value }))}
+                              className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 font-medium text-sm transition-all ${
+                                active
+                                  ? 'border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0EA5E9]'
+                                  : isDark ? 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-gray-200' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                              }`}>
+                              {m.icon}
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {bookForm.preferredMode === 'OL' && (
+                        <p className="mt-2.5 text-xs text-cyan-500 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
+                          A meeting link will be provided once confirmed.
+                        </p>
+                      )}
+                      {bookForm.preferredMode === 'F2F' && selectedSlot?.location && selectedSlot.location !== 'Online Only' && (
+                        <p className="mt-2.5 text-xs text-purple-400 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /></svg>
+                          Location: {selectedSlot.location}
+                        </p>
+                      )}
+                    </>
                   );
-                })}
-              </div>
-              {bookForm.mode === 'OL' && (
-                <p className="mt-2.5 text-xs text-cyan-500 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-                  A meeting link will be provided once confirmed.
-                </p>
-              )}
-              {bookForm.mode === 'F2F' && selectedSlot?.location && (
-                <p className="mt-2.5 text-xs text-purple-400 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /></svg>
-                  Location: {selectedSlot.location}
-                </p>
-              )}
+                }
+                const availableModes = slotMode === 'OL' ? allModes.filter(m => m.value === 'OL')
+                  : slotMode === 'FF' ? allModes.filter(m => m.value === 'F2F')
+                  : allModes;
+                return (
+                  <>
+                    <div className={`grid gap-2 ${availableModes.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                      {availableModes.map(m => {
+                        const active = bookForm.mode === m.value;
+                        return (
+                          <button key={m.value} type="button" onClick={() => setBookForm(f => ({ ...f, mode: m.value }))}
+                            className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 font-medium text-sm transition-all ${
+                              active
+                                ? 'border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0EA5E9]'
+                                : isDark ? 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-gray-200' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                            }`}>
+                            {m.icon}
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {bookForm.mode === 'OL' && (
+                      <p className="mt-2.5 text-xs text-cyan-500 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
+                        A meeting link will be provided once confirmed.
+                      </p>
+                    )}
+                    {bookForm.mode === 'F2F' && selectedSlot?.location && selectedSlot.location !== 'Online Only' && (
+                      <p className="mt-2.5 text-xs text-purple-400 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /></svg>
+                        Location: {selectedSlot.location}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Date picker — professor-wide calendar */}
@@ -510,7 +580,8 @@ export default function BookProfPage() {
                 onSelect={dateStr => {
                   const matched = findMatchingSlot(slots, dateStr);
                   setSelectedSlot(matched ?? null);
-                  setBookForm(f => ({ ...f, date: dateStr, time: '' }));
+                  const autoMode = matched?.mode === 'OL' ? 'OL' : matched?.mode === 'BOTH' ? 'BOTH' : 'F2F';
+                  setBookForm(f => ({ ...f, date: dateStr, time: '', mode: autoMode, preferredMode: '' }));
                   if (matched) {
                     const key = `${matched.id}-${dateStr}`;
                     if (bookedTimes[key] === undefined) {
@@ -643,6 +714,17 @@ export default function BookProfPage() {
                 </div>
               )}
             </div>
+
+            {/* Slot announcement banner */}
+            {selectedSlot?.announcement && (
+              <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${isDark ? 'bg-violet-500/10 border-violet-500/25' : 'bg-violet-50 border-violet-200'}`}>
+                <Megaphone className={`flex-shrink-0 mt-0.5 ${isDark ? 'text-violet-400' : 'text-violet-600'}`} size={16} strokeWidth={2} />
+                <div>
+                  <p className={`text-xs font-semibold mb-0.5 ${isDark ? 'text-violet-300' : 'text-violet-700'}`}>Note from professor</p>
+                  <p className={`text-xs leading-relaxed ${isDark ? 'text-violet-200/80' : 'text-violet-800'}`}>{selectedSlot.announcement}</p>
+                </div>
+              </div>
+            )}
 
             {/* Error */}
             {bookError && (

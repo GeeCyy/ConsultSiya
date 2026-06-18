@@ -23,7 +23,7 @@ const PROF_NAV_ITEMS = [
   { key: 'export',        label: 'Export Report' },
   { key: 'history',       label: 'History' },
 ];
-import { Check, X, CalendarClock, CheckCheck } from 'lucide-react';
+import { Check, X, CalendarClock, CheckCheck, Megaphone, PencilLine } from 'lucide-react';
 import ChatbotWidget from '@/components/ChatbotWidget';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -73,8 +73,8 @@ function to12h(t: string): string {
 }
 
 function fmtTime(c: { time: string | null; time_start: string; time_end: string }): string {
-  if (c.time) return `${c.time.slice(0, 5)}–${addMins(c.time, 30)}`;
-  return `${c.time_start?.slice(0, 5)}–${c.time_end?.slice(0, 5)}`;
+  if (c.time) return `${to12h(c.time)}–${to12h(addMins(c.time, 30))}`;
+  return `${to12h(c.time_start)}–${to12h(c.time_end)}`;
 }
 
 type Consultation = {
@@ -91,6 +91,8 @@ type Consultation = {
   nature_of_advising: string;
   nature_of_advising_specify: string | null;
   mode: string;
+  slot_mode?: string | null;
+  preferred_mode?: string | null;
   status: string;
   uploaded_form_path: string | null;
   action_taken: string | null;
@@ -117,6 +119,9 @@ type Schedule = {
   is_available: boolean;
   location?: string;
   upcoming_count?: number;
+  announcement?: string | null;
+  meeting_link?: string | null;
+  mode?: string | null;
 };
 
 
@@ -166,10 +171,21 @@ function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: st
 
 function getQuarterLabel(dateStr: string): string {
   const d = new Date(dateStr);
-  const m = d.getMonth();
+  const m = d.getMonth(); // 0 = Jan
   const y = d.getFullYear();
-  const q = m < 3 ? '1st' : m < 6 ? '2nd' : m < 9 ? '3rd' : '4th';
-  return `${q} Quarter ${y}`;
+  // Mapúa trimester: 1st=Aug–Nov, 2nd=Dec–Mar, 3rd=Apr–Jul
+  let term: string;
+  let ay: string;
+  if (m >= 7 && m <= 10) {
+    term = '1st Trimester'; ay = `A.Y. ${y}–${y + 1}`;
+  } else if (m === 11) {
+    term = '2nd Trimester'; ay = `A.Y. ${y}–${y + 1}`;
+  } else if (m <= 2) {
+    term = '2nd Trimester'; ay = `A.Y. ${y - 1}–${y}`;
+  } else {
+    term = '3rd Trimester'; ay = `A.Y. ${y - 1}–${y}`;
+  }
+  return `${term}, ${ay}`;
 }
 
 function groupByQuarter<T extends { date: string }>(items: T[]): Array<[string, T[]]> {
@@ -208,7 +224,7 @@ type Announcement = {
   created_at: string;
 };
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, onClose, children, isDark }: { title: string; onClose: () => void; children: React.ReactNode; isDark?: boolean }) {
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -222,11 +238,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#252525] shadow-2xl"
+        className={`relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl ${isDark ? 'border-white/10 bg-[#252525]' : 'border-gray-200 bg-white'}`}
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-          <h2 className="text-white font-bold text-base">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/5 transition-colors">
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+          <h2 className={`font-bold text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h2>
+          <button onClick={onClose} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -312,7 +328,7 @@ function ScheduleDatePicker({
           const isPast = date < today;
           const isSunday = dow === 0;
           const hasSlot = disabledDates.includes(dateStr);
-          const isDisabled = isPast || isSunday || hasSlot;
+          const isDisabled = isPast || isSunday;
           const isSelected = selected === dateStr;
           const isToday = date.getTime() === today.getTime();
           return (
@@ -322,13 +338,16 @@ function ScheduleDatePicker({
               disabled={isDisabled}
               onClick={() => onSelect(dateStr, dayName)}
               className={[
-                'rounded-lg text-xs py-1.5 font-medium transition-colors w-full',
+                'relative rounded-lg text-xs py-1.5 font-medium transition-colors w-full',
                 isSelected ? 'bg-[#0EA5E9] text-white' :
                 isDisabled ? `${dayDisabled} cursor-not-allowed` :
                 isToday ? dayToday :
                 dayNormal,
               ].join(' ')}>
               {day}
+              {hasSlot && !isDisabled && !isSelected && (
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-400" />
+              )}
             </button>
           );
         })}
@@ -342,7 +361,7 @@ function ScheduleDatePicker({
   );
 }
 
-function TimePicker({ value, onChange, dark = true }: { value: string; onChange: (v: string) => void; dark?: boolean }) {
+function TimePicker({ value, onChange, dark = true, forceUp = false }: { value: string; onChange: (v: string) => void; dark?: boolean; forceUp?: boolean }) {
   const parse = (v: string) => {
     if (!v) return { h: '', m: '00', ampm: 'AM' as 'AM' | 'PM' };
     const [hStr, mStr] = v.split(':');
@@ -371,6 +390,7 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
         onChange={v => emit(v, m, ampm)}
         isDark={dark}
         className={selCls}
+        forceUp={forceUp}
         options={[{ value: '', label: '--' }, ...HOURS.map(hr => ({ value: hr, label: hr }))]}
       />
       <span className={`text-sm font-bold select-none ${dark ? 'text-gray-600' : 'text-gray-400'}`}>:</span>
@@ -379,6 +399,7 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
         onChange={v => emit(h, v, ampm)}
         isDark={dark}
         className={selCls}
+        forceUp={forceUp}
         options={MINS.map(mn => ({ value: mn, label: mn }))}
       />
       <CustomSelect
@@ -386,6 +407,7 @@ function TimePicker({ value, onChange, dark = true }: { value: string; onChange:
         onChange={v => emit(h, m, v)}
         isDark={dark}
         className={selCls}
+        forceUp={forceUp}
         options={[{ value: 'AM', label: 'AM' }, { value: 'PM', label: 'PM' }]}
       />
     </div>
@@ -575,7 +597,7 @@ function ProfCalendar({
             ))}
           </div>
 
-          <div className={`grid grid-cols-7 divide-x divide-y ${isDark ? 'divide-white/[0.08]' : 'divide-gray-300'}`}>
+          <div className={`grid grid-cols-7 divide-x divide-y border-b ${isDark ? 'divide-white/[0.08] border-white/[0.08]' : 'divide-gray-300 border-gray-300'}`}>
             {Array.from({ length: firstDow }, (_, i) => (
               <div key={`e${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
             ))}
@@ -634,6 +656,9 @@ function ProfCalendar({
                 </button>
               );
             })}
+            {Array.from({ length: (7 - ((firstDow + daysInMonth) % 7)) % 7 }, (_, i) => (
+              <div key={`t${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
+            ))}
           </div>
         </div>
 
@@ -700,7 +725,7 @@ function ProfCalendar({
                       <div className="flex-1 min-w-0">
                         <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.student_name}</p>
                         <p className={`text-[10px] ${tm}`}>
-                          {to12h((c.time || c.time_start)?.slice(0,5) ?? '')} · {c.mode === 'F2F' ? 'In-Person' : 'Online'}
+                          {to12h((c.time || c.time_start)?.slice(0,5) ?? '')} · {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'In-Person' : 'Online'}
                         </p>
                       </div>
                       <StatusBadge status={c.status} isDark={isDark} />
@@ -818,7 +843,7 @@ export default function ProfessorDashboard() {
 
   // History page
   const [histSearch,     setHistSearch]     = useState('');
-  const [histStatus,     setHistStatus]     = useState<'all' | 'completed' | 'rescheduled' | 'missed'>('all');
+  const [histStatus,     setHistStatus]     = useState<'all' | 'completed' | 'missed'>('all');
   const [expandedHistId, setExpandedHistId] = useState<number | null>(null);
   const [histNotes,      setHistNotes]      = useState<Record<number, { action_taken: string; remarks: string }>>({});
   const [histSaving,     setHistSaving]     = useState<number | null>(null);
@@ -832,18 +857,23 @@ export default function ProfessorDashboard() {
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
   const [newSchedDate, setNewSchedDate] = useState('');
-  const [newSchedMode, setNewSchedMode] = useState<'F2F' | 'Online'>('F2F');
+  const [newSchedMode, setNewSchedMode] = useState<'F2F' | 'Online' | 'Both'>('F2F');
+  const [newSchedAnnouncement, setNewSchedAnnouncement] = useState('');
+  const [newSchedMeetingLink, setNewSchedMeetingLink] = useState('');
   const [schedError, setSchedError] = useState('');
   const [showConfirmSched, setShowConfirmSched] = useState(false);
-  const [pendingSched, setPendingSched] = useState<typeof newSched | null>(null);
+  const [pendingSched, setPendingSched] = useState<(typeof newSched & { mode: string }) | null>(null);
 
   // Edit schedule modal
   const [editingScheduleSlot, setEditingScheduleSlot] = useState<Schedule | null>(null);
   const [editSched, setEditSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
   const [editSchedDate, setEditSchedDate] = useState('');
+  const [editSchedMode, setEditSchedMode] = useState<'F2F' | 'Online' | 'Both'>('F2F');
+  const [editSchedAnnouncement, setEditSchedAnnouncement] = useState('');
+  const [editSchedMeetingLink, setEditSchedMeetingLink] = useState('');
   const [editSchedError, setEditSchedError] = useState('');
   const [showConfirmEdit, setShowConfirmEdit] = useState(false);
-  const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string } & typeof editSched | null>(null);
+  const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string; announcement?: string; meeting_link?: string; mode?: string } & typeof editSched | null>(null);
 
   const [downloadingForm, setDownloadingForm] = useState<number | null>(null);
   const [viewingProof, setViewingProof]       = useState<number | null>(null);
@@ -863,7 +893,7 @@ export default function ProfessorDashboard() {
 
   // My Consultations — search / filter / sort
   const [consultSearch,       setConsultSearch]       = useState('');
-  const [consultStatusFilter, setConsultStatusFilter] = useState<'all' | 'pending' | 'confirmed'>('all');
+  const [consultStatusFilter, setConsultStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'rescheduled'>('all');
   const [consultSortBy,       setConsultSortBy]       = useState<'date' | 'name' | 'status'>('date');
 
   // Bulk selection
@@ -871,6 +901,8 @@ export default function ProfessorDashboard() {
   const [bulkCancelOpen,  setBulkCancelOpen]  = useState(false);
   const [bulkCancelReason,setBulkCancelReason]= useState('');
   const [bulkCancelError, setBulkCancelError] = useState('');
+  const [bulkMeetingLinkOpen,  setBulkMeetingLinkOpen]  = useState(false);
+  const [bulkMeetingLinkInput, setBulkMeetingLinkInput] = useState('');
 
   // Profile
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '', avatar: null });
@@ -930,6 +962,10 @@ export default function ProfessorDashboard() {
     if (!t) { router.push('/login'); return; }
     if (r !== 'professor') { router.push('/dashboard/home'); return; }
     setAuthReady(true);
+
+    const onTabChange = (e: Event) => setTab((e as CustomEvent<string>).detail as Tab);
+    window.addEventListener('consulta-tab-change', onTabChange);
+    return () => window.removeEventListener('consulta-tab-change', onTabChange);
   }, [router]);
 
   // Data fetch — only runs once auth is confirmed
@@ -1079,7 +1115,28 @@ export default function ProfessorDashboard() {
   const handleBulkConfirm = async () => {
     const toConfirm = visibleConsultations.filter(c => selectedIds.has(c.id) && c.status === 'pending');
     if (!toConfirm.length) return;
+    const needsLink = toConfirm.some(c => c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH');
+    if (needsLink) {
+      setBulkMeetingLinkInput('');
+      setBulkMeetingLinkOpen(true);
+      return;
+    }
     await Promise.all(toConfirm.map(c => api.patch(`/api/consultations/${c.id}/confirm`, {}, token!)));
+    clearSelection();
+    fetchAll();
+    toast.success(`${toConfirm.length} consultation${toConfirm.length !== 1 ? 's' : ''} confirmed.`);
+  };
+
+  const handleBulkConfirmWithLink = async () => {
+    const toConfirm = visibleConsultations.filter(c => selectedIds.has(c.id) && c.status === 'pending');
+    if (!toConfirm.length) return;
+    const link = bulkMeetingLinkInput.trim() || undefined;
+    await Promise.all(toConfirm.map(c => {
+      const needsLink = c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH';
+      return api.patch(`/api/consultations/${c.id}/confirm`, needsLink ? { meeting_link: link } : {}, token!);
+    }));
+    setBulkMeetingLinkOpen(false);
+    setBulkMeetingLinkInput('');
     clearSelection();
     fetchAll();
     toast.success(`${toConfirm.length} consultation${toConfirm.length !== 1 ? 's' : ''} confirmed.`);
@@ -1166,20 +1223,25 @@ export default function ProfessorDashboard() {
         return;
       }
     }
-    const resolvedLocation = newSchedMode === 'Online' ? 'Online Only' : newSched.location;
-    setPendingSched({ ...newSched, location: resolvedLocation });
+    const resolvedMode = newSchedMode === 'Both' ? 'BOTH' : newSchedMode === 'Online' ? 'OL' : 'FF';
+    const resolvedLocation = newSchedMode === 'Online' ? '' : newSched.location;
+    setPendingSched({ ...newSched, location: resolvedLocation, mode: resolvedMode });
     setShowConfirmSched(true);
   };
 
   const handleConfirmAddSchedule = async () => {
     if (!pendingSched) return;
     setShowConfirmSched(false);
-    const payload = { ...pendingSched, date: newSchedDate };
+    const announcement = newSchedAnnouncement.trim() || undefined;
+    const meeting_link = (newSchedMode === 'Online' || newSchedMode === 'Both') ? (newSchedMeetingLink.trim() || undefined) : undefined;
+    const payload = { ...pendingSched, date: newSchedDate, announcement, meeting_link };
     const data = await api.post('/api/schedules', payload, token!);
     if (data.error) { setSchedError(data.error); return; }
     setNewSched({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] });
     setNewSchedDate('');
+    setNewSchedMeetingLink('');
     setNewSchedMode('F2F');
+    setNewSchedAnnouncement('');
     setPendingSched(null);
     fetchAll();
   };
@@ -1187,14 +1249,22 @@ export default function ProfessorDashboard() {
   // Schedule edit modal
   const openEditModal = (s: Schedule) => {
     setEditingScheduleSlot(s);
+    const slotMode: 'F2F' | 'Online' | 'Both' =
+      s.mode === 'OL' ? 'Online' :
+      s.mode === 'BOTH' ? 'Both' :
+      s.mode === 'FF' ? 'F2F' :
+      s.location === 'Online Only' ? 'Online' : 'F2F';
+    setEditSchedMode(slotMode);
     setEditSched({
       day: s.day,
-      location: s.location || '',
+      location: (slotMode === 'Online') ? '' : (s.location || ''),
       time_ranges: s.time_ranges?.length
         ? s.time_ranges.map(r => ({ time_start: r.time_start.slice(0, 5), time_end: r.time_end.slice(0, 5) }))
         : [{ time_start: s.time_start.slice(0, 5), time_end: s.time_end.slice(0, 5) }],
     });
     setEditSchedDate(s.date || '');
+    setEditSchedAnnouncement(s.announcement || '');
+    setEditSchedMeetingLink(s.meeting_link || '');
     setEditSchedError('');
   };
 
@@ -1206,7 +1276,10 @@ export default function ProfessorDashboard() {
       if (!r.time_start || !r.time_end) { setEditSchedError('Please fill in all time range fields.'); return; }
       if (r.time_start >= r.time_end) { setEditSchedError('End time must be after start time in each range.'); return; }
     }
-    setPendingEdit({ id: editingScheduleSlot!.id, ...editSched, date: editSchedDate });
+    const resolvedMode = editSchedMode === 'Both' ? 'BOTH' : editSchedMode === 'Online' ? 'OL' : 'FF';
+    const resolvedLocation = editSchedMode === 'Online' ? '' : editSched.location;
+    const meeting_link = (editSchedMode === 'Online' || editSchedMode === 'Both') ? (editSchedMeetingLink.trim() || undefined) : undefined;
+    setPendingEdit({ id: editingScheduleSlot!.id, ...editSched, location: resolvedLocation, date: editSchedDate, announcement: editSchedAnnouncement.trim() || undefined, meeting_link, mode: resolvedMode });
     setShowConfirmEdit(true);
   };
 
@@ -1328,7 +1401,7 @@ export default function ProfessorDashboard() {
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   const visibleConsultations = consultations.filter(
-    c => (c.status === 'pending' || c.status === 'confirmed') && c.date >= todayStr
+    c => c.status === 'rescheduled' || ((c.status === 'pending' || c.status === 'confirmed') && c.date >= todayStr)
   );
   const stats = {
     total: visibleConsultations.length,
@@ -1368,12 +1441,14 @@ export default function ProfessorDashboard() {
 
   const radioCls = (selected: boolean) =>
     `flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
-      selected ? 'bg-[#0EA5E9]/10 ring-1 ring-[#0EA5E9]/30 text-white' : 'bg-[#2d2d2d] text-gray-400 hover:bg-white/5'
+      selected
+        ? isDark ? 'bg-[#0EA5E9]/10 ring-1 ring-[#0EA5E9]/30 text-white' : 'bg-sky-50 ring-1 ring-sky-300/60 text-gray-900'
+        : isDark ? 'bg-[#2d2d2d] text-gray-400 hover:bg-white/5' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
     }`;
 
   const radioBtn = (selected: boolean) => (
     <span className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center ${
-      selected ? 'border-[#0EA5E9] bg-[#0EA5E9]' : 'border-gray-600'
+      selected ? 'border-[#0EA5E9] bg-[#0EA5E9]' : isDark ? 'border-gray-600' : 'border-gray-300'
     }`}>
       {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
     </span>
@@ -1457,8 +1532,12 @@ export default function ProfessorDashboard() {
   const hoverBg    = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/80';
 
   const btnPrimary   = 'bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-[10px] transition-colors duration-150';
-  const btnSecondary = 'border border-white/20 text-gray-300 bg-transparent font-medium rounded-[10px] transition-colors duration-150 hover:bg-white/8 hover:border-white/30';
-  const btnDanger    = 'border border-red-400/40 text-red-400 bg-transparent font-semibold rounded-[10px] transition-colors duration-150 hover:bg-red-500/10 hover:border-red-400/60';
+  const btnSecondary = isDark
+    ? 'border border-white/20 text-gray-300 bg-transparent font-medium rounded-[10px] transition-colors duration-150 hover:bg-white/8 hover:border-white/30'
+    : 'border border-gray-300 text-gray-600 bg-transparent font-medium rounded-[10px] transition-colors duration-150 hover:bg-gray-50 hover:border-gray-400';
+  const btnDanger    = isDark
+    ? 'border border-red-400/40 text-red-400 bg-transparent font-semibold rounded-[10px] transition-colors duration-150 hover:bg-red-500/10 hover:border-red-400/60'
+    : 'border border-red-300 text-red-500 bg-transparent font-semibold rounded-[10px] transition-colors duration-150 hover:bg-red-50 hover:border-red-400';
   const btnSuccess   = 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-[10px] transition-colors duration-150';
 
   const handleTabChange = (next: ProfessorTab) => {
@@ -1509,14 +1588,15 @@ export default function ProfessorDashboard() {
       {/* Confirmation dialogs */}
       {showConfirmSched && pendingSched && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-            <h2 className="text-white font-bold text-lg mb-4">Confirm New Schedule</h2>
+          <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+            <h2 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Confirm New Schedule</h2>
             <div className="space-y-2 mb-5">
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {newSchedDate ? new Date(newSchedDate + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingSched.day}</p>
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Date:</span> {newSchedDate ? new Date(newSchedDate + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingSched.day}</p>
               {pendingSched.time_ranges.map((r, i) => (
-                <p key={i} className="text-gray-400 text-sm"><span className="text-gray-600">Range {i + 1}:</span> {r.time_start} – {r.time_end}</p>
+                <p key={i} className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Range {i + 1}:</span> {to12h(r.time_start)} – {to12h(r.time_end)}</p>
               ))}
-              {pendingSched.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingSched.location}</p>}
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Mode:</span> {pendingSched.mode === 'OL' ? 'Online' : pendingSched.mode === 'BOTH' ? 'Face-to-Face & Online' : 'Face-to-Face'}</p>
+              {pendingSched.location && <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Location:</span> {pendingSched.location}</p>}
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowConfirmSched(false)} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
@@ -1528,8 +1608,8 @@ export default function ProfessorDashboard() {
 
       {editLinkConsult && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-            <h2 className="text-white font-bold text-lg mb-1">Edit Meeting Link</h2>
+          <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+            <h2 className={`font-bold text-lg mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Edit Meeting Link</h2>
             <p className="text-gray-500 text-sm mb-5">Update the Zoom or Google Meet link for this consultation.</p>
             <div className="mb-5">
               <label className="text-gray-500 text-xs mb-1.5 block">Meeting Link</label>
@@ -1539,7 +1619,7 @@ export default function ProfessorDashboard() {
                 value={editLinkInput}
                 onChange={e => setEditLinkInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSaveMeetingLink()}
-                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600"
+                className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
               />
             </div>
             <div className="flex gap-2">
@@ -1550,10 +1630,34 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
+      {bulkMeetingLinkOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+            <h2 className={`font-bold text-lg mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Confirm Selected Consultations</h2>
+            <p className="text-gray-500 text-sm mb-5">Some selected bookings require a meeting link (Online / Both). Optionally provide one — it will be applied to all online/hybrid sessions.</p>
+            <div className="mb-5">
+              <label className="text-gray-500 text-xs mb-1.5 block">Meeting Link <span className="text-gray-400">(optional)</span></label>
+              <input
+                type="url"
+                placeholder="https://zoom.us/j/... or https://meet.google.com/..."
+                value={bulkMeetingLinkInput}
+                onChange={e => setBulkMeetingLinkInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleBulkConfirmWithLink()}
+                className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setBulkMeetingLinkOpen(false); setBulkMeetingLinkInput(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button onClick={handleBulkConfirmWithLink} className={`flex-1 py-2 text-sm ${btnSuccess}`}>Confirm All</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {meetingLinkConsult && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-            <h2 className="text-white font-bold text-lg mb-1">Confirm Online Consultation</h2>
+          <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+            <h2 className={`font-bold text-lg mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Confirm Online Consultation</h2>
             <p className="text-gray-500 text-sm mb-5">Provide a Zoom or Google Meet link for the student to join.</p>
             <div className="mb-5">
               <label className="text-gray-500 text-xs mb-1.5 block">Meeting Link</label>
@@ -1563,7 +1667,7 @@ export default function ProfessorDashboard() {
                 value={meetingLinkInput}
                 onChange={e => setMeetingLinkInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleConfirmWithLink()}
-                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600"
+                className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
               />
             </div>
             <div className="flex gap-2">
@@ -1576,14 +1680,15 @@ export default function ProfessorDashboard() {
 
       {showConfirmEdit && pendingEdit && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className="bg-[#252525] border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-            <h2 className="text-white font-bold text-lg mb-4">Confirm Schedule Edit</h2>
+          <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
+            <h2 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Confirm Schedule Edit</h2>
             <div className="space-y-2 mb-5">
-              <p className="text-gray-400 text-sm"><span className="text-gray-600">Date:</span> {pendingEdit.date ? new Date(pendingEdit.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingEdit.day}</p>
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Date:</span> {pendingEdit.date ? new Date(pendingEdit.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingEdit.day}</p>
               {pendingEdit.time_ranges.map((r, i) => (
-                <p key={i} className="text-gray-400 text-sm"><span className="text-gray-600">Range {i + 1}:</span> {r.time_start} – {r.time_end}</p>
+                <p key={i} className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Range {i + 1}:</span> {to12h(r.time_start)} – {to12h(r.time_end)}</p>
               ))}
-              {pendingEdit.location && <p className="text-gray-400 text-sm"><span className="text-gray-600">Location:</span> {pendingEdit.location}</p>}
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Mode:</span> {pendingEdit.mode === 'OL' ? 'Online' : pendingEdit.mode === 'BOTH' ? 'Face-to-Face & Online' : 'Face-to-Face'}</p>
+              {pendingEdit.location && <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Location:</span> {pendingEdit.location}</p>}
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowConfirmEdit(false)} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
@@ -2051,7 +2156,7 @@ export default function ProfessorDashboard() {
                                 {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
                               </span>
                               <span className={`text-[10px] flex-shrink-0 ${tm}`}>
-                                {c.mode === 'F2F' ? 'F2F' : 'Online'}
+                                {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'F2F' : 'Online'}
                               </span>
                             </div>
                           );
@@ -2140,7 +2245,7 @@ export default function ProfessorDashboard() {
               </div>
               {/* Status filter chips */}
               <div className="flex items-center gap-1.5 flex-shrink-0">
-                {(['all', 'pending', 'confirmed'] as const).map(s => (
+                {(['all', 'pending', 'confirmed', 'rescheduled'] as const).map(s => (
                   <button
                     key={s}
                     onClick={() => setConsultStatusFilter(s)}
@@ -2150,6 +2255,8 @@ export default function ProfessorDashboard() {
                           ? isDark ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40' : 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'
                         : s === 'confirmed'
                           ? isDark ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-sky-100 text-sky-700 ring-1 ring-sky-300'
+                        : s === 'rescheduled'
+                          ? isDark ? 'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/40' : 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
                         : isDark ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-gray-200 text-gray-700 ring-1 ring-gray-300'
                         : isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                     }`}
@@ -2288,16 +2395,29 @@ export default function ProfessorDashboard() {
                           </div>
                           <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                             <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Meeting</p>
-                            <div className="flex items-center gap-1.5">
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.mode === 'F2F' ? 'bg-purple-400' : 'bg-cyan-400'}`} />
-                              <span className={`text-sm font-medium ${c.mode === 'F2F' ? 'text-purple-300' : 'text-cyan-300'}`}>
-                                {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}
-                              </span>
-                            </div>
-                            {c.mode === 'F2F' && c.location && (
-                              <p className="text-gray-500 text-xs mt-0.5 truncate">{c.location}</p>
-                            )}
-                            {c.mode === 'OL' && c.meeting_link && (
+                            {(() => {
+                              const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
+                              return (
+                                <>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
+                                    <span className={`text-sm font-medium ${effMode === 'F2F' ? 'text-purple-300' : effMode === 'BOTH' ? 'text-teal-300' : 'text-cyan-300'}`}>
+                                      {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
+                                    </span>
+                                  </div>
+                                  {(effMode === 'F2F' || effMode === 'BOTH') && c.location && (
+                                    <p className="text-gray-500 text-xs mt-0.5 truncate">{c.location}</p>
+                                  )}
+                                  {effMode === 'BOTH' && c.preferred_mode && (
+                                    <p className={`text-xs mt-1.5 flex items-center gap-1 ${c.preferred_mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
+                                      <span className="font-medium">Student Preference:</span>
+                                      {c.preferred_mode === 'F2F' ? 'Face-to-Face' : 'Online'}
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                            {(c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH') && c.meeting_link && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
                                   className="text-cyan-400 text-xs truncate hover:underline flex-1 min-w-0">
@@ -2308,14 +2428,12 @@ export default function ProfessorDashboard() {
                                     onClick={() => { setEditLinkConsult(c); setEditLinkInput(c.meeting_link || ''); }}
                                     className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0 p-0.5 rounded"
                                     title="Edit meeting link">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 0 1 2.828 2.828L11.828 15.828a2 2 0 0 1-1.414.586H7v-3a2 2 0 0 1 .586-1.414z" />
-                                    </svg>
+                                    <PencilLine className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>
                             )}
-                            {c.mode === 'OL' && c.status === 'confirmed' && !c.meeting_link && (
+                            {(c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH') && c.status === 'confirmed' && !c.meeting_link && (
                               <button
                                 onClick={() => { setEditLinkConsult(c); setEditLinkInput(''); }}
                                 className="text-cyan-600 hover:text-cyan-400 text-xs mt-0.5 transition-colors">
@@ -2350,7 +2468,7 @@ export default function ProfessorDashboard() {
                                 Student Form
                               </button>
                             )}
-                            {c.proof_of_evidence && (
+                            {c.proof_of_evidence ? (
                               c.proof_type === 'link' ? (
                                 <a
                                   href={c.proof_of_evidence}
@@ -2375,6 +2493,13 @@ export default function ProfessorDashboard() {
                                   View Proof
                                 </button>
                               )
+                            ) : (
+                              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-500/10 text-gray-500 ring-1 ring-gray-500/20 cursor-not-allowed select-none">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                                No Proof Submitted
+                              </span>
                             )}
                           </div>
 
@@ -2382,7 +2507,7 @@ export default function ProfessorDashboard() {
                             <div className="flex flex-wrap items-center gap-2">
                               {c.status === 'pending' && (
                                 <button
-                                  onClick={() => c.mode === 'OL'
+                                  onClick={() => (c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH')
                                     ? (setMeetingLinkConsult(c), setMeetingLinkInput(''))
                                     : handleConfirm(c.id)}
                                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-green-500 hover:bg-green-600 text-white">
@@ -2399,6 +2524,20 @@ export default function ProfessorDashboard() {
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-slate-500/60 text-slate-400 hover:bg-slate-700/40' : 'border-slate-400 text-slate-600 hover:bg-slate-100'}`}>
                                 <CalendarClock className="w-3.5 h-3.5" />
                                 Reschedule
+                              </button>
+                              <button onClick={() => openCompleteModal(c)}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-500 hover:bg-blue-600 text-white">
+                                <CheckCheck className="w-3.5 h-3.5" />
+                                Mark Completed
+                              </button>
+                            </div>
+                          )}
+                          {c.status === 'rescheduled' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button onClick={() => openCancelModal(c)}
+                                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-red-400/60 text-red-400 hover:bg-red-950/60' : 'border-red-400 text-red-600 hover:bg-red-50'}`}>
+                                <X className="w-3.5 h-3.5" />
+                                Cancel
                               </button>
                               <button onClick={() => openCompleteModal(c)}
                                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-500 hover:bg-blue-600 text-white">
@@ -2465,7 +2604,7 @@ export default function ProfessorDashboard() {
                                 <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
                                 <div>
                                   <p className={`text-sm font-medium ${tp}`}>{c.student_name}</p>
-                                  <p className={`text-xs ${tm}`}>{fmtTime(c)} · {c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
+                                  <p className={`text-xs ${tm}`}>{fmtTime(c)} · {c.mode === 'BOTH' ? 'Face-to-Face & Online' : c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
                                 </div>
                               </div>
                               <StatusBadge status={c.status} isDark={isDark} />
@@ -2545,28 +2684,30 @@ export default function ProfessorDashboard() {
                 {/* Mode toggle */}
                 <div className="mb-3">
                   <Label className="text-gray-500 text-xs mb-1.5 block">Mode</Label>
-                  <div className={`inline-flex rounded-lg p-0.5 ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
-                    {(['F2F', 'Online'] as const).map(m => (
+                  <div className={`flex rounded-lg p-0.5 w-full ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                    {(['F2F', 'Online', 'Both'] as const).map(m => (
                       <button
                         key={m}
                         type="button"
                         onClick={() => setNewSchedMode(m)}
-                        className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                        className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
                           newSchedMode === m
                             ? m === 'Online'
                               ? 'bg-sky-500 text-white shadow-sm'
-                              : isDark ? 'bg-white/10 text-white shadow-sm' : 'bg-white text-gray-800 shadow-sm'
+                              : m === 'Both'
+                              ? 'bg-violet-500 text-white shadow-sm'
+                              : isDark ? 'bg-white/10 text-white shadow-sm' : 'bg-white border border-gray-200 shadow text-gray-800'
                             : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
                         }`}
                       >
-                        {m === 'F2F' ? 'Face-to-Face' : 'Online'}
+                        {m === 'F2F' ? 'Face-to-Face' : m}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Location — only shown for F2F */}
-                {newSchedMode === 'F2F' && (
+                {/* Location — shown for F2F and Both */}
+                {(newSchedMode === 'F2F' || newSchedMode === 'Both') && (
                   <div className="mb-3">
                     <Label className="text-gray-500 text-xs mb-1.5 block">Location <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional)</span></Label>
                     <input
@@ -2574,6 +2715,20 @@ export default function ProfessorDashboard() {
                       value={newSched.location}
                       onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
                       placeholder="e.g. Room 201"
+                      className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                    />
+                  </div>
+                )}
+
+                {/* Meeting Link — shown for Online and Both */}
+                {(newSchedMode === 'Online' || newSchedMode === 'Both') && (
+                  <div className="mb-3">
+                    <Label className="text-gray-500 text-xs mb-1.5 block">Meeting Link <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
+                    <input
+                      type="url"
+                      value={newSchedMeetingLink}
+                      onChange={e => setNewSchedMeetingLink(e.target.value)}
+                      placeholder="https://zoom.us/j/... or https://meet.google.com/..."
                       className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                     />
                   </div>
@@ -2599,6 +2754,7 @@ export default function ProfessorDashboard() {
                               value={r.time_start}
                               onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_start: v } : x) }))}
                               dark={isDark}
+                              forceUp
                             />
                           </div>
                           <div>
@@ -2607,6 +2763,7 @@ export default function ProfessorDashboard() {
                               value={r.time_end}
                               onChange={v => setNewSched(s => ({ ...s, time_ranges: s.time_ranges.map((x, j) => j === i ? { ...x, time_end: v } : x) }))}
                               dark={isDark}
+                              forceUp
                             />
                           </div>
                         </div>
@@ -2622,6 +2779,24 @@ export default function ProfessorDashboard() {
                   </div>
                 </div>
 
+                {/* Announcement */}
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-gray-500 text-xs">Announcement <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
+                    <span className={`text-[10px] tabular-nums ${newSchedAnnouncement.length > 270 ? 'text-amber-400' : isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {newSchedAnnouncement.length}/300
+                    </span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    maxLength={300}
+                    value={newSchedAnnouncement}
+                    onChange={e => setNewSchedAnnouncement(e.target.value)}
+                    placeholder="e.g. Bring your thesis draft, online via Google Meet link: …"
+                    className={`w-full ${fieldCls} resize-none text-xs ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                  />
+                </div>
+
                 {schedError && <p className="text-red-400 text-xs mt-2">{schedError}</p>}
                 <button onClick={handleRequestAddSchedule}
                   className={`mt-4 px-4 py-2 text-sm ${btnPrimary}`}>
@@ -2633,13 +2808,23 @@ export default function ProfessorDashboard() {
               <div>
                 {(() => {
                   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-                  const activeSlots = schedules.filter(s => s.date && s.date >= todayStr);
-                  const pastSlots   = schedules.filter(s => s.date && s.date < todayStr)
+                  // Include both dated-future slots AND undated (recurring) slots; sort chronologically
+                  const activeSlots = schedules
+                    .filter(s => !s.date || s.date >= todayStr)
+                    .sort((a, b) => {
+                      if (!a.date && !b.date) return 0;
+                      if (!a.date) return 1;   // undated recurring slots go after dated ones
+                      if (!b.date) return -1;
+                      return a.date.localeCompare(b.date);
+                    });
+                  const pastSlots = schedules
+                    .filter(s => s.date && s.date < todayStr)
                     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
                   const renderSlot = (s: Schedule, dimmed = false) => {
                     const hasBookings = Number(s.upcoming_count) > 0;
-                    const isOnline = s.location?.toLowerCase().includes('online');
+                    const slotIsOL = s.mode === 'OL' || (!s.mode && s.location === 'Online Only');
+                    const slotIsBoth = s.mode === 'BOTH';
                     const timeStr = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
                       .map(r => `${to12h(r.time_start)}–${to12h(r.time_end)}`).join('  ·  ');
                     return (
@@ -2663,16 +2848,24 @@ export default function ProfessorDashboard() {
                           {/* Row 2: time + tags */}
                           <div className="flex flex-wrap items-center gap-2 pl-[18px]">
                             <span className={`text-xs font-mono ${ts}`}>{timeStr}</span>
-                            {s.location && (
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                                isOnline
-                                  ? isDark ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-sky-50 text-sky-700 border-sky-200'
-                                  : isDark ? 'bg-white/5 text-gray-400 border-white/10' : 'bg-gray-100 text-gray-600 border-gray-200'
-                              }`}>
-                                {isOnline
-                                  ? <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 11H4a1 1 0 110-2h3.586L5.293 7.707a1 1 0 010-1.414z"/></svg>
-                                  : <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                }
+                            {/* Online badge */}
+                            {slotIsOL && (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isDark ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
+                                <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 11H4a1 1 0 110-2h3.586L5.293 7.707a1 1 0 010-1.414z"/></svg>
+                                Online
+                              </span>
+                            )}
+                            {/* Both badge */}
+                            {slotIsBoth && (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isDark ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-700 border-violet-200'}`}>
+                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+                                F2F & Online
+                              </span>
+                            )}
+                            {/* Location badge (shown for F2F and Both when location exists) */}
+                            {!slotIsOL && s.location && s.location !== 'Online Only' && (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isDark ? 'bg-white/5 text-gray-400 border-white/10' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                 {s.location}
                               </span>
                             )}
@@ -2685,7 +2878,19 @@ export default function ProfessorDashboard() {
                                 {hasBookings ? `${s.upcoming_count} upcoming` : 'Available'}
                               </span>
                             )}
+                            {s.announcement && (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isDark ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' : 'bg-violet-50 text-violet-700 border-violet-200'}`}>
+                                <Megaphone size={10} strokeWidth={2} />
+                                Announcement
+                              </span>
+                            )}
                           </div>
+                          {/* Announcement text */}
+                          {s.announcement && (
+                            <div className={`mt-2 mx-0 pl-[18px]`}>
+                              <p className={`text-[11px] leading-relaxed ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{s.announcement}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -2763,7 +2968,6 @@ export default function ProfessorDashboard() {
                   options={[
                     { value: 'all', label: 'All statuses' },
                     { value: 'completed', label: 'Completed' },
-                    { value: 'rescheduled', label: 'Rescheduled' },
                     { value: 'missed', label: 'Missed' },
                   ]}
                 />
@@ -2773,11 +2977,11 @@ export default function ProfessorDashboard() {
             {(() => {
               const q = histSearch.toLowerCase().trim();
               const historyItems = consultations
-                .filter(c => ['completed','rescheduled','missed'].includes(c.status))
+                .filter(c => ['completed','missed'].includes(c.status))
                 .filter(c => histStatus === 'all' || c.status === histStatus)
                 .filter(c => !q || c.student_name?.toLowerCase().includes(q) || c.student_number?.toLowerCase().includes(q));
 
-              if (consultations.filter(c => ['completed','rescheduled','missed'].includes(c.status)).length === 0) {
+              if (consultations.filter(c => ['completed','missed'].includes(c.status)).length === 0) {
                 return (
                   <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
                     <p className={`font-medium text-sm ${ts}`}>No history yet</p>
@@ -2905,7 +3109,7 @@ export default function ProfessorDashboard() {
                                                 <div className="flex gap-6 flex-wrap">
                                                   <div>
                                                     <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tm}`}>Mode</p>
-                                                    <p className={`text-xs ${ts}`}>{c.mode === 'F2F' ? 'In-Person' : c.mode || '—'}</p>
+                                                    <p className={`text-xs ${ts}`}>{c.mode === 'BOTH' ? 'Face-to-Face & Online' : c.mode === 'F2F' ? 'In-Person' : c.mode === 'OL' ? 'Online' : c.mode || '—'}</p>
                                                   </div>
                                                   <div>
                                                     <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tm}`}>Time</p>
@@ -3210,12 +3414,12 @@ export default function ProfessorDashboard() {
 
       {/* Complete modal */}
       {completingConsult && (
-        <Modal title="Mark as Completed" onClose={() => setCompletingConsult(null)}>
+        <Modal title="Mark as Completed" onClose={() => setCompletingConsult(null)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+            <div className={`flex items-center gap-3 p-3 rounded-xl border ${isDark ? 'bg-white/3 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
               <Avatar name={completingConsult.student_name} avatarUrl={completingConsult.student_avatar} size="sm" />
               <div>
-                <p className="text-white text-sm font-semibold">{completingConsult.student_name}</p>
+                <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{completingConsult.student_name}</p>
                 <p className="text-gray-500 text-xs mt-0.5">{completingConsult.student_number} · {fmtDate(completingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
@@ -3246,7 +3450,7 @@ export default function ProfessorDashboard() {
                   ))}
                 </div>
                 {completeForm.referral === 'Other Office (Please Specify)' && (
-                  <input className="mt-2 w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600"
+                  <input className={`mt-2 w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                     placeholder="Please specify the office…"
                     value={completeForm.referral_specify}
                     onChange={e => { setCompleteForm(f => ({ ...f, referral_specify: e.target.value })); setCompleteError(''); }} />
@@ -3256,7 +3460,7 @@ export default function ProfessorDashboard() {
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
               <textarea value={completeForm.remarks} onChange={e => setCompleteForm(f => ({ ...f, remarks: e.target.value }))}
-                rows={2} className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#0EA5E9]/50 resize-none placeholder-gray-600"
+                rows={2} className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                 placeholder="Additional remarks…" />
             </div>
             {completeError && <p className="text-red-400 text-xs">{completeError}</p>}
@@ -3274,12 +3478,12 @@ export default function ProfessorDashboard() {
 
       {/* Reschedule modal */}
       {reschedulingConsult && (
-        <Modal title="Mark as Rescheduled" onClose={() => setReschedulingConsult(null)}>
+        <Modal title="Mark as Rescheduled" onClose={() => setReschedulingConsult(null)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+            <div className={`flex items-center gap-3 p-3 rounded-xl border ${isDark ? 'bg-white/3 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
               <Avatar name={reschedulingConsult.student_name} avatarUrl={reschedulingConsult.student_avatar} size="sm" />
               <div>
-                <p className="text-white text-sm font-semibold">{reschedulingConsult.student_name}</p>
+                <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{reschedulingConsult.student_name}</p>
                 <p className="text-gray-500 text-xs mt-0.5">{reschedulingConsult.student_number} · {fmtDate(reschedulingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
@@ -3297,7 +3501,7 @@ export default function ProfessorDashboard() {
                 ))}
               </div>
               {rescheduleForm.referral === 'Other Office (Please Specify)' && (
-                <input className="mt-2 w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600"
+                <input className={`mt-2 w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                   placeholder="Specify office…"
                   value={rescheduleForm.referral_specify}
                   onChange={e => setRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
@@ -3306,7 +3510,7 @@ export default function ProfessorDashboard() {
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
               <textarea value={rescheduleForm.remarks} onChange={e => setRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
-                rows={2} className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-[#0EA5E9]/50 resize-none placeholder-gray-600"
+                rows={2} className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                 placeholder="Reason for rescheduling…" />
             </div>
             {rescheduleError && <p className="text-red-400 text-xs">{rescheduleError}</p>}
@@ -3324,7 +3528,7 @@ export default function ProfessorDashboard() {
 
       {/* Edit schedule modal */}
       {editingScheduleSlot && (
-        <Modal title="Edit Schedule Slot" onClose={() => setEditingScheduleSlot(null)}>
+        <Modal title="Edit Schedule Slot" onClose={() => setEditingScheduleSlot(null)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
@@ -3336,17 +3540,54 @@ export default function ProfessorDashboard() {
               />
             </div>
             <div>
-              <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
-              <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
-                placeholder="Optional"
-                className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#1e1e1e] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600" />
+              <Label className="text-gray-500 text-xs mb-1.5 block">Mode</Label>
+              <div className={`flex rounded-lg p-0.5 w-full ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                {(['F2F', 'Online', 'Both'] as const).map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setEditSchedMode(m)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      editSchedMode === m
+                        ? m === 'Online'
+                          ? 'bg-sky-500 text-white shadow-sm'
+                          : m === 'Both'
+                          ? 'bg-violet-500 text-white shadow-sm'
+                          : isDark ? 'bg-white/10 text-white shadow-sm' : 'bg-white border border-gray-200 shadow text-gray-800'
+                        : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {m === 'F2F' ? 'Face-to-Face' : m}
+                  </button>
+                ))}
+              </div>
             </div>
+            {(editSchedMode === 'F2F' || editSchedMode === 'Both') && (
+              <div>
+                <Label className="text-gray-500 text-xs mb-1.5 block">Location <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
+                <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
+                  placeholder="e.g. Room 201"
+                  className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`} />
+              </div>
+            )}
+            {(editSchedMode === 'Online' || editSchedMode === 'Both') && (
+              <div>
+                <Label className="text-gray-500 text-xs mb-1.5 block">Meeting Link <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
+                <input
+                  type="url"
+                  value={editSchedMeetingLink}
+                  onChange={e => setEditSchedMeetingLink(e.target.value)}
+                  placeholder="https://zoom.us/j/... or https://meet.google.com/..."
+                  className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                />
+              </div>
+            )}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-gray-500 text-xs">Time Ranges</Label>
                 <button type="button"
                   onClick={() => setEditSched(f => ({ ...f, time_ranges: [...f.time_ranges, { time_start: '', time_end: '' }] }))}
-                  className="text-xs text-sky-400 hover:text-sky-300 transition-colors font-medium">
+                  className={`text-xs font-medium transition-colors ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-700'}`}>
                   + Add Time Range
                 </button>
               </div>
@@ -3355,30 +3596,50 @@ export default function ProfessorDashboard() {
                   <div key={i} className="flex items-end gap-2">
                     <div className="flex-1 grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-gray-600 text-[10px] mb-1 block">Start</Label>
+                        <Label className="text-gray-500 text-[10px] mb-1 block">Start</Label>
                         <TimePicker
                           value={r.time_start}
                           onChange={v => setEditSched(f => ({ ...f, time_ranges: f.time_ranges.map((x, j) => j === i ? { ...x, time_start: v } : x) }))}
+                          dark={isDark}
+                          forceUp
                         />
                       </div>
                       <div>
-                        <Label className="text-gray-600 text-[10px] mb-1 block">End</Label>
+                        <Label className="text-gray-500 text-[10px] mb-1 block">End</Label>
                         <TimePicker
                           value={r.time_end}
                           onChange={v => setEditSched(f => ({ ...f, time_ranges: f.time_ranges.map((x, j) => j === i ? { ...x, time_end: v } : x) }))}
+                          dark={isDark}
+                          forceUp
                         />
                       </div>
                     </div>
                     {editSched.time_ranges.length > 1 && (
                       <button type="button"
                         onClick={() => setEditSched(f => ({ ...f, time_ranges: f.time_ranges.filter((_, j) => j !== i) }))}
-                        className="pb-1.5 text-gray-600 hover:text-red-400 transition-colors text-lg leading-none">
+                        className={`pb-1.5 transition-colors text-lg leading-none ${isDark ? 'text-gray-600 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}>
                         ×
                       </button>
                     )}
                   </div>
                 ))}
               </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-gray-500 text-xs">Announcement <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
+                <span className={`text-[10px] tabular-nums ${editSchedAnnouncement.length > 270 ? 'text-amber-400' : isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                  {editSchedAnnouncement.length}/300
+                </span>
+              </div>
+              <textarea
+                rows={2}
+                maxLength={300}
+                value={editSchedAnnouncement}
+                onChange={e => setEditSchedAnnouncement(e.target.value)}
+                placeholder="e.g. Bring your thesis draft, online via Google Meet link: …"
+                className={`w-full ${fieldCls} resize-none text-xs ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+              />
             </div>
             {editSchedError && <p className="text-red-400 text-xs">{editSchedError}</p>}
             <div className="flex gap-2 pt-1">
@@ -3395,12 +3656,12 @@ export default function ProfessorDashboard() {
 
       {/* Cancel modal */}
       {cancellingConsult && (
-        <Modal title="Cancel Consultation" onClose={() => setCancellingConsult(null)}>
+        <Modal title="Cancel Consultation" onClose={() => setCancellingConsult(null)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-white/5">
+            <div className={`flex items-center gap-3 p-3 rounded-xl border ${isDark ? 'bg-white/3 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
               <Avatar name={cancellingConsult.student_name} avatarUrl={cancellingConsult.student_avatar} size="sm" />
               <div>
-                <p className="text-white text-sm font-semibold">{cancellingConsult.student_name}</p>
+                <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{cancellingConsult.student_name}</p>
                 <p className="text-gray-500 text-xs mt-0.5">{cancellingConsult.student_number} · {fmtDate(cancellingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
@@ -3410,7 +3671,7 @@ export default function ProfessorDashboard() {
                 value={cancelReason}
                 onChange={e => { setCancelReason(e.target.value); setCancelError(''); }}
                 rows={3}
-                className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-red-500/50 resize-none placeholder-gray-600"
+                className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                 placeholder="e.g. Schedule conflict, unavailable, etc."
                 autoFocus
               />
@@ -3430,7 +3691,7 @@ export default function ProfessorDashboard() {
 
       {/* ── Bulk Cancel Modal ── */}
       {bulkCancelOpen && (
-        <Modal title="Cancel Selected Consultations" onClose={() => setBulkCancelOpen(false)}>
+        <Modal title="Cancel Selected Consultations" onClose={() => setBulkCancelOpen(false)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
             <div className={`flex items-center gap-2 p-3 rounded-xl ${isDark ? 'bg-red-500/10 border border-red-500/20' : 'bg-red-50 border border-red-200'}`}>
               <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -3446,7 +3707,7 @@ export default function ProfessorDashboard() {
                 value={bulkCancelReason}
                 onChange={e => { setBulkCancelReason(e.target.value); setBulkCancelError(''); }}
                 rows={3}
-                className="w-full rounded-lg bg-[#2d2d2d] border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-red-500/50 resize-none placeholder-gray-600"
+                className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                 placeholder="e.g. Schedule conflict, professor unavailable, etc."
                 autoFocus
               />
@@ -3473,8 +3734,9 @@ export default function ProfessorDashboard() {
         />
       )}
 
-      <ChatbotWidget token={token} role="professor" />
       </div>{/* /content area */}
+
+      <ChatbotWidget token={token ?? ''} role="professor" />
     </div>
   );
 }

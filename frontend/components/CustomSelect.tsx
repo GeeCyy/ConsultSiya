@@ -16,9 +16,10 @@ interface CustomSelectProps {
   className?: string;
   wrapperClassName?: string;
   align?: 'left' | 'right';
+  forceUp?: boolean;
 }
 
-export default function CustomSelect({ value, onChange, options, isDark, className = '', wrapperClassName, align = 'left' }: CustomSelectProps) {
+export default function CustomSelect({ value, onChange, options, isDark, className = '', wrapperClassName, align = 'left', forceUp = false }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -28,7 +29,7 @@ export default function CustomSelect({ value, onChange, options, isDark, classNa
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const panelHeight = panelRef.current?.offsetHeight ?? 240;
-    const flipUp = rect.bottom + panelHeight > window.innerHeight && rect.top - panelHeight > 0;
+    const flipUp = forceUp || (rect.bottom + panelHeight > window.innerHeight && rect.top - panelHeight > 0);
     setPos({
       top: flipUp ? rect.top - panelHeight - 4 : rect.bottom + 4,
       left: align === 'right' ? rect.right - Math.max(rect.width, panelRef.current?.offsetWidth ?? 0) : rect.left,

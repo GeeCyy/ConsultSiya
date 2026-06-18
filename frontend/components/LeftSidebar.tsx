@@ -334,7 +334,8 @@ export default function LeftSidebar({
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
         {navItems.map(item => {
           const isActive = activeTab === item.key;
-          const hasBadge = item.key === 'consultations' && unreadCount > 0;
+          const pendingCount = item.key === 'consultations' ? pendingConsultations.length : 0;
+          const hasBadge = pendingCount > 0;
           return (
             <button
               key={item.key}
@@ -351,7 +352,7 @@ export default function LeftSidebar({
                 <span className={`text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center ${
                   isActive ? 'bg-white/20 text-white' : 'bg-[#0EA5E9] text-white'
                 }`}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
+                  {pendingCount > 9 ? '9+' : pendingCount}
                 </span>
               )}
             </button>

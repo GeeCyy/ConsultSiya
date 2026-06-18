@@ -6,17 +6,29 @@ const notifModule = require('./notifications');
 
 // Professor sets their available schedules
 router.post('/', authenticate, authorize('professor'), async (req, res) => {
-  const { day, time_start, time_end, location, date, time_ranges } = req.body;
+  const { day, time_start, time_end, location, date, time_ranges, announcement, meeting_link, mode } = req.body;
 
   // Normalize date
   const dateValue = (typeof date === 'string' && date.trim().length >= 8)
     ? date.trim().slice(0, 10)
     : null;
+
+  // Server-side past-date guard
+  if (dateValue) {
+    const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }));
+    if (new Date(dateValue) < today) {
+      return res.status(400).json({ error: 'Cannot create a slot in the past.' });
+    }
+  }
   // Derive effective time_start/time_end from first/last range for backward compat
   const trArray = Array.isArray(time_ranges) && time_ranges.length > 0 ? time_ranges : null;
   const effectiveStart = trArray ? trArray[0].time_start : time_start;
   const effectiveEnd   = trArray ? trArray[trArray.length - 1].time_end : time_end;
   const trJson = trArray ? JSON.stringify(trArray) : null;
+  const announcementValue = typeof announcement === 'string' && announcement.trim() ? announcement.trim().slice(0, 300) : null;
+  const slotMode = ['FF', 'OL', 'BOTH'].includes(mode) ? mode : 'FF';
+  const locationValue = slotMode === 'OL' ? null : (typeof location === 'string' && location.trim() ? location.trim() : null);
+  const meetingLinkValue = (slotMode === 'OL' || slotMode === 'BOTH') ? (typeof meeting_link === 'string' && meeting_link.trim() ? meeting_link.trim() : null) : null;
 
   try {
     const profResult = await pool.query(
@@ -29,10 +41,10 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
     const professor_id = profResult.rows[0].id;
 
     const result = await pool.query(
-      `INSERT INTO schedules (professor_id, day, time_start, time_end, location, date, time_ranges)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-       RETURNING id, day, time_start, time_end, location, date::text AS date, time_ranges`,
-      [professor_id, day, effectiveStart, effectiveEnd, location || null, dateValue, trJson]
+      `INSERT INTO schedules (professor_id, day, time_start, time_end, location, date, time_ranges, announcement, meeting_link, mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
+       RETURNING id, day, time_start, time_end, location, date::text AS date, time_ranges, announcement, meeting_link, mode`,
+      [professor_id, day, effectiveStart, effectiveEnd, locationValue, dateValue, trJson, announcementValue, meetingLinkValue, slotMode]
     );
 
     // Notify all students (fire-and-forget — may be many users)
@@ -59,7 +71,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
-              s.time_ranges,
+              s.time_ranges, s.announcement, s.mode,
               p.id AS professor_id, p.full_name AS professor_name, p.department,
               u.avatar AS professor_avatar
        FROM schedules s
@@ -81,7 +93,7 @@ router.get('/all', authenticate, authorize('admin'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
-              s.time_ranges,
+              s.time_ranges, s.announcement, s.mode,
               p.id AS professor_id, p.full_name AS professor_name, p.department
        FROM schedules s
        JOIN professors p ON s.professor_id = p.id
@@ -108,12 +120,12 @@ router.get('/mine', authenticate, authorize('professor'), async (req, res) => {
 
     const result = await pool.query(
       `SELECT s.id, s.professor_id, s.day, s.time_start, s.time_end, s.is_available, s.location,
-              s.date::text AS date, s.time_ranges,
+              s.date::text AS date, s.time_ranges, s.announcement, s.meeting_link, s.mode,
          (SELECT COUNT(*)::int FROM consultations c
-          WHERE c.schedule_id = s.id AND c.status NOT IN ('cancelled') AND c.date >= CURRENT_DATE) AS upcoming_count
+          WHERE c.schedule_id = s.id AND c.status NOT IN ('cancelled', 'rescheduled') AND c.date >= CURRENT_DATE) AS upcoming_count
        FROM schedules s
        WHERE s.professor_id = $1
-       ORDER BY s.day, s.time_start`,
+       ORDER BY s.date NULLS LAST, s.time_start`,
       [professor_id]
     );
     res.json(result.rows);
@@ -263,15 +275,30 @@ router.get('/:id/booked-times', authenticate, async (req, res) => {
 // Professor edits their own schedule slot
 router.patch('/:id', authenticate, authorize('professor'), async (req, res) => {
   const { id } = req.params;
-  const { day, time_start, time_end, location, date, time_ranges } = req.body;
+  const { day, time_start, time_end, location, date, time_ranges, announcement, meeting_link, mode } = req.body;
 
+  const dateValue = (typeof date === 'string' && date.trim().length >= 8)
+    ? date.trim().slice(0, 10)
+    : null;
   const trArray = Array.isArray(time_ranges) && time_ranges.length > 0 ? time_ranges : null;
   const effectiveStart = trArray ? trArray[0].time_start : time_start;
   const effectiveEnd   = trArray ? trArray[trArray.length - 1].time_end : time_end;
   const trJson = trArray ? JSON.stringify(trArray) : null;
+  const announcementValue = typeof announcement === 'string' && announcement.trim() ? announcement.trim().slice(0, 300) : null;
+  const slotMode = ['FF', 'OL', 'BOTH'].includes(mode) ? mode : 'FF';
+  const locationValue = slotMode === 'OL' ? null : (typeof location === 'string' && location.trim() ? location.trim() : null);
+  const meetingLinkValue = (slotMode === 'OL' || slotMode === 'BOTH') ? (typeof meeting_link === 'string' && meeting_link.trim() ? meeting_link.trim() : null) : null;
 
   if (!day || !effectiveStart || !effectiveEnd) {
     return res.status(400).json({ error: 'day and at least one time range are required.' });
+  }
+
+  // Server-side past-date guard
+  if (dateValue) {
+    const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }));
+    if (new Date(dateValue) < today) {
+      return res.status(400).json({ error: 'Cannot move a slot to a date in the past.' });
+    }
   }
 
   try {
@@ -296,7 +323,7 @@ router.patch('/:id', authenticate, authorize('professor'), async (req, res) => {
     // Check active bookings whose dates no longer match the new day
     const bookings = await pool.query(
       `SELECT c.date FROM consultations c
-       WHERE c.schedule_id = $1 AND c.status NOT IN ('cancelled') AND c.date >= CURRENT_DATE`,
+       WHERE c.schedule_id = $1 AND c.status NOT IN ('cancelled', 'rescheduled') AND c.date >= CURRENT_DATE`,
       [id]
     );
 
@@ -316,10 +343,10 @@ router.patch('/:id', authenticate, authorize('professor'), async (req, res) => {
 
     const result = await pool.query(
       `UPDATE schedules
-       SET day = $1, time_start = $2, time_end = $3, location = $4, date = $5, time_ranges = $6::jsonb
+       SET day = $1, time_start = $2, time_end = $3, location = $4, date = $5, time_ranges = $6::jsonb, announcement = $8, meeting_link = $9, mode = $10
        WHERE id = $7
-       RETURNING id, day, time_start, time_end, location, date::text AS date, time_ranges`,
-      [day, effectiveStart, effectiveEnd, location || null, date || null, trJson, id]
+       RETURNING id, day, time_start, time_end, location, date::text AS date, time_ranges, announcement, meeting_link, mode`,
+      [day, effectiveStart, effectiveEnd, locationValue, dateValue, trJson, id, announcementValue, meetingLinkValue, slotMode]
     );
     res.json(result.rows[0]);
   } catch (err) {
