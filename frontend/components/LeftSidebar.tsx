@@ -267,9 +267,11 @@ export default function LeftSidebar({
   }, []);
 
   const handleLogout = () => {
-    const tourDone = localStorage.getItem('consulta-tour-done-student');
+    const tourStudent = localStorage.getItem('consulta-tour-done-student');
+    const tourProf    = localStorage.getItem('consulta-tour-done-professor');
     localStorage.clear();
-    if (tourDone) localStorage.setItem('consulta-tour-done-student', tourDone);
+    if (tourStudent) localStorage.setItem('consulta-tour-done-student', tourStudent);
+    if (tourProf)    localStorage.setItem('consulta-tour-done-professor', tourProf);
     router.push('/login');
   };
 

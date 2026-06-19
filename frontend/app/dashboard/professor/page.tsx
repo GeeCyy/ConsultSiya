@@ -23,6 +23,7 @@ const PROF_NAV_ITEMS = [
 ];
 import { Check, X, CalendarClock, CheckCheck, Megaphone, PencilLine } from 'lucide-react';
 import ChatbotWidget from '@/components/ChatbotWidget';
+import NavigationTour from '@/components/NavigationTour';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import {
@@ -3721,6 +3722,7 @@ export default function ProfessorDashboard() {
       </div>{/* /content area */}
 
       <ChatbotWidget token={token ?? ''} role="professor" />
+      <NavigationTour isDark={isDark} role="professor" />
     </div>
   );
 }
