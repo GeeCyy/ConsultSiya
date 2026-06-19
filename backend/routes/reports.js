@@ -166,10 +166,8 @@ function buildReportHtml(sections) {
       let proofUrl = null;
       if (row.proof_type === 'link' && row.proof_of_evidence) {
         proofUrl = row.proof_of_evidence;
-      } else if (row.proof_type === 'file' && row.proof_of_evidence) {
-        proofUrl = row.proof_of_evidence.startsWith('https://')
-          ? row.proof_of_evidence
-          : `${baseUrl}/api/consultations/${row.id}/proof`;
+      } else if (row.proof_type === 'file' && row.proof_of_evidence?.startsWith('https://')) {
+        proofUrl = row.proof_of_evidence;
       } else if (row.uploaded_form_path?.startsWith('https://')) {
         proofUrl = row.uploaded_form_path;
       } else if (row.uploaded_form_path) {
