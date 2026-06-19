@@ -248,6 +248,7 @@ export default function AdminDashboard() {
   // Consultation filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // History filters
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('all');
@@ -572,6 +573,41 @@ export default function AdminDashboard() {
     return true;
   }), [consultations, statusFilter, search]);
 
+  // All bookings indexed by student key — used for full summary counts regardless of active filter
+  const allBookingsByStudent = useMemo(() => {
+    const map = new Map<string, Consultation[]>();
+    for (const c of consultations) {
+      const key = c.student_number || c.student_name;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return map;
+  }, [consultations]);
+
+  // Filtered consultations grouped by student, sorted by most recent booking
+  const groupedConsultations = useMemo(() => {
+    const map = new Map<string, Consultation[]>();
+    for (const c of filteredConsultations) {
+      const key = c.student_number || c.student_name;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    for (const bookings of map.values()) {
+      bookings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      new Date(b[0].date).getTime() - new Date(a[0].date).getTime()
+    );
+  }, [filteredConsultations]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const filteredUsers = users
     .filter(u => {
       if (accountRoleFilter !== 'all' && u.role !== accountRoleFilter) return false;
@@ -879,88 +915,162 @@ export default function AdminDashboard() {
                 </div>
 
                 <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                  {filteredConsultations.length} record{filteredConsultations.length !== 1 ? 's' : ''}
+                  {groupedConsultations.length} student{groupedConsultations.length !== 1 ? 's' : ''} · {filteredConsultations.length} record{filteredConsultations.length !== 1 ? 's' : ''}
                 </p>
 
-                {filteredConsultations.length === 0 ? (
+                {groupedConsultations.length === 0 ? (
                   <div className={`flex flex-col items-center justify-center py-20 rounded-2xl border ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white'}`}>
                     <p className={`font-medium text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No records found</p>
                     <p className={`text-xs mt-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Try adjusting your filters</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {filteredConsultations.map(c => (
-                      <div key={c.id} className={`rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col ${
-                        isDark ? 'bg-[#1a1b1e] border-white/[0.08]' : 'bg-white border-gray-200'
-                      }`}>
+                  <div className="columns-1 sm:columns-2 xl:columns-3 gap-4">
+                    {groupedConsultations.map(bookings => {
+                      const rep = bookings[0];
+                      const groupKey = rep.student_number || rep.student_name;
+                      const isExpanded = expandedGroups.has(groupKey) || bookings.length === 1;
+                      const allBookings = allBookingsByStudent.get(groupKey) ?? bookings;
+                      const totalCount = allBookings.length;
+                      const statusCounts = allBookings.reduce(
+                        (acc, c) => {
+                          const st = (c.status ?? '').toLowerCase().trim();
+                          if (['pending', 'confirmed', 'rescheduled'].includes(st)) acc.pending++;
+                          else if (st === 'completed') acc.completed++;
+                          else if (st === 'missed') acc.missed++;
+                          else if (st === 'cancelled') acc.cancelled++;
+                          return acc;
+                        },
+                        { pending: 0, completed: 0, missed: 0, cancelled: 0 }
+                      );
+                      const summaryParts = [
+                        statusCounts.completed ? `${statusCounts.completed} Completed` : '',
+                        statusCounts.pending   ? `${statusCounts.pending} Pending`     : '',
+                        statusCounts.missed    ? `${statusCounts.missed} Missed`       : '',
+                        statusCounts.cancelled ? `${statusCounts.cancelled} Cancelled` : '',
+                      ].filter(Boolean);
 
-                        {/* Card top: id + status */}
-                        <div className={`flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                          <span className={`text-[11px] font-mono font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>#{c.id}</span>
-                          <StatusBadge status={c.status} isDark={isDark} />
-                        </div>
+                      const effModeRep = rep.slot_mode === 'BOTH' ? 'BOTH' : rep.mode;
+                      const modeLabelRep = effModeRep === 'F2F' ? 'Face-to-Face' : effModeRep === 'BOTH' ? 'F2F & Online' : 'Online';
+                      const modeClsRep = effModeRep === 'F2F'
+                        ? (isDark ? 'text-purple-400' : 'text-purple-600')
+                        : effModeRep === 'BOTH'
+                          ? (isDark ? 'text-teal-400' : 'text-teal-600')
+                          : (isDark ? 'text-cyan-400' : 'text-cyan-600');
+                      const repDate = new Date((rep.date || '').slice(0, 10) + 'T12:00:00')
+                        .toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 
-                        {/* Card body */}
-                        <div className="p-3 sm:p-4 flex flex-col gap-3 flex-1">
+                      return (
+                        <div key={groupKey} className={`break-inside-avoid mb-4 rounded-2xl border overflow-hidden flex flex-col ${isDark ? 'bg-[#161616] border-white/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.4)]' : 'bg-white border-gray-100 shadow-sm'}`}>
 
-                          {/* Avatar + name */}
-                          <div className="flex items-center gap-3">
-                            <Avatar name={c.student_name} />
-                            <div className="min-w-0">
-                              <p className={`font-semibold text-sm leading-tight truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.student_name}</p>
-                              <p className={`text-[11px] mt-0.5 truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                                {c.student_number}{c.program ? ` · ${c.program}` : ''}
+                          {/* ── Card header (styled like original booking card) ── */}
+                          <div
+                            className={`p-4 flex-1 transition-colors ${bookings.length > 1 ? 'cursor-pointer select-none' : ''} ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/50'}`}
+                            onClick={() => { if (bookings.length > 1) toggleGroup(groupKey); }}
+                          >
+                            {/* Top row: avatar + name / status badge + chevron */}
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Avatar name={rep.student_name} />
+                                <div className="min-w-0">
+                                  <p className={`font-semibold text-sm leading-tight truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{rep.student_name}</p>
+                                  <p className={`text-[11px] mt-0.5 truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                                    {rep.student_number}{rep.program ? ` · ${rep.program}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <StatusBadge status={rep.status} isDark={isDark} />
+                                {bookings.length > 1 && (
+                                  <svg
+                                    className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''} ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
+                                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Details: professor, date, time, mode, topics */}
+                            <div className="space-y-1.5">
+                              <div className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" />
+                                </svg>
+                                <span className="truncate">with {rep.professor_name}</span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
+                                </svg>
+                                <span>{repDate}</span>
+                                <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>·</span>
+                                <span>{rep.day}</span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                                </svg>
+                                <span>{formatTime(rep.time_start)}–{formatTime(rep.time_end)}</span>
+                                <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>·</span>
+                                <span className={modeClsRep}>{modeLabelRep}</span>
+                              </div>
+                              <p className={`text-[11px] line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{natureLabel(rep)}</p>
+                            </div>
+
+                            {/* Multi-booking summary pill */}
+                            {totalCount > 1 && (
+                              <p className={`text-[11px] mt-2.5 font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                {totalCount} consultations{summaryParts.length > 0 ? ` · ${summaryParts.join(' · ')}` : ''}
                               </p>
-                            </div>
+                            )}
                           </div>
 
-                          {/* Divider */}
-                          <div className={`border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`} />
-
-                          {/* Details */}
-                          <div className="space-y-1.5">
-                            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" />
-                              </svg>
-                              <span className="truncate">with {c.professor_name}</span>
-                            </div>
-                            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
-                              </svg>
-                              <span>{new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                              <span className={isDark ? 'text-gray-700' : 'text-gray-300'}>·</span>
-                              <span className="truncate">{c.day}</span>
-                            </div>
-                            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0z" />
-                              </svg>
-                              <span>{formatTime(c.time_start)}–{formatTime(c.time_end)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {(() => {
+                          {/* ── Expanded sub-rows ── */}
+                          {isExpanded && bookings.length > 1 && (
+                            <div className={`border-t max-h-80 overflow-y-auto ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                              {bookings.map((c, idx) => {
                                 const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
+                                const modeLabel = effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'F2F & Online' : 'Online';
+                                const modeCls = effMode === 'F2F'
+                                  ? (isDark ? 'text-purple-400' : 'text-purple-600')
+                                  : effMode === 'BOTH'
+                                    ? (isDark ? 'text-teal-400' : 'text-teal-600')
+                                    : (isDark ? 'text-cyan-400' : 'text-cyan-600');
                                 return (
-                                  <>
-                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
-                                    <span className={`text-xs font-medium ${effMode === 'F2F' ? (isDark ? 'text-purple-400' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-400' : 'text-teal-600') : (isDark ? 'text-cyan-400' : 'text-cyan-600')}`}>
-                                      {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
-                                    </span>
-                                  </>
+                                  <div
+                                    key={c.id}
+                                    className={`px-4 py-3 flex flex-col gap-1.5 ${isDark ? 'bg-[#0f0f11]' : 'bg-gray-50'} ${idx < bookings.length - 1 ? `border-b ${isDark ? 'border-white/[0.12]' : 'border-gray-300'}` : ''}`}
+                                  >
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className={`font-mono text-[11px] font-bold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>#{c.id}</span>
+                                      <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>·</span>
+                                      <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                        {new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </span>
+                                      <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>·</span>
+                                      <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{formatTime(c.time_start)}–{formatTime(c.time_end)}</span>
+                                      <div className="ml-auto flex-shrink-0">
+                                        <StatusBadge status={c.status} isDark={isDark} />
+                                      </div>
+                                    </div>
+                                    <div className={`flex items-center gap-2 text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z" />
+                                      </svg>
+                                      <span className="truncate">with {c.professor_name}</span>
+                                      <span className={isDark ? 'text-gray-600' : 'text-gray-300'}>·</span>
+                                      <span className={modeCls}>{modeLabel}</span>
+                                    </div>
+                                    <p className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{natureLabel(c)}</p>
+                                  </div>
                                 );
-                              })()}
+                              })}
                             </div>
-                          </div>
-
-                          {/* Topics */}
-                          <div className={`mt-auto pt-3 border-t text-xs line-clamp-2 ${isDark ? 'border-white/5 text-gray-500' : 'border-gray-100 text-gray-500'}`}>
-                            {natureLabel(c)}
-                          </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -1489,7 +1599,7 @@ export default function AdminDashboard() {
 
                 {/* Term stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="md:col-span-2 rounded-2xl p-6 border border-white/5 bg-[#161616] flex items-center gap-6 shadow-[0_10px_40px_rgba(0,0,0,0.60)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75)] hover:-translate-y-0.5 transition-all duration-200">
+                  <div className={`md:col-span-2 rounded-2xl p-6 border border-white/5 bg-[#161616] flex items-center gap-6 hover:-translate-y-0.5 transition-all duration-200 ${isDark ? 'shadow-[0_10px_40px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.55)]' : 'shadow-[0_4px_16px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.18)]'}`}>
                     <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] shadow-lg shadow-sky-900/30">
                       <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
                       <span className="text-sky-100 text-[10px] font-semibold uppercase tracking-wider mt-0.5">Week</span>

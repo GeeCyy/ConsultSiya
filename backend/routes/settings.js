@@ -420,6 +420,7 @@ router.patch(
 // ── GET /api/settings/system (admin only) ────────────────────────────────────
 const SYSTEM_DEFAULTS = {
   maintenance_mode: 'false',
+  require_admin_approval: 'true',
   max_bookings_per_student: '5',
   academic_year: '2025-2026',
   current_semester: '2nd Semester',
@@ -430,9 +431,10 @@ router.get('/system', authenticate, authorize('admin'), async (req, res) => {
     const result = await pool.query(
       `SELECT key, value FROM system_settings ORDER BY key`
     );
-    const settings = {};
+    // Always start from defaults so new keys are always present even before first save
+    const settings = { ...SYSTEM_DEFAULTS };
     result.rows.forEach((row) => { settings[row.key] = row.value; });
-    res.json(Object.keys(settings).length ? settings : SYSTEM_DEFAULTS);
+    res.json(settings);
   } catch (err) {
     // 42P01 = table doesn't exist yet (migration not run) — return defaults
     if (err.code === '42P01') return res.json(SYSTEM_DEFAULTS);
@@ -444,6 +446,7 @@ router.get('/system', authenticate, authorize('admin'), async (req, res) => {
 // ── PUT /api/settings/system (admin only) ────────────────────────────────────
 const ALLOWED_SYSTEM_KEYS = [
   'maintenance_mode',
+  'require_admin_approval',
   'max_bookings_per_student',
   'academic_year',
   'current_semester',

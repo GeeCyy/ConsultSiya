@@ -129,7 +129,7 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push('/login?registered=1');
+    router.push(data.requires_approval ? '/login?registered=1&approval=1' : '/login?registered=1');
   };
 
   // Theme tokens
