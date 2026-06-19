@@ -189,7 +189,7 @@ function LoginContent() {
 
         <div className="mt-10 flex items-center gap-2 relative z-10">
           <div className="w-4 h-px bg-white/30 rounded" />
-          <p className="text-red-400 text-xs tracking-widest uppercase">Mapúa University SOIT</p>
+          <p className="text-white text-xs tracking-widest uppercase font-bold">© Mapúa University SOIT</p>
           <div className="w-4 h-px bg-white/30 rounded" />
         </div>
       </div>
@@ -292,7 +292,6 @@ function LoginContent() {
               <Link href="/register" className="text-[#4F6BED] hover:underline">Register</Link>
             </p>
 
-            <p className={`text-center text-xs mt-5 ${muteText}`}>© 2026 Mapúa University SOIT</p>
           </div>
 
           {/* Announcements toggle */}
