@@ -21,13 +21,14 @@ const upload = multer({
   },
 });
 
-function uploadToCloudinary(buffer, consultationId, mimetype) {
+function uploadToCloudinary(buffer, consultationId, mimetype, originalname) {
   return new Promise((resolve, reject) => {
     const resourceType = mimetype === 'application/pdf' ? 'raw' : 'image';
+    const ext = (originalname && path.extname(originalname).toLowerCase()) || (mimetype === 'application/pdf' ? '.pdf' : '.jpg');
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: 'consultsiya/forms',
-        public_id: `consultation-${consultationId}-${Date.now()}`,
+        public_id: `consultation-${consultationId}-${Date.now()}${ext}`,
         resource_type: resourceType,
       },
       (err, result) => {
@@ -304,7 +305,7 @@ router.post('/upload/:id', authenticate, upload.single('form'), async (req, res)
       } catch { /* ignore cleanup errors */ }
     }
 
-    const secureUrl = await uploadToCloudinary(req.file.buffer, id, req.file.mimetype);
+    const secureUrl = await uploadToCloudinary(req.file.buffer, id, req.file.mimetype, req.file.originalname);
     await pool.query('UPDATE consultations SET uploaded_form_path = $1 WHERE id = $2', [secureUrl, id]);
     res.json({ message: 'Form uploaded successfully.', url: secureUrl });
   } catch (err) {
