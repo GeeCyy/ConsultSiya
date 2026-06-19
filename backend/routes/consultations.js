@@ -844,9 +844,10 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
       }
       const mimetype = req.file.mimetype;
       const resourceType = mimetype === 'application/pdf' ? 'raw' : 'image';
+      const ext = path.extname(req.file.originalname).toLowerCase() || (mimetype === 'application/pdf' ? '.pdf' : '.jpg');
       const secureUrl = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
-          { folder: 'consultsiya/proofs', public_id: `proof-${id}-${Date.now()}`, resource_type: resourceType },
+          { folder: 'consultsiya/proofs', public_id: `proof-${id}-${Date.now()}${ext}`, resource_type: resourceType },
           (err, result) => { if (err) return reject(err); resolve(result.secure_url); }
         );
         stream.end(req.file.buffer);
