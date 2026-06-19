@@ -281,7 +281,7 @@ export default function BookProfPage() {
         time: bookForm.time,
         nature_of_advising: bookForm.nature_of_advising,
         nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
-        mode: bookForm.mode,
+        mode: bookForm.mode === 'BOTH' ? (bookForm.preferredMode || 'OL') : bookForm.mode,
         preferred_mode: bookForm.mode === 'BOTH' ? (bookForm.preferredMode || undefined) : undefined,
         notes: bookForm.notes.trim() || undefined,
       }, token!);
