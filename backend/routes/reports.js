@@ -154,7 +154,7 @@ function buildReportHtml(sections) {
   const termLabel   = `${ordinal(qtr.replace(/\D/g, ''))} QTR  Term, AY${ay}`;
   const baseUrl     = process.env.BASE_URL || 'http://localhost:5001';
   const logoTag     = MAPUA_LOGO_B64
-    ? `<img src="${MAPUA_LOGO_B64}" style="width:70px;height:auto;mix-blend-mode:multiply;">`
+    ? `<img src="${MAPUA_LOGO_B64}" style="width:60px;height:auto;mix-blend-mode:multiply;">`
     : '';
 
   const pagesHtml = sections.map(({ professor, rows }, idx) => {
@@ -274,30 +274,29 @@ function buildReportHtml(sections) {
   .hdr-tbl td { border: 1px solid #000; }
 
   .hdr-logo {
-    width: 16%;
+    width: 80px;
     text-align: center;
-    padding: 6pt;
+    padding: 4pt 6pt;
     vertical-align: middle;
   }
   .hdr-title {
-    width: 52%;
     text-align: center;
     vertical-align: middle;
-    font-size: 13pt;
+    font-size: 13px;
     font-weight: bold;
-    padding: 10pt 8pt;
+    padding: 6pt 8pt;
   }
   /* Right column: two rows split by internal border */
   .hdr-doc-top {
-    width: 32%;
-    font-size: 9pt;
-    padding: 6pt 8pt 5pt 8pt;
+    width: 180px;
+    font-size: 11px;
+    padding: 4pt 6pt;
     vertical-align: middle;
     border-bottom: 1px solid #000;
   }
   .hdr-doc-bot {
-    font-size: 9pt;
-    padding: 5pt 8pt 6pt 8pt;
+    font-size: 11px;
+    padding: 4pt 6pt;
     vertical-align: middle;
   }
 
