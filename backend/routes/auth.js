@@ -44,12 +44,19 @@ router.post(
     try {
       const password_hash = await bcrypt.hash(password, 12);
 
+      // Check if admin approval is required (default: true)
+      let requireApproval = true;
+      try {
+        const settingRes = await pool.query(
+          `SELECT value FROM system_settings WHERE key = 'require_admin_approval'`
+        );
+        if (settingRes.rows.length > 0) requireApproval = settingRes.rows[0].value !== 'false';
+      } catch { /* system_settings table not yet created — keep default */ }
+
       const userResult = await pool.query(
-        // `INSERT INTO users (email, password_hash, role, is_approved)
-        //  VALUES ($1, $2, $3, false) RETURNING id`,
         `INSERT INTO users (email, password_hash, role, is_approved)
-         VALUES ($1, $2, $3, true) RETURNING id`,
-        [email, password_hash, role]
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [email, password_hash, role, !requireApproval]
       );
 
       const userId = userResult.rows[0].id;
@@ -69,7 +76,12 @@ router.post(
         );
       }
 
-      res.status(201).json({ message: 'Registration successful. Your account is pending admin approval.' });
+      res.status(201).json({
+        message: requireApproval
+          ? 'Registration successful. Your account is pending admin approval.'
+          : 'Registration successful.',
+        requires_approval: requireApproval,
+      });
 
       // Notify all admins of the new pending registration (fire-and-forget)
       pool.query(`SELECT id FROM users WHERE role = 'admin'`).then(admins => {
@@ -152,11 +164,21 @@ router.post(
       }
 
       // ── Approval check ────────────────────────────────────────────────────
-      // if (!user.is_approved) {
-      //   return res.status(403).json({
-      //     error: 'Your account is pending admin approval. Please wait for approval before logging in.',
-      //   });
-      // }
+      if (!user.is_approved) {
+        let requireApproval = true;
+        try {
+          const settingRes = await pool.query(
+            `SELECT value FROM system_settings WHERE key = 'require_admin_approval'`
+          );
+          if (settingRes.rows.length > 0) requireApproval = settingRes.rows[0].value !== 'false';
+        } catch { /* keep default */ }
+
+        if (requireApproval) {
+          return res.status(403).json({
+            error: 'Your account is pending admin approval. Please wait for approval before logging in.',
+          });
+        }
+      }
 
       // ── Deactivation check ────────────────────────────────────────────────
       if (user.is_active === false) {

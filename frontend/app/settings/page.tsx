@@ -38,6 +38,7 @@ type NotifSettings = {
 
 type SystemSettings = {
   maintenance_mode: string;
+  require_admin_approval: string;
   max_bookings_per_student: string;
   academic_year: string;
   current_semester: string;
@@ -408,6 +409,7 @@ export default function SettingsPage() {
   // System settings state
   const [sysSettings, setSysSettings] = useState<SystemSettings>({
     maintenance_mode: 'false',
+    require_admin_approval: 'true',
     max_bookings_per_student: '5',
     academic_year: '2025-2026',
     current_semester: '2nd Semester',
@@ -1259,6 +1261,27 @@ export default function SettingsPage() {
                           checked={sysSettings.maintenance_mode === 'true'}
                           onChange={(v) =>
                             setSysSettings((s) => ({ ...s, maintenance_mode: v ? 'true' : 'false' }))
+                          }
+                        />
+                      </div>
+
+                      {/* Require admin approval */}
+                      <div className="flex items-start justify-between gap-6 py-3 border-b border-white/5">
+                        <div>
+                          <p className="text-sm font-medium text-gray-200">Require Admin Approval</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            When enabled, new registrations must be approved by an admin before the user can log in.
+                          </p>
+                          {sysSettings.require_admin_approval === 'true' && (
+                            <span className="inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/20">
+                              APPROVAL REQUIRED
+                            </span>
+                          )}
+                        </div>
+                        <Toggle
+                          checked={sysSettings.require_admin_approval === 'true'}
+                          onChange={(v) =>
+                            setSysSettings((s) => ({ ...s, require_admin_approval: v ? 'true' : 'false' }))
                           }
                         />
                       </div>
