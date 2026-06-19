@@ -22,6 +22,7 @@ const PROF_TREE: Record<string, TreeNode> = {
       { label: '📊 Reports & Export',     next: 'reports'        },
       { label: '📆 Booking Calendar',     next: 'calendar'       },
       { label: 'ℹ️ About Consulta',       next: 'about'          },
+      { label: '🗺️ Take a navigation tour', next: 'restart_tour' },
     ],
   },
 
@@ -157,10 +158,11 @@ const STUDENT_TREE: Record<string, TreeNode> = {
   root: {
     message: "Hi! I'm the Consulta Assistant. What do you need help with?",
     options: [
-      { label: '🔍 Find a professor',         next: 'find_prof'   },
-      { label: '📅 How to book',              next: 'booking'     },
-      { label: '📋 About my consultations',   next: 'my_consults' },
-      { label: 'ℹ️ About Consulta',           next: 'about'       },
+      { label: '🔍 Find a professor',           next: 'find_prof'    },
+      { label: '📅 How to book',                next: 'booking'      },
+      { label: '📋 About my consultations',     next: 'my_consults'  },
+      { label: 'ℹ️ About Consulta',             next: 'about'        },
+      { label: '🗺️ Take a navigation tour',     next: 'restart_tour' },
     ],
   },
 
@@ -322,6 +324,7 @@ export default function ChatbotWidget({
   const aiScrollRef = useRef<HTMLDivElement>(null);
   const [isDark, setIsDark] = useState(false);
   const [mobileTab, setMobileTab] = useState<'faq' | 'ai'>('faq');
+  const [tourFocused, setTourFocused] = useState(false);
 
   // Reset to root on close
   useEffect(() => {
@@ -375,6 +378,13 @@ export default function ChatbotWidget({
 
   const selectOption = async (opt: TreeOption) => {
     if (loading) return;
+
+    if (opt.next === 'restart_tour') {
+      window.dispatchEvent(new CustomEvent('consulta-restart-tour'));
+      setOpen(false);
+      return;
+    }
+
     setApiMsg('');
     setApiOpts([]);
 
@@ -410,6 +420,12 @@ export default function ChatbotWidget({
     return () => window.removeEventListener('consulta-theme-change', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => setTourFocused((e as CustomEvent<{ active: boolean }>).detail.active);
+    window.addEventListener('consulta-tour-chatbot', handler);
+    return () => window.removeEventListener('consulta-tour-chatbot', handler);
+  }, []);
+
   const rootOptionCount = tree['root'].options.length;
 
   const panelBg      = isDark ? '#1e1f22' : '#ffffff';
@@ -434,7 +450,7 @@ export default function ChatbotWidget({
   const inputBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
   return (
-    <div className="fixed bottom-5 right-3 sm:right-5 z-[55] flex flex-col items-end gap-3">
+    <div className={`fixed bottom-5 right-3 sm:right-5 ${tourFocused ? 'z-[203]' : 'z-[55]'} flex flex-col items-end gap-3`}>
 
       {/* ── FAQ panel ── */}
       {open && (
@@ -807,6 +823,7 @@ export default function ChatbotWidget({
 
       {/* ── FAB ── */}
       <button
+        data-tour="chatbot-fab"
         onClick={() => setOpen(o => !o)}
         className="w-12 h-12 rounded-full bg-[#0EA5E9] shadow-lg shadow-sky-900/40 flex items-center justify-center hover:bg-[#0284C7] hover:scale-105 active:scale-95 transition-all"
         aria-label="Open Consulta Assistant"
@@ -816,9 +833,7 @@ export default function ChatbotWidget({
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         ) : (
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zm-9 5.25h.008v.008H12v-.008z" />
-          </svg>
+          <img src="/chatbot-icon.jpg" alt="Assistant" className="w-10 h-10 rounded-full object-cover" />
         )}
       </button>
     </div>
