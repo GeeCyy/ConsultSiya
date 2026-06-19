@@ -60,6 +60,11 @@ const getReportData = async (professorId, { period, dateFrom, dateTo, status } =
      ORDER BY c.date ASC`,
     params
   );
+  console.log('[report] first 5 rows proof data:', result.rows.slice(0, 5).map(r => ({
+    id: r.id, student: r.student_name, proof_type: r.proof_type, proof_of_evidence: r.proof_of_evidence, uploaded_form_path: r.uploaded_form_path
+  })));
+  const row53 = result.rows.find(r => r.id === 53);
+  if (row53) console.log('[report] consultation 53:', { proof_type: row53.proof_type, proof_of_evidence: row53.proof_of_evidence, uploaded_form_path: row53.uploaded_form_path });
   return result.rows;
 };
 
@@ -173,6 +178,7 @@ function buildReportHtml(sections) {
       } else if (row.uploaded_form_path) {
         proofUrl = `${baseUrl}/api/forms/download/${row.id}`;
       }
+      if (row.id === 53 || i < 5) console.log(`[report row ${row.id}] proof_type=${row.proof_type} proof_of_evidence=${row.proof_of_evidence} → proofUrl=${proofUrl}`);
       const proofCell = proofUrl
         ? `<a href="${proofUrl}">Advising Slip</a>`
         : '';
