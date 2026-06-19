@@ -266,7 +266,12 @@ export default function LeftSidebar({
     return () => window.removeEventListener('resize', h);
   }, []);
 
-  const handleLogout = () => { localStorage.clear(); router.push('/login'); };
+  const handleLogout = () => {
+    const tourDone = localStorage.getItem('consulta-tour-done-student');
+    localStorage.clear();
+    if (tourDone) localStorage.setItem('consulta-tour-done-student', tourDone);
+    router.push('/login');
+  };
 
   const handleTabChange = (key: string) => {
     onTabChange(key);
@@ -315,6 +320,7 @@ export default function LeftSidebar({
       {/* ── Notification bell ── */}
       <div ref={notifRef} className="px-2 pt-2 pb-1">
         <button
+          data-tour="notifications"
           onClick={() => setNotifOpen(o => !o)}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
         >
@@ -339,6 +345,7 @@ export default function LeftSidebar({
           return (
             <button
               key={item.key}
+              data-tour={`nav-${item.key}`}
               onClick={() => handleTabChange(item.key)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left group ${
                 isActive

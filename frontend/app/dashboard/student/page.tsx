@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar from '@/components/LeftSidebar';
 import ChatbotWidget from '@/components/ChatbotWidget';
+import NavigationTour from '@/components/NavigationTour';
 import { type LeaderboardItem } from '@/components/LeaderboardCard';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -2329,6 +2330,7 @@ export default function StudentDashboard() {
       </div>{/* /content area */}
 
       <ChatbotWidget token={token ?? ''} role="student" />
+      <NavigationTour isDark={isDark} />
     </div>
   );
 }
