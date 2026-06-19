@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
+const path = require('path');
+const fs = require('fs');
 const pool = require('../db/db');
+const cloudinary = require('../lib/cloudinary');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 
 // List all non-admin users with profiles
@@ -384,6 +387,81 @@ router.delete('/calendar-overrides/:id', authenticate, authorize('admin'), async
     res.json({ message: 'Override deleted.' });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/fix-proof/:consultationId
+// Inspects and optionally re-uploads a local proof file to Cloudinary.
+// Pass ?dry=true to only inspect without uploading.
+router.get('/fix-proof/:consultationId', authenticate, authorize('admin'), async (req, res) => {
+  const { consultationId } = req.params;
+  const dry = req.query.dry === 'true';
+
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.date::text AS date, c.mode, c.uploaded_form_path, c.proof_of_evidence, c.proof_type,
+              s.full_name AS student_name, p.full_name AS professor_name
+       FROM consultations c
+       JOIN students s ON c.student_id = s.id
+       JOIN professors p ON c.professor_id = p.id
+       WHERE c.id = $1`,
+      [consultationId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultation not found.' });
+    }
+
+    const row = result.rows[0];
+    const info = {
+      id: row.id,
+      student: row.student_name,
+      professor: row.professor_name,
+      date: row.date,
+      mode: row.mode,
+      uploaded_form_path: row.uploaded_form_path,
+      proof_of_evidence: row.proof_of_evidence,
+      proof_type: row.proof_type,
+    };
+
+    const results = [];
+
+    const migrateFile = async (localPath, uploadsDir, folder, dbColumn) => {
+      if (!localPath) return { status: 'no_file', action: 'none' };
+      if (localPath.startsWith('https://')) return { status: 'already_cloudinary', action: 'none' };
+      const filename = path.basename(localPath);
+      const filePath = path.join(uploadsDir, filename);
+      if (!fs.existsSync(filePath)) {
+        const dirContents = fs.existsSync(uploadsDir) ? fs.readdirSync(uploadsDir) : [];
+        return { status: 'file_not_found', stored_filename: filename, uploads_dir_contents: dirContents, action: 'none' };
+      }
+      if (dry) return { status: 'file_found', stored_filename: filename, action: 'dry_run_no_upload' };
+      const buffer = fs.readFileSync(filePath);
+      const mimetype = filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+      const resourceType = mimetype === 'application/pdf' ? 'raw' : 'image';
+      const secureUrl = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder, public_id: `consultation-${consultationId}-${dbColumn}-migrated-${Date.now()}`, resource_type: resourceType },
+          (err, result) => { if (err) return reject(err); resolve(result.secure_url); }
+        );
+        stream.end(buffer);
+      });
+      await pool.query(`UPDATE consultations SET ${dbColumn} = $1 WHERE id = $2`, [secureUrl, consultationId]);
+      return { status: 'migrated', stored_filename: filename, new_cloudinary_url: secureUrl, action: 'uploaded_and_updated' };
+    };
+
+    const formResult = await migrateFile(row.uploaded_form_path, path.join(__dirname, '../uploads/forms'), 'consultsiya/forms', 'uploaded_form_path');
+    results.push({ field: 'uploaded_form_path', ...formResult });
+
+    if (row.proof_type === 'file' && row.proof_of_evidence) {
+      const proofResult = await migrateFile(row.proof_of_evidence, path.join(__dirname, '../uploads/proofs'), 'consultsiya/proofs', 'proof_of_evidence');
+      results.push({ field: 'proof_of_evidence', ...proofResult });
+    }
+
+    res.json({ ...info, results });
+  } catch (err) {
+    console.error('[fix-proof]', err);
     res.status(500).json({ error: err.message });
   }
 });
