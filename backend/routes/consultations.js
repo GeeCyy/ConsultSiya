@@ -391,9 +391,11 @@ router.get('/', authenticate, async (req, res) => {
       result = await pool.query(
         `SELECT c.*, c.date::text AS date, p.full_name AS professor_name,
                 sch.day, sch.time_start, sch.time_end, sch.location, sch.mode AS slot_mode,
-                cd.action_taken, cd.referral, cd.referral_specify, cd.remarks
+                cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
+                pu.avatar AS professor_avatar
          FROM consultations c
          JOIN professors p ON c.professor_id = p.id
+         JOIN users pu ON p.user_id = pu.id
          JOIN schedules sch ON c.schedule_id = sch.id
          LEFT JOIN LATERAL (
            SELECT action_taken, referral, referral_specify, remarks

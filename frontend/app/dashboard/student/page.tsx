@@ -130,6 +130,7 @@ type Consultation = {
   meeting_link?: string | null;
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
+  professor_avatar?: string | null;
 };
 
 type StudentProfile = {
@@ -494,7 +495,7 @@ function FullCalendar({
                   <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/[0.05] bg-white/[0.03] border border-white/[0.05]' : 'divide-gray-100 bg-white border border-gray-200/80 shadow-sm'}`}>
                     {selConsults.map(c => (
                       <div key={c.id} className={`flex items-center gap-2.5 px-3 py-2.5 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}>
-                        <Avatar name={c.professor_name} size="sm" />
+                        <Avatar name={c.professor_name} avatarUrl={c.professor_avatar} size="sm" />
                         <div className="flex-1 min-w-0">
                           <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.professor_name}</p>
                           <p className={`text-[10px] ${tm}`}>
@@ -1375,7 +1376,7 @@ export default function StudentDashboard() {
                     <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/[0.05] border border-white/[0.05]' : 'divide-gray-100 border border-gray-100'}`}>
                       {recentConsultations.map(c => (
                         <div key={c.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}>
-                          <Avatar name={c.professor_name} size="sm" />
+                          <Avatar name={c.professor_name} avatarUrl={c.professor_avatar} size="sm" />
                           <div className="flex-1 min-w-0">
                             <p className={`text-xs font-semibold truncate ${tp}`}>{c.professor_name}</p>
                             <p className={`text-[10px] ${tm}`}>
@@ -2080,7 +2081,7 @@ export default function StudentDashboard() {
                     <div className="flex items-start gap-4">
                       <button type="button" onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
                         className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
-                        <Avatar name={c.professor_name} />
+                        <Avatar name={c.professor_name} avatarUrl={c.professor_avatar} />
                       </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
