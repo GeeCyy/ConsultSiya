@@ -272,6 +272,10 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] consultations.proof_type column ready'))
     .catch(err => console.error('[startup] consultations.proof_type migration failed:', err.message));
 
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS notes TEXT`)
+    .then(() => console.log('[startup] consultations.notes column ready'))
+    .catch(err => console.error('[startup] consultations.notes migration failed:', err.message));
+
   pool.query(`
     CREATE TABLE IF NOT EXISTS notifications (
       id         SERIAL PRIMARY KEY,
