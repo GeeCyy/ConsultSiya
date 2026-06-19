@@ -163,11 +163,18 @@ function buildReportHtml(sections) {
       if (row.mode === 'OL')   modeDisplay = 'OL';
       if (row.mode === 'BOTH') modeDisplay = 'F2F/OL';
 
-      const proofUrl = (row.proof_type === 'link' && row.proof_of_evidence)
-        ? row.proof_of_evidence
-        : (row.uploaded_form_path?.startsWith('https://')
-            ? row.uploaded_form_path
-            : (row.uploaded_form_path ? `${baseUrl}/api/forms/download/${row.id}` : null));
+      let proofUrl = null;
+      if (row.proof_type === 'link' && row.proof_of_evidence) {
+        proofUrl = row.proof_of_evidence;
+      } else if (row.proof_type === 'file' && row.proof_of_evidence) {
+        proofUrl = row.proof_of_evidence.startsWith('https://')
+          ? row.proof_of_evidence
+          : `${baseUrl}/api/consultations/${row.id}/proof`;
+      } else if (row.uploaded_form_path?.startsWith('https://')) {
+        proofUrl = row.uploaded_form_path;
+      } else if (row.uploaded_form_path) {
+        proofUrl = `${baseUrl}/api/forms/download/${row.id}`;
+      }
       const proofCell = proofUrl
         ? `<a href="${proofUrl}">Advising Slip</a>`
         : '';

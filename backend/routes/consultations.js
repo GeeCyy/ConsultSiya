@@ -7,21 +7,14 @@ const { sendBookingPendingEmail, sendBookingConfirmedEmail, sendBookingCompleted
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('../lib/cloudinary');
 
 // ── Proof-of-evidence upload setup ───────────────────────────────────────────
 const proofUploadDir = path.join(__dirname, '../uploads/proofs');
 if (!fs.existsSync(proofUploadDir)) fs.mkdirSync(proofUploadDir, { recursive: true });
 
-const proofStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, proofUploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `proof-${req.params.id}-${Date.now()}${ext}`);
-  },
-});
-
 const proofUpload = multer({
-  storage: proofStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
@@ -832,16 +825,37 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
     }
 
     if (req.file) {
-      // Remove old file proof if it exists
+      // Remove old Cloudinary proof if it exists
       if (c.proof_type === 'file' && c.proof_of_evidence) {
-        const oldPath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        if (c.proof_of_evidence.startsWith('https://res.cloudinary.com/')) {
+          try {
+            const match = c.proof_of_evidence.match(/\/consultsiya\/proofs\/([^/.]+)/);
+            if (match) {
+              const isPdf = c.proof_of_evidence.includes('/raw/');
+              await cloudinary.uploader.destroy(`consultsiya/proofs/${match[1]}`, {
+                resource_type: isPdf ? 'raw' : 'image',
+              });
+            }
+          } catch { /* ignore cleanup errors */ }
+        } else {
+          const oldPath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
       }
+      const mimetype = req.file.mimetype;
+      const resourceType = mimetype === 'application/pdf' ? 'raw' : 'image';
+      const secureUrl = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'consultsiya/proofs', public_id: `proof-${id}-${Date.now()}`, resource_type: resourceType },
+          (err, result) => { if (err) return reject(err); resolve(result.secure_url); }
+        );
+        stream.end(req.file.buffer);
+      });
       await pool.query(
         `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'file' WHERE id = $2`,
-        [req.file.filename, id]
+        [secureUrl, id]
       );
-      return res.json({ proof_of_evidence: req.file.filename, proof_type: 'file' });
+      return res.json({ proof_of_evidence: secureUrl, proof_type: 'file' });
     }
 
     const link = (req.body?.link || '').trim();
@@ -884,6 +898,9 @@ router.get('/:id/proof', authenticate, async (req, res) => {
       }
     }
 
+    if (c.proof_of_evidence.startsWith('https://')) {
+      return res.redirect(c.proof_of_evidence);
+    }
     const filePath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
     res.download(filePath);
