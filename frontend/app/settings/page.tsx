@@ -741,7 +741,7 @@ export default function SettingsPage() {
     <DashboardShell weekBadge={false} hideTopBar={true}>
       <div className={`min-h-full ${isDark ? 'bg-[#1e2235]' : 'bg-[#f2f3f5]'}`}>
         {/* ── Page header ──────────────────────────────────────────────────── */}
-        <div className={`flex items-center gap-3 px-6 py-4 border-b ${isDark ? 'bg-[#1e2235] border-white/5' : 'bg-white border-black/10'}`}>
+        <div className={`flex items-center gap-3 px-4 sm:px-6 py-4 border-b ${isDark ? 'bg-[#1e2235] border-white/5' : 'bg-white border-black/10'}`}>
           <button
             onClick={() => router.back()}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-200 transition-colors"
@@ -763,11 +763,11 @@ export default function SettingsPage() {
             </div>
           </div>
         ) : (
-          <div className="flex max-w-5xl mx-auto px-4 py-6 gap-6">
+          <div className="flex flex-col sm:flex-row max-w-5xl mx-auto px-4 py-6 gap-6">
             {/* ── Sidebar ──────────────────────────────────────────────────── */}
-            <aside className="w-52 flex-shrink-0">
+            <aside className="w-full sm:w-52 sm:flex-shrink-0">
               {/* Mini profile card */}
-              <div className={`flex flex-col items-center gap-2 p-4 mb-4 rounded-xl border ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
+              <div className={`flex flex-row sm:flex-col items-center gap-3 sm:gap-2 p-4 mb-4 rounded-xl border ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
                 <div className={`w-14 h-14 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center border-2 border-[#0EA5E9]/40 ${isDark ? 'bg-[#0369A1]/20' : 'bg-sky-50'}`}>
                   {avatarSrc ? (
                     <img src={avatarSrc} alt="avatar" className="w-full h-full object-cover" />
@@ -775,7 +775,7 @@ export default function SettingsPage() {
                     <span className="text-lg font-bold text-sky-400">{initials}</span>
                   )}
                 </div>
-                <div className="text-center min-w-0 w-full">
+                <div className="text-left sm:text-center min-w-0 flex-1 sm:w-full">
                   <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{profile.full_name}</p>
                   <span
                     className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1 ${
@@ -811,7 +811,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Nav tabs */}
-              <nav className="flex flex-col gap-0.5">
+              <nav className="flex flex-row flex-wrap sm:flex-col gap-1 sm:gap-0.5">
                 {visibleTabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -837,12 +837,12 @@ export default function SettingsPage() {
               {/* ── PROFILE TAB ────────────────────────────────────────────── */}
               {activeTab === 'profile' && (
                 <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-[#252535] border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.35)]' : 'bg-white border-sky-100 shadow-sm'}`}>
-                  <div className="px-6 py-4 border-b border-white/5">
+                  <div className="px-4 sm:px-6 py-4 border-b border-white/5">
                     <h2 className="text-sm font-semibold text-white">Profile Information</h2>
                     <p className="text-xs text-gray-500 mt-0.5">Update your display name, contact email, and profile picture.</p>
                   </div>
 
-                  <div className="px-6 py-5 space-y-5">
+                  <div className="px-4 sm:px-6 py-5 space-y-5">
                     {profileMsg && (
                       <StatusBanner
                         message={profileMsg.text}
@@ -852,7 +852,7 @@ export default function SettingsPage() {
                     )}
 
                     {/* Avatar section */}
-                    <div className="flex items-center gap-4 pb-5 border-b border-white/5">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pb-5 border-b border-white/5">
                       <div className="w-20 h-20 rounded-full overflow-hidden flex-shrink-0 bg-[#0369A1]/20 flex items-center justify-center border-2 border-[#0EA5E9]/40">
                         {avatarSrc ? (
                           <img src={avatarSrc} alt="avatar" className="w-full h-full object-cover" />
@@ -1060,7 +1060,7 @@ export default function SettingsPage() {
                         <button
                           type="submit"
                           disabled={profileSaving}
-                          className="px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full sm:w-auto px-5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] hover:from-[#0284c7] hover:to-[#38bdf8] text-white transition-all shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {profileSaving ? 'Saving…' : 'Save Changes'}
                         </button>
@@ -1072,7 +1072,7 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => { setPwOpen(o => !o); setPwMsg(null); setPwForm({ current: '', next: '', confirm: '' }); }}
-                        className={`w-full flex items-center justify-between px-6 py-4 text-left transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50'}`}
+                        className={`w-full flex items-center justify-between px-4 sm:px-6 py-4 text-left transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50'}`}
                       >
                         <div className="flex items-center gap-2.5">
                           <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>

@@ -851,7 +851,7 @@ export default function ProfessorDashboard() {
   const [exportDateFrom, setExportDateFrom] = useState('');
   const [exportDateTo, setExportDateTo] = useState('');
   const [exportStatus, setExportStatus] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
-  const [exportOrientation, setExportOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
@@ -1341,6 +1341,8 @@ export default function ProfessorDashboard() {
     const headers = ['Student Name', 'Student No.', 'Program', 'Date', 'Time', 'Mode', 'Nature of Advising', 'Action Taken', 'Status', 'Proof of Evidence'];
 
     if (format === 'pdf') {
+      if (pdfExporting) return;
+      setPdfExporting(true);
       try {
         const params = new URLSearchParams();
         if (exportDateFrom) params.set('date_from', exportDateFrom);
@@ -1365,7 +1367,8 @@ export default function ProfessorDashboard() {
         toast.success(`PDF downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
       } catch {
         toast.error('Failed to generate PDF. Please try again.');
-        return;
+      } finally {
+        setPdfExporting(false);
       }
     } else {
       const wsData = [headers, ...tableData];
@@ -3338,21 +3341,6 @@ export default function ProfessorDashboard() {
                       ]}
                     />
                   </div>
-                  <div>
-                    <label className={labelCls}>PDF Orientation</label>
-                    <div className="flex gap-2">
-                      {(['portrait', 'landscape'] as const).map(o => (
-                        <button key={o} onClick={() => setExportOrientation(o)}
-                          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors border ${
-                            exportOrientation === o
-                              ? 'bg-sky-500/10 border-sky-500/40 text-sky-400'
-                              : isDark ? 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
-                          }`}>
-                          {o.charAt(0).toUpperCase() + o.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -3380,15 +3368,18 @@ export default function ProfessorDashboard() {
                   <p className={`font-semibold text-sm ${tp}`}>Excel Spreadsheet</p>
                   <p className={`text-xs mt-1 ${tm}`}>Download as .xlsx — open in Excel or Sheets</p>
                 </button>
-                <button onClick={() => handleExport('pdf')}
-                  className={`rounded-2xl p-5 text-left transition-all group hover:border-blue-500/20 hover:bg-blue-500/5 ${card}`}>
+                <button onClick={() => handleExport('pdf')} disabled={pdfExporting}
+                  className={`rounded-2xl p-5 text-left transition-all group hover:border-blue-500/20 hover:bg-blue-500/5 ${card} ${pdfExporting ? 'opacity-60 cursor-not-allowed' : ''}`}>
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:bg-blue-500/20 transition-colors">
-                    <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
-                    </svg>
+                    {pdfExporting
+                      ? <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      : <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
+                        </svg>
+                    }
                   </div>
-                  <p className={`font-semibold text-sm ${tp}`}>PDF Document</p>
-                  <p className={`text-xs mt-1 ${tm}`}>Download as .pdf — {exportOrientation} layout, MAPUA header</p>
+                  <p className={`font-semibold text-sm ${tp}`}>{pdfExporting ? 'Generating PDF…' : 'PDF Document'}</p>
+                  <p className={`text-xs mt-1 ${tm}`}>Download as .pdf — landscape layout, MAPUA header</p>
                 </button>
               </div>
               </div>

@@ -6,20 +6,13 @@ const PDFDocument = require('pdfkit');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('../lib/cloudinary');
 
 const uploadDir = path.join(__dirname, '../uploads/forms');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `consultation-${req.params.id}-${Date.now()}${ext}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
@@ -27,6 +20,24 @@ const upload = multer({
     else cb(new Error('Only PDF, JPG, and PNG files are allowed.'));
   },
 });
+
+function uploadToCloudinary(buffer, consultationId, mimetype) {
+  return new Promise((resolve, reject) => {
+    const resourceType = mimetype === 'application/pdf' ? 'raw' : 'image';
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'consultsiya/forms',
+        public_id: `consultation-${consultationId}-${Date.now()}`,
+        resource_type: resourceType,
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
+}
 
 // ── PDF Slip Drawing ──────────────────────────────────────────────────────────
 
@@ -279,15 +290,23 @@ router.post('/upload/:id', authenticate, upload.single('form'), async (req, res)
     }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
 
-    // Remove previous upload if it exists
+    // Delete previous Cloudinary asset if it was a Cloudinary URL
     const old = consult.rows[0].uploaded_form_path;
-    if (old) {
-      const oldPath = path.join(uploadDir, path.basename(old));
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    if (old && old.startsWith('https://res.cloudinary.com/')) {
+      try {
+        const publicIdMatch = old.match(/\/consultsiya\/forms\/([^/.]+)/);
+        if (publicIdMatch) {
+          const isPdf = old.includes('/raw/');
+          await cloudinary.uploader.destroy(`consultsiya/forms/${publicIdMatch[1]}`, {
+            resource_type: isPdf ? 'raw' : 'image',
+          });
+        }
+      } catch { /* ignore cleanup errors */ }
     }
 
-    await pool.query('UPDATE consultations SET uploaded_form_path = $1 WHERE id = $2', [req.file.filename, id]);
-    res.json({ message: 'Form uploaded successfully.' });
+    const secureUrl = await uploadToCloudinary(req.file.buffer, id, req.file.mimetype);
+    await pool.query('UPDATE consultations SET uploaded_form_path = $1 WHERE id = $2', [secureUrl, id]);
+    res.json({ message: 'Form uploaded successfully.', url: secureUrl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -315,6 +334,12 @@ router.get('/download/:id', authenticate, async (req, res) => {
       if (!prof.rows[0] || prof.rows[0].id !== c.professor_id) return res.status(403).json({ error: 'Access denied.' });
     }
 
+    // New uploads are Cloudinary URLs — redirect directly
+    if (c.uploaded_form_path.startsWith('https://')) {
+      return res.redirect(c.uploaded_form_path);
+    }
+
+    // Legacy: file stored locally on disk
     const filePath = path.join(uploadDir, path.basename(c.uploaded_form_path));
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
 

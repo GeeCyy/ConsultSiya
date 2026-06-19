@@ -8,9 +8,9 @@ const fs = require('fs');
 const path = require('path');
 
 // Embed Mapúa logo as base64 for PDF (resolved once at startup)
-const MAPUA_LOGO_PATH = path.join(__dirname, '../../frontend/public/mapua-banner.jpg');
+const MAPUA_LOGO_PATH = path.join(__dirname, '../../frontend/public/mapua-logo.png');
 const MAPUA_LOGO_B64 = fs.existsSync(MAPUA_LOGO_PATH)
-  ? `data:image/jpeg;base64,${fs.readFileSync(MAPUA_LOGO_PATH).toString('base64')}`
+  ? `data:image/png;base64,${fs.readFileSync(MAPUA_LOGO_PATH).toString('base64')}`
   : '';
 
 // Build a date-range WHERE clause fragment based on ?period=week|year|semester
@@ -46,7 +46,7 @@ const getReportData = async (professorId, { period, dateFrom, dateTo, status } =
 
   const result = await pool.query(
     `SELECT
-      c.id, c.date, c.nature_of_advising, c.mode, c.status, c.uploaded_form_path,
+      c.id, c.date, c.nature_of_advising, c.mode, c.status, c.uploaded_form_path, c.proof_of_evidence, c.proof_type,
       s.full_name AS student_name, s.student_number, s.program,
       p.full_name AS professor_name, p.department,
       sch.day, sch.time_start, sch.time_end,
@@ -154,7 +154,7 @@ function buildReportHtml(sections) {
   const termLabel   = `${ordinal(qtr.replace(/\D/g, ''))} QTR  Term, AY${ay}`;
   const baseUrl     = process.env.BASE_URL || 'http://localhost:5001';
   const logoTag     = MAPUA_LOGO_B64
-    ? `<img src="${MAPUA_LOGO_B64}" style="max-width:80px;max-height:52px;object-fit:contain;">`
+    ? `<img src="${MAPUA_LOGO_B64}" style="width:70px;height:auto;mix-blend-mode:multiply;">`
     : '';
 
   const pagesHtml = sections.map(({ professor, rows }, idx) => {
@@ -163,8 +163,13 @@ function buildReportHtml(sections) {
       if (row.mode === 'OL')   modeDisplay = 'OL';
       if (row.mode === 'BOTH') modeDisplay = 'F2F/OL';
 
-      const proofCell = row.uploaded_form_path
-        ? `<a href="${baseUrl}/api/forms/download/${row.id}">Advising Slip</a>`
+      const proofUrl = (row.proof_type === 'link' && row.proof_of_evidence)
+        ? row.proof_of_evidence
+        : (row.uploaded_form_path?.startsWith('https://')
+            ? row.uploaded_form_path
+            : (row.uploaded_form_path ? `${baseUrl}/api/forms/download/${row.id}` : null));
+      const proofCell = proofUrl
+        ? `<a href="${proofUrl}">Advising Slip</a>`
         : '';
 
       return `
