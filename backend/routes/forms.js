@@ -221,13 +221,17 @@ function drawSlip(doc, startY, data) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-// Serve blank advising slip template for download
 router.get('/blank-slip', authenticate, (req, res) => {
-  const templatePath = path.join(__dirname, '../templates/advising-slip-template.pdf');
-  if (!fs.existsSync(templatePath)) {
-    return res.status(404).json({ error: 'Template file not found on server.' });
+  try {
+    const templatePath = path.join(__dirname, '../templates/FM-AS-11-02-Course-Program-Advising-Slip.pdf');
+    const pdfBuffer = fs.readFileSync(templatePath);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=advising-slip-FM-AS-11-02.pdf');
+    res.end(pdfBuffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
-  res.download(templatePath, 'advising-slip-FM-AS-11-02.pdf');
 });
 
 // Generate pre-filled advising slip PDF

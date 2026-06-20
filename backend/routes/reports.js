@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Embed Mapúa logo as base64 for PDF (resolved once at startup)
-const MAPUA_LOGO_PATH = path.join(__dirname, '../../frontend/public/mapua-logo.png');
+const MAPUA_LOGO_PATH = path.join(__dirname, '../../frontend/public/logo-mapua.png');
 const MAPUA_LOGO_B64 = fs.existsSync(MAPUA_LOGO_PATH)
   ? `data:image/png;base64,${fs.readFileSync(MAPUA_LOGO_PATH).toString('base64')}`
   : '';
@@ -33,7 +33,7 @@ function periodClause(period) {
 }
 
 const getReportData = async (professorId, { period, dateFrom, dateTo, status } = {}) => {
-  const conditions = ['c.professor_id = $1'];
+  const conditions = ["c.professor_id = $1", "c.status = 'completed'"];
   const params = [professorId];
 
   if (period) {
@@ -42,7 +42,6 @@ const getReportData = async (professorId, { period, dateFrom, dateTo, status } =
   }
   if (dateFrom) { params.push(dateFrom); conditions.push(`c.date >= $${params.length}`); }
   if (dateTo)   { params.push(dateTo);   conditions.push(`c.date <= $${params.length}`); }
-  if (status && status !== 'all') { params.push(status); conditions.push(`c.status = $${params.length}`); }
 
   const result = await pool.query(
     `SELECT
@@ -60,11 +59,6 @@ const getReportData = async (professorId, { period, dateFrom, dateTo, status } =
      ORDER BY c.date ASC`,
     params
   );
-  console.log('[report] first 5 rows proof data:', result.rows.slice(0, 5).map(r => ({
-    id: r.id, student: r.student_name, proof_type: r.proof_type, proof_of_evidence: r.proof_of_evidence, uploaded_form_path: r.uploaded_form_path
-  })));
-  const row53 = result.rows.find(r => r.id === 53);
-  if (row53) console.log('[report] consultation 53:', { proof_type: row53.proof_type, proof_of_evidence: row53.proof_of_evidence, uploaded_form_path: row53.uploaded_form_path });
   return result.rows;
 };
 
@@ -178,7 +172,6 @@ function buildReportHtml(sections) {
       } else if (row.uploaded_form_path) {
         proofUrl = `${baseUrl}/api/forms/download/${row.id}`;
       }
-      if (row.id === 53 || i < 5) console.log(`[report row ${row.id}] proof_type=${row.proof_type} proof_of_evidence=${row.proof_of_evidence} → proofUrl=${proofUrl}`);
       const proofCell = proofUrl
         ? `<a href="${proofUrl}">Advising Slip</a>`
         : '';
@@ -273,7 +266,7 @@ function buildReportHtml(sections) {
   .hdr-tbl {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 18pt;
+    margin-bottom: 12pt;
   }
   .hdr-tbl td { border: 1px solid #000; }
 
@@ -309,41 +302,41 @@ function buildReportHtml(sections) {
     text-align: center;
     font-size: 12pt;
     font-weight: bold;
-    margin-bottom: 6pt;
+    margin-bottom: 4pt;
   }
   .meta-dept {
     text-align: center;
     font-size: 12pt;
     font-weight: bold;
-    margin-bottom: 14pt;
+    margin-bottom: 10pt;
   }
 
   /* ── Data table ── */
   .data-tbl {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 20pt;
+    margin-bottom: 14pt;
   }
   .data-tbl th,
   .data-tbl td {
     border: 1px solid #000;
-    padding: 5pt 5pt;
+    padding: 7pt 6pt;
     vertical-align: middle;
     font-size: 9pt;
-    line-height: 1.35;
+    line-height: 1.4;
   }
   .data-tbl th { font-weight: bold; text-align: center; }
   .data-tbl td.c { text-align: center; }
   .data-tbl a { color: #1155cc; text-decoration: underline; }
   .empty-row { text-align: center; color: #888; font-style: italic; }
 
-  .col-num   { width: 5%; }
-  .col-name  { width: 18%; }
-  .col-snum  { width: 13%; }
-  .col-prog  { width: 9%; }
-  .col-date  { width: 11%; }
-  .col-mode  { width: 12%; }
-  .col-proof { width: 32%; }
+  .col-num   { width: 4%; }
+  .col-name  { width: 20%; }
+  .col-snum  { width: 14%; }
+  .col-prog  { width: 10%; }
+  .col-date  { width: 13%; }
+  .col-mode  { width: 9%; }
+  .col-proof { width: 30%; }
 
   /* ── Footer ── */
   .certify {
@@ -383,7 +376,7 @@ function buildReportHtml(sections) {
     width: 180pt;
   }
 
-  @page { size: A4 portrait; margin: 20mm 25mm; }
+  @page { size: A4 portrait; margin: 0.5in; }
 </style>
 </head>
 <body>
