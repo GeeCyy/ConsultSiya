@@ -1636,29 +1636,6 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
-      {meetingLinkConsult && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
-            <h2 className={`font-bold text-lg mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Confirm Online Consultation</h2>
-            <p className="text-gray-500 text-sm mb-5">Provide a Zoom or Google Meet link for the student to join.</p>
-            <div className="mb-5">
-              <label className="text-gray-500 text-xs mb-1.5 block">Meeting Link</label>
-              <input
-                type="url"
-                placeholder="https://zoom.us/j/... or https://meet.google.com/..."
-                value={meetingLinkInput}
-                onChange={e => setMeetingLinkInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleConfirmWithLink()}
-                className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => { setMeetingLinkConsult(null); setMeetingLinkInput(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
-              <button onClick={handleConfirmWithLink} className={`flex-1 py-2 text-sm ${btnSuccess}`}>Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showConfirmEdit && pendingEdit && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
@@ -2405,17 +2382,15 @@ export default function ProfessorDashboard() {
                                   className="text-cyan-400 text-xs truncate hover:underline flex-1 min-w-0">
                                   Join Meeting →
                                 </a>
-                                {c.status === 'confirmed' && (
                                   <button
                                     onClick={() => { setEditLinkConsult(c); setEditLinkInput(c.meeting_link || ''); }}
                                     className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0 p-0.5 rounded"
                                     title="Edit meeting link">
                                     <PencilLine className="w-3.5 h-3.5" />
                                   </button>
-                                )}
                               </div>
                             )}
-                            {(c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH') && c.status === 'confirmed' && !c.meeting_link && (
+                            {(c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH') && !c.meeting_link && (
                               <button
                                 onClick={() => { setEditLinkConsult(c); setEditLinkInput(''); }}
                                 className="text-cyan-600 hover:text-cyan-400 text-xs mt-0.5 transition-colors">
@@ -2489,9 +2464,7 @@ export default function ProfessorDashboard() {
                             <div className="flex flex-wrap items-center gap-2">
                               {c.status === 'pending' && (
                                 <button
-                                  onClick={() => (c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH')
-                                    ? (setMeetingLinkConsult(c), setMeetingLinkInput(''))
-                                    : handleConfirm(c.id)}
+                                  onClick={() => handleConfirm(c.id)}
                                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-green-500 hover:bg-green-600 text-white">
                                   <Check className="w-3.5 h-3.5" />
                                   Confirm
@@ -2697,20 +2670,6 @@ export default function ProfessorDashboard() {
                       value={newSched.location}
                       onChange={e => setNewSched(s => ({ ...s, location: e.target.value }))}
                       placeholder="e.g. Room 201"
-                      className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                    />
-                  </div>
-                )}
-
-                {/* Meeting Link — shown for Online and Both */}
-                {(newSchedMode === 'Online' || newSchedMode === 'Both') && (
-                  <div className="mb-3">
-                    <Label className="text-gray-500 text-xs mb-1.5 block">Meeting Link <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
-                    <input
-                      type="url"
-                      value={newSchedMeetingLink}
-                      onChange={e => setNewSchedMeetingLink(e.target.value)}
-                      placeholder="https://zoom.us/j/... or https://meet.google.com/..."
                       className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
                     />
                   </div>
@@ -3544,18 +3503,6 @@ export default function ProfessorDashboard() {
                 <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
                   placeholder="e.g. Room 201"
                   className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`} />
-              </div>
-            )}
-            {(editSchedMode === 'Online' || editSchedMode === 'Both') && (
-              <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Meeting Link <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
-                <input
-                  type="url"
-                  value={editSchedMeetingLink}
-                  onChange={e => setEditSchedMeetingLink(e.target.value)}
-                  placeholder="https://zoom.us/j/... or https://meet.google.com/..."
-                  className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                />
               </div>
             )}
             <div>
