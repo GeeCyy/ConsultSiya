@@ -43,6 +43,9 @@ router.get('/stream', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+  res.socket.setTimeout(0);
+  res.socket.setNoDelay(true);
+  res.socket.setKeepAlive(true);
   res.flushHeaders();
 
   const userId = Number(user.id);
