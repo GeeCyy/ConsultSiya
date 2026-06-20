@@ -79,7 +79,7 @@ function ResetPasswordContent() {
           : 'bg-white border-gray-200 shadow-lg'
       }`}>
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>Consulta</h1>
+          <h1 className="text-3xl font-bold" style={{ color: '#4F6BED' }}>Consulta</h1>
           <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Set a new password</p>
           <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mapúa University SOIT</p>
         </div>
@@ -93,7 +93,7 @@ function ResetPasswordContent() {
             </div>
             <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Password reset successfully!</p>
             <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Redirecting you to the login page…</p>
-            <Link href="/login" className="block text-[#CC0000] text-sm hover:underline">
+            <Link href="/login" className="block text-[#4F6BED] text-sm hover:underline">
               Go to Sign In
             </Link>
           </div>
@@ -163,7 +163,7 @@ function ResetPasswordContent() {
 
               <Button
                 className="w-full text-white font-semibold"
-                style={{ backgroundColor: '#CC0000' }}
+                style={{ backgroundColor: '#4F6BED' }}
                 onClick={handleSubmit}
                 disabled={loading || !token}
               >
@@ -172,7 +172,7 @@ function ResetPasswordContent() {
             </div>
 
             <p className={`text-center text-sm mt-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-              <Link href="/login" className="text-[#CC0000] hover:underline">Back to Sign In</Link>
+              <Link href="/login" className="text-[#4F6BED] hover:underline">Back to Sign In</Link>
             </p>
           </>
         )}
