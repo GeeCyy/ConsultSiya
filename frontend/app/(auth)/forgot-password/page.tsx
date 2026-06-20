@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
           : 'bg-white border-gray-200 shadow-lg'
       }`}>
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>Consulta</h1>
+          <h1 className="text-3xl font-bold" style={{ color: '#4F6BED' }}>Consulta</h1>
           <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reset your password</p>
           <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mapúa University SOIT</p>
         </div>
@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
               Check your inbox and follow the instructions.
             </p>
             <p className={`text-xs mt-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Didn't receive it? Check your spam folder or try again.</p>
-            <Link href="/login" className="block text-[#CC0000] text-sm hover:underline mt-4">
+            <Link href="/login" className="block text-[#4F6BED] text-sm hover:underline mt-4">
               Back to Sign In
             </Link>
           </div>
@@ -104,7 +104,7 @@ export default function ForgotPasswordPage() {
 
               <Button
                 className="w-full text-white font-semibold"
-                style={{ backgroundColor: '#CC0000' }}
+                style={{ backgroundColor: '#4F6BED' }}
                 onClick={handleSubmit}
                 disabled={loading}
               >
@@ -114,7 +114,7 @@ export default function ForgotPasswordPage() {
 
             <p className={`text-center text-sm mt-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
               Remember your password?{' '}
-              <Link href="/login" className="text-[#CC0000] hover:underline">Sign in</Link>
+              <Link href="/login" className="text-[#4F6BED] hover:underline">Sign in</Link>
             </p>
           </>
         )}
