@@ -40,7 +40,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center px-3 sm:px-4 transition-colors duration-200 ${isDark ? 'bg-[#1e1f22]' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen flex items-center justify-center px-3 sm:px-4 transition-colors duration-200 ${isDark ? 'bg-[#1e1f22]' : 'bg-[#EEF2FF]'}`}>
       <div className={`w-full max-w-md px-5 sm:px-8 py-8 sm:py-10 rounded-2xl border transition-colors duration-200 ${
         isDark
           ? 'bg-[#2b2d31] border-white/10'
