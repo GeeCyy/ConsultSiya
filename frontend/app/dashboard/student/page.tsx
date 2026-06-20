@@ -1050,7 +1050,7 @@ export default function StudentDashboard() {
   const mostConsultedTopics = myTopics;
 
   // Style tokens
-  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white border border-sky-100 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
+  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white border border-gray-200 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
   const tp        = isDark ? 'text-white'    : 'text-gray-900';
   const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
   const tm        = isDark ? 'text-gray-400' : 'text-gray-500';
@@ -2192,18 +2192,23 @@ export default function StudentDashboard() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              isDark
-                                ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20'
-                                : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'
-                            }`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            Submit Proof of Evidence
-                          </button>
+                          <>
+                            <p className={`text-xs mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                              💡 You may save your consultation form to Google Drive or OneDrive and submit it as a shareable link.
+                            </p>
+                            <button
+                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                isDark
+                                  ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20'
+                                  : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'
+                              }`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                              </svg>
+                              Submit Proof of Evidence
+                            </button>
+                          </>
                         )}
 
                         {/* Expandable proof submission panel */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,17 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [_isDark, setIsDark] = useState(false);
+  const isDark = mounted ? _isDark : false;
+
+  useEffect(() => {
+    setMounted(true);
+    setIsDark(localStorage.getItem('consulta-theme') === 'dark');
+    const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
+    window.addEventListener('consulta-theme-change', handler);
+    return () => window.removeEventListener('consulta-theme-change', handler);
+  }, []);
 
   const handleSubmit = async () => {
     setError('');
@@ -29,57 +40,65 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-3 sm:px-4" style={{ backgroundColor: '#1e1f22' }}>
-      <div
-        className="w-full max-w-md px-5 sm:px-8 py-8 sm:py-10 rounded-2xl border border-white/10"
-        style={{ backgroundColor: '#2b2d31' }}
-      >
+    <div className={`min-h-screen flex items-center justify-center px-3 sm:px-4 transition-colors duration-200 ${isDark ? 'bg-[#1e1f22]' : 'bg-gray-50'}`}>
+      <div className={`w-full max-w-md px-5 sm:px-8 py-8 sm:py-10 rounded-2xl border transition-colors duration-200 ${
+        isDark
+          ? 'bg-[#2b2d31] border-white/10'
+          : 'bg-white border-gray-200 shadow-lg'
+      }`}>
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold" style={{ color: '#CC0000' }}>Consulta</h1>
-          <p className="text-gray-400 text-sm mt-1">Reset your password</p>
-          <p className="text-gray-500 text-xs mt-1">Mapúa University SOIT</p>
+          <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reset your password</p>
+          <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Mapúa University SOIT</p>
         </div>
 
         {sent ? (
           <div className="text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/30 flex items-center justify-center mx-auto">
-              <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-white font-semibold">Check your email</p>
-            <p className="text-gray-400 text-sm">
-              If <span className="text-white">{email}</span> is registered, a password reset link has been sent.
+            <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Check your email</p>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              If <span className={isDark ? 'text-white' : 'text-gray-900'}>{email}</span> is registered, a password reset link has been sent.
               Check your inbox and follow the instructions.
             </p>
-            <p className="text-gray-600 text-xs mt-2">Didn't receive it? Check your spam folder or try again.</p>
+            <p className={`text-xs mt-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Didn't receive it? Check your spam folder or try again.</p>
             <Link href="/login" className="block text-[#CC0000] text-sm hover:underline mt-4">
               Back to Sign In
             </Link>
           </div>
         ) : (
           <>
-            <p className="text-gray-400 text-sm mb-6">
+            <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
               Enter the email address associated with your account and we'll send you a link to reset your password.
             </p>
 
             {error && (
-              <div className="mb-4 px-4 py-3 rounded-xl text-sm border" style={{ backgroundColor: '#3a0000', color: '#ff6b6b', borderColor: '#7f1d1d' }}>
+              <div className={`mb-4 px-4 py-3 rounded-xl text-sm border ${
+                isDark
+                  ? 'bg-[#3a0000] text-[#ff6b6b] border-[#7f1d1d]'
+                  : 'bg-red-50 text-red-600 border-red-200'
+              }`}>
                 {error}
               </div>
             )}
 
             <div className="space-y-4">
               <div className="space-y-1">
-                <Label className="text-gray-300">Email</Label>
+                <Label className={isDark ? 'text-gray-300' : 'text-gray-700'}>Email</Label>
                 <Input
                   type="email"
                   placeholder="you@mymapua.edu.ph"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                  className="border text-white placeholder-gray-500"
-                  style={{ backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }}
+                  className={`border ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                  style={isDark
+                    ? { backgroundColor: '#383a40', borderColor: 'rgba(255,255,255,0.1)' }
+                    : { backgroundColor: '#fff', borderColor: '#d1d5db' }
+                  }
                 />
               </div>
 
@@ -93,7 +112,7 @@ export default function ForgotPasswordPage() {
               </Button>
             </div>
 
-            <p className="text-center text-sm text-gray-500 mt-5">
+            <p className={`text-center text-sm mt-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
               Remember your password?{' '}
               <Link href="/login" className="text-[#CC0000] hover:underline">Sign in</Link>
             </p>
