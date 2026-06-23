@@ -4,6 +4,14 @@ const pool = require('../db/db');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const notifModule = require('./notifications');
 
+const MEETING_LINK_PREFIXES = [
+  'https://zoom.us/',
+  'https://us02web.zoom.us/',
+  'https://meet.google.com/',
+  'https://teams.microsoft.com/',
+];
+const isValidMeetingLink = (url) => MEETING_LINK_PREFIXES.some(p => url.startsWith(p));
+
 // Professor sets their available schedules
 router.post('/', authenticate, authorize('professor'), async (req, res) => {
   const { day, time_start, time_end, location, date, time_ranges, announcement, meeting_link, mode } = req.body;
@@ -29,6 +37,10 @@ router.post('/', authenticate, authorize('professor'), async (req, res) => {
   const slotMode = ['FF', 'OL', 'BOTH'].includes(mode) ? mode : 'FF';
   const locationValue = slotMode === 'OL' ? null : (typeof location === 'string' && location.trim() ? location.trim() : null);
   const meetingLinkValue = (slotMode === 'OL' || slotMode === 'BOTH') ? (typeof meeting_link === 'string' && meeting_link.trim() ? meeting_link.trim() : null) : null;
+
+  if (meetingLinkValue && !isValidMeetingLink(meetingLinkValue)) {
+    return res.status(400).json({ error: 'Meeting link must start with https://zoom.us/, https://meet.google.com/, or https://teams.microsoft.com/.' });
+  }
 
   try {
     const profResult = await pool.query(
@@ -288,6 +300,10 @@ router.patch('/:id', authenticate, authorize('professor'), async (req, res) => {
   const slotMode = ['FF', 'OL', 'BOTH'].includes(mode) ? mode : 'FF';
   const locationValue = slotMode === 'OL' ? null : (typeof location === 'string' && location.trim() ? location.trim() : null);
   const meetingLinkValue = (slotMode === 'OL' || slotMode === 'BOTH') ? (typeof meeting_link === 'string' && meeting_link.trim() ? meeting_link.trim() : null) : null;
+
+  if (meetingLinkValue && !isValidMeetingLink(meetingLinkValue)) {
+    return res.status(400).json({ error: 'Meeting link must start with https://zoom.us/, https://meet.google.com/, or https://teams.microsoft.com/.' });
+  }
 
   if (!day || !effectiveStart || !effectiveEnd) {
     return res.status(400).json({ error: 'day and at least one time range are required.' });
