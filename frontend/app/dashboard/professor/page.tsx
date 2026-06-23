@@ -41,6 +41,14 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+const MEETING_LINK_PREFIXES = [
+  'https://zoom.us/',
+  'https://us02web.zoom.us/',
+  'https://meet.google.com/',
+  'https://teams.microsoft.com/',
+];
+const isValidMeetingLink = (url: string) => MEETING_LINK_PREFIXES.some(p => url.startsWith(p));
+
 const REFERRAL_OPTIONS = [
   'Peer Advising (W501-Intramuros / R203-Makati)',
   'Counseling of Personal Concerns (Center for Guidance and Counseling)',
@@ -884,6 +892,8 @@ export default function ProfessorDashboard() {
   // Edit meeting link modal (for already-confirmed OL consultations)
   const [editLinkConsult, setEditLinkConsult] = useState<Consultation | null>(null);
   const [editLinkInput, setEditLinkInput] = useState('');
+  const [editLinkError, setEditLinkError] = useState('');
+  const [bulkMeetingLinkError, setBulkMeetingLinkError] = useState('');
 
   // Cancel modal
   const [cancellingConsult, setCancellingConsult] = useState<Consultation | null>(null);
@@ -1065,7 +1075,13 @@ export default function ProfessorDashboard() {
 
   const handleSaveMeetingLink = async () => {
     if (!editLinkConsult) return;
-    const data = await api.patch(`/api/consultations/${editLinkConsult.id}/meeting-link`, { meeting_link: editLinkInput.trim() || null }, token!);
+    const link = editLinkInput.trim();
+    if (link && !isValidMeetingLink(link)) {
+      setEditLinkError('Link must be a Zoom, Google Meet, or Microsoft Teams URL.');
+      return;
+    }
+    setEditLinkError('');
+    const data = await api.patch(`/api/consultations/${editLinkConsult.id}/meeting-link`, { meeting_link: link || null }, token!);
     if (data.error) { toast.error(data.error); return; }
     setEditLinkConsult(null);
     setEditLinkInput('');
@@ -1129,7 +1145,13 @@ export default function ProfessorDashboard() {
   const handleBulkConfirmWithLink = async () => {
     const toConfirm = visibleConsultations.filter(c => selectedIds.has(c.id) && c.status === 'pending');
     if (!toConfirm.length) return;
-    const link = bulkMeetingLinkInput.trim() || undefined;
+    const rawLink = bulkMeetingLinkInput.trim();
+    if (rawLink && !isValidMeetingLink(rawLink)) {
+      setBulkMeetingLinkError('Link must be a Zoom, Google Meet, or Microsoft Teams URL.');
+      return;
+    }
+    setBulkMeetingLinkError('');
+    const link = rawLink || undefined;
     await Promise.all(toConfirm.map(c => {
       const needsLink = c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH';
       return api.patch(`/api/consultations/${c.id}/confirm`, needsLink ? { meeting_link: link } : {}, token!);
@@ -1599,14 +1621,28 @@ export default function ProfessorDashboard() {
                 type="url"
                 placeholder="https://zoom.us/j/... or https://meet.google.com/..."
                 value={editLinkInput}
-                onChange={e => setEditLinkInput(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setEditLinkInput(val);
+                  if (val.trim() && !isValidMeetingLink(val.trim())) {
+                    setEditLinkError('Invalid link. Please use Zoom, Google Meet, or Teams.');
+                  } else {
+                    setEditLinkError('');
+                  }
+                }}
                 onKeyDown={e => e.key === 'Enter' && handleSaveMeetingLink()}
-                className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                className={`w-full ${fieldCls} ${editLinkError ? '!border-red-500' : ''} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
               />
+              {editLinkError && <p className="text-red-500 text-xs mt-1">{editLinkError}</p>}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setEditLinkConsult(null); setEditLinkInput(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
-              <button onClick={handleSaveMeetingLink} className={`flex-1 py-2 text-sm ${btnPrimary}`}>Save</button>
+              <button onClick={() => { setEditLinkConsult(null); setEditLinkInput(''); setEditLinkError(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button
+                onClick={handleSaveMeetingLink}
+                disabled={!!editLinkInput.trim() && !isValidMeetingLink(editLinkInput.trim())}
+                className={`flex-1 py-2 text-sm ${btnPrimary} disabled:opacity-50`}>
+                Save
+              </button>
             </div>
           </div>
         </div>
@@ -1623,14 +1659,28 @@ export default function ProfessorDashboard() {
                 type="url"
                 placeholder="https://zoom.us/j/... or https://meet.google.com/..."
                 value={bulkMeetingLinkInput}
-                onChange={e => setBulkMeetingLinkInput(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setBulkMeetingLinkInput(val);
+                  if (val.trim() && !isValidMeetingLink(val.trim())) {
+                    setBulkMeetingLinkError('Invalid link. Please use Zoom, Google Meet, or Teams.');
+                  } else {
+                    setBulkMeetingLinkError('');
+                  }
+                }}
                 onKeyDown={e => e.key === 'Enter' && handleBulkConfirmWithLink()}
-                className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                className={`w-full ${fieldCls} ${bulkMeetingLinkError ? '!border-red-500' : ''} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
               />
+              {bulkMeetingLinkError && <p className="text-red-500 text-xs mt-1">{bulkMeetingLinkError}</p>}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setBulkMeetingLinkOpen(false); setBulkMeetingLinkInput(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
-              <button onClick={handleBulkConfirmWithLink} className={`flex-1 py-2 text-sm ${btnSuccess}`}>Confirm All</button>
+              <button onClick={() => { setBulkMeetingLinkOpen(false); setBulkMeetingLinkInput(''); setBulkMeetingLinkError(''); }} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
+              <button
+                onClick={handleBulkConfirmWithLink}
+                disabled={!!bulkMeetingLinkInput.trim() && !isValidMeetingLink(bulkMeetingLinkInput.trim())}
+                className={`flex-1 py-2 text-sm ${btnSuccess} disabled:opacity-50`}>
+                Confirm All
+              </button>
             </div>
           </div>
         </div>

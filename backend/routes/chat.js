@@ -192,6 +192,7 @@ LIVE SCHEDULE DATA:
 - When LIVE SCHEDULE DATA is present, lead with the specific slot information immediately — do not open with generic advice like "you can browse the Book a Slot tab." Give the data first, then optionally add a brief follow-up.
 - When showing schedule data for a specific professor, include an action pointing to /dashboard/student/book/prof/{id} using that professor's [profId=N] from the data. If showing multiple professors, use /dashboard/student?view=book.
 - If no LIVE SCHEDULE DATA is present and a user asks about availability, tell them to go to the Book a Slot tab and browse there.
+- When LIVE SCHEDULE DATA lists professor availability for today, this week, or this month: list every professor by name with their time slot(s) and location. Group multiple slots under the same professor. If the data says no slots exist for that period, say so clearly and suggest the Book a Slot tab for any updates.
 
 NAVIGATION PATHS (only use these exact values for "action.route" — no others exist):
 
@@ -308,6 +309,92 @@ async function buildScheduleContext(latestMsg) {
   return '\n\nLIVE SCHEDULE DATA (real-time from the database — use this to answer the question accurately):\n' + lines.join('\n');
 }
 
+function to12h(t) {
+  if (!t) return '?';
+  const [hStr, mStr] = t.split(':');
+  const h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return m === '00' ? `${hour}:00 ${suffix}` : `${hour}:${m} ${suffix}`;
+}
+
+async function buildProfAvailContext(latestMsg) {
+  const isWeek  = ['this week', 'whole week', 'for the week'].some(k => latestMsg.includes(k));
+  const isMonth = ['this month', 'whole month', 'for the month'].some(k => latestMsg.includes(k));
+
+  let periodLabel, slots;
+
+  if (isMonth) {
+    periodLabel = 'this month';
+    slots = await pool.query(
+      `SELECT p.id AS professor_id, p.full_name AS professor_name,
+              s.date::text AS date, s.day, s.time_start, s.time_end, s.time_ranges, s.location
+       FROM schedules s
+       JOIN professors p ON s.professor_id = p.id
+       JOIN users u ON p.user_id = u.id
+       WHERE s.is_available = true AND u.is_approved = true
+         AND (
+           (s.date IS NOT NULL AND s.date >= date_trunc('month', CURRENT_DATE)
+            AND s.date < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')
+           OR s.date IS NULL
+         )
+       ORDER BY p.full_name, s.date NULLS LAST, s.time_start
+       LIMIT 60`
+    );
+  } else if (isWeek) {
+    periodLabel = 'this week';
+    slots = await pool.query(
+      `SELECT p.id AS professor_id, p.full_name AS professor_name,
+              s.date::text AS date, s.day, s.time_start, s.time_end, s.time_ranges, s.location
+       FROM schedules s
+       JOIN professors p ON s.professor_id = p.id
+       JOIN users u ON p.user_id = u.id
+       WHERE s.is_available = true AND u.is_approved = true
+         AND (
+           (s.date IS NOT NULL AND s.date >= CURRENT_DATE AND s.date < CURRENT_DATE + INTERVAL '7 days')
+           OR s.date IS NULL
+         )
+       ORDER BY p.full_name, s.date NULLS LAST, s.time_start
+       LIMIT 60`
+    );
+  } else {
+    periodLabel = 'today';
+    slots = await pool.query(
+      `SELECT p.id AS professor_id, p.full_name AS professor_name,
+              s.date::text AS date, s.day, s.time_start, s.time_end, s.time_ranges, s.location
+       FROM schedules s
+       JOIN professors p ON s.professor_id = p.id
+       JOIN users u ON p.user_id = u.id
+       WHERE s.is_available = true AND u.is_approved = true
+         AND (
+           s.date = CURRENT_DATE
+           OR (s.date IS NULL AND LOWER(TRIM(s.day)) = LOWER(TO_CHAR(CURRENT_DATE, 'FMDay')))
+         )
+       ORDER BY p.full_name, s.time_start
+       LIMIT 40`
+    );
+  }
+
+  if (slots.rows.length === 0) {
+    return `\n\nLIVE SCHEDULE DATA: No professors have available slots ${periodLabel}.`;
+  }
+
+  const lines = slots.rows.map(s => {
+    const ranges = Array.isArray(s.time_ranges) && s.time_ranges.length > 0
+      ? s.time_ranges.map(tr => `${to12h(tr.time_start)}–${to12h(tr.time_end)}`).join(', ')
+      : `${to12h(s.time_start)}–${to12h(s.time_end)}`;
+    const when = s.date ? s.date : `Every ${s.day}`;
+    return `• ${s.professor_name} [profId=${s.professor_id}]: ${when}, ${ranges}${s.location ? ` at ${s.location}` : ''}`;
+  });
+
+  const recurringNote = (isWeek || isMonth)
+    ? '\n(Entries marked "Every [Day]" are recurring weekly slots available every week on that day.)'
+    : '';
+
+  return `\n\nLIVE SCHEDULE DATA — professors with available slots ${periodLabel} (real-time from database):${recurringNote}\n${lines.join('\n')}`;
+}
+
 // POST /api/chat/faq — AI FAQ assistant (authenticated users only)
 router.post(
   '/faq',
@@ -349,16 +436,27 @@ router.post(
       ];
       const isSummaryQuestion = SUMMARY_KEYWORDS.some(k => latestMsg.includes(k));
       const isTodayQuestion   = TODAY_KEYWORDS.some(k => latestMsg.includes(k));
+
+      // "Who are the available professors for today/this week/this month?"
+      const isProfAvailQuestion = (
+        (latestMsg.includes('professor') || latestMsg.includes('prof') || latestMsg.includes('faculty')) &&
+        (latestMsg.includes('available') || latestMsg.includes('who can i consult'))
+      ) || latestMsg.includes('available professor') || latestMsg.includes('professors available');
+
       let dbContext = '';
 
-      // Skip schedule availability for summary/today questions — mixing slot
-      // data with consultation records confuses the model.
-      const scheduleContext = (isSummaryQuestion || isTodayQuestion)
-        ? ''
-        : await buildScheduleContext(latestMsg);
+      // Route to the right context builder:
+      // - Prof availability questions get the new per-period slot data
+      // - Summary/today personal questions get consultation records
+      // - All others get the general slot search
+      const scheduleContext = isProfAvailQuestion
+        ? await buildProfAvailContext(latestMsg)
+        : (isSummaryQuestion || isTodayQuestion)
+          ? ''
+          : await buildScheduleContext(latestMsg);
 
       // ── Today's consultation details ─────────────────────────────────────────
-      if (isTodayQuestion && req.user.role === 'student') {
+      if (isTodayQuestion && !isProfAvailQuestion && req.user.role === 'student') {
         const rows = await pool.query(
           `SELECT c.time::text, c.status, c.mode, c.nature_of_advising,
                   c.nature_of_advising_specify, p.full_name AS professor_name
@@ -383,7 +481,7 @@ router.post(
         }
       }
 
-      if (isTodayQuestion && req.user.role === 'professor') {
+      if (isTodayQuestion && !isProfAvailQuestion && req.user.role === 'professor') {
         const rows = await pool.query(
           `SELECT c.time::text, c.status, c.mode, c.nature_of_advising,
                   c.nature_of_advising_specify, s.full_name AS student_name, s.student_number

@@ -9,6 +9,22 @@ const path = require('path');
 const fs = require('fs');
 const cloudinary = require('../lib/cloudinary');
 
+const MEETING_LINK_PREFIXES = [
+  'https://zoom.us/',
+  'https://us02web.zoom.us/',
+  'https://meet.google.com/',
+  'https://teams.microsoft.com/',
+];
+const isValidMeetingLink = (url) => MEETING_LINK_PREFIXES.some(p => url.startsWith(p));
+
+const PROOF_LINK_PREFIXES = [
+  'https://drive.google.com/',
+  'https://docs.google.com/',
+  'https://onedrive.live.com/',
+  'https://1drv.ms/',
+];
+const isValidProofLink = (url) => PROOF_LINK_PREFIXES.some(p => url.startsWith(p));
+
 // ── Proof-of-evidence upload setup ───────────────────────────────────────────
 const proofUploadDir = path.join(__dirname, '../uploads/proofs');
 if (!fs.existsSync(proofUploadDir)) fs.mkdirSync(proofUploadDir, { recursive: true });
@@ -447,6 +463,9 @@ router.patch('/:id/confirm', authenticate, authorize('professor'), async (req, r
     }
 
     const { meeting_link } = req.body;
+    if (meeting_link && !isValidMeetingLink(meeting_link)) {
+      return res.status(400).json({ error: 'Meeting link must start with https://zoom.us/, https://meet.google.com/, or https://teams.microsoft.com/.' });
+    }
     const link = (consultation.rows[0].mode === 'OL' || consultation.rows[0].mode === 'BOTH') ? (meeting_link || null) : null;
     const result = await pool.query(
       `UPDATE consultations SET status = 'confirmed', meeting_link = $2 WHERE id = $1 RETURNING *`,
@@ -519,6 +538,9 @@ router.patch('/:id/meeting-link', authenticate, authorize('professor'), async (r
     }
 
     const { meeting_link } = req.body;
+    if (meeting_link && !isValidMeetingLink(meeting_link)) {
+      return res.status(400).json({ error: 'Meeting link must start with https://zoom.us/, https://meet.google.com/, or https://teams.microsoft.com/.' });
+    }
     const result = await pool.query(
       `UPDATE consultations SET meeting_link = $2 WHERE id = $1 RETURNING *`,
       [id, meeting_link || null]
@@ -861,6 +883,9 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
 
     const link = (req.body?.link || '').trim();
     if (!link) return res.status(400).json({ error: 'A file or link is required.' });
+    if (!isValidProofLink(link)) {
+      return res.status(400).json({ error: 'Proof link must be from Google Drive, Google Docs, or OneDrive (onedrive.live.com or 1drv.ms).' });
+    }
 
     await pool.query(
       `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'link' WHERE id = $2`,

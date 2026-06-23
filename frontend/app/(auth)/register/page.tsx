@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -20,6 +20,26 @@ const PROGRAMS = [
 
 const YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
 
+
+async function sha1Hex(str: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+}
+
+async function isPwnedPassword(password: string): Promise<boolean> {
+  const hash = await sha1Hex(password);
+  const prefix = hash.slice(0, 5);
+  const suffix = hash.slice(5);
+  const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+    headers: { 'Add-Padding': 'true' },
+  });
+  if (!res.ok) throw new Error(`HIBP ${res.status}`);
+  const text = await res.text();
+  return text.split('\r\n').some(line => line.split(':')[0] === suffix);
+}
 
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
@@ -51,6 +71,10 @@ export default function RegisterPage() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
+  const [pwnedError, setPwnedError] = useState('');
+  const [checkingPwned, setCheckingPwned] = useState(false);
+  const lastCheckedPwd = useRef('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isDark, setIsDark] = useState(false);
@@ -73,8 +97,34 @@ export default function RegisterPage() {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }));
 
+  const passwordChecks = {
+    length:    form.password.length >= 8,
+    uppercase: /[A-Z]/.test(form.password),
+    lowercase: /[a-z]/.test(form.password),
+    number:    /[0-9]/.test(form.password),
+    special:   /[^A-Za-z0-9]/.test(form.password),
+  };
+  const passwordValid = Object.values(passwordChecks).every(Boolean);
+
+  const handlePasswordBlur = async () => {
+    const pwd = form.password;
+    if (!pwd || lastCheckedPwd.current === pwd) return;
+    setCheckingPwned(true);
+    try {
+      const breached = await isPwnedPassword(pwd);
+      lastCheckedPwd.current = pwd;
+      setPwnedError(breached ? 'This password has appeared in a data breach. Please choose a different one.' : '');
+    } catch (e) {
+      console.warn('[HIBP] Breach check failed:', e);
+      lastCheckedPwd.current = pwd;
+    } finally {
+      setCheckingPwned(false);
+    }
+  };
+
   const handleRegister = async () => {
     setError('');
+    setConfirmError('');
 
     if (!form.email || !form.password || !form.full_name) {
       setError('Email, password, and full name are required.');
@@ -85,8 +135,8 @@ export default function RegisterPage() {
       setError('Please enter a valid email address.');
       return;
     }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (!passwordValid) {
+      setError('Password does not meet all requirements.');
       return;
     }
     if (form.password !== form.confirm_password) {
@@ -104,6 +154,26 @@ export default function RegisterPage() {
     if (role === 'student' && !/^\d{10}$/.test(form.student_number)) {
       setError('Student number must be exactly 10 digits.');
       return;
+    }
+
+    // Pwned password check — use cached result or run now if blur was skipped
+    if (pwnedError) return;
+    if (lastCheckedPwd.current !== form.password) {
+      setCheckingPwned(true);
+      try {
+        const breached = await isPwnedPassword(form.password);
+        lastCheckedPwd.current = form.password;
+        if (breached) {
+          setPwnedError('This password has appeared in a data breach. Please choose a different one.');
+          setCheckingPwned(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('[HIBP] Breach check failed, allowing submission:', e);
+        lastCheckedPwd.current = form.password;
+      } finally {
+        setCheckingPwned(false);
+      }
     }
 
     setLoading(true);
@@ -280,7 +350,20 @@ export default function RegisterPage() {
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={form.password}
-                    onChange={set('password')}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm(f => ({ ...f, password: val }));
+                      if (form.confirm_password && form.confirm_password !== val) {
+                        setConfirmError('Passwords do not match.');
+                      } else {
+                        setConfirmError('');
+                      }
+                      if (val !== lastCheckedPwd.current) {
+                        setPwnedError('');
+                        lastCheckedPwd.current = '';
+                      }
+                    }}
+                    onBlur={handlePasswordBlur}
                     className={`${inputCls} pr-10`}
                     style={{ backgroundColor: inputBg, borderColor: inputBorder }}
                   />
@@ -292,6 +375,34 @@ export default function RegisterPage() {
                     <EyeIcon open={showPassword} />
                   </button>
                 </div>
+                {form.password.length > 0 && (
+                  <div className={`mt-1.5 border-l-[3px] rounded-r-md px-3 py-2 ${
+                    passwordValid
+                      ? isDark ? 'bg-green-950/30 border-green-500' : 'bg-green-50 border-green-500'
+                      : isDark ? 'bg-red-950/30 border-red-500'     : 'bg-red-50 border-red-500'
+                  }`}>
+                    <p className={`text-[10px] font-semibold ${
+                      passwordValid
+                        ? isDark ? 'text-green-400' : 'text-green-700'
+                        : isDark ? 'text-red-400'   : 'text-red-700'
+                    }`}>
+                      {passwordValid ? 'Password looks strong' : 'Password too weak'}
+                    </p>
+                    {!passwordValid && (
+                      <p className={`text-[10px] mt-0.5 ${isDark ? 'text-red-300/80' : 'text-red-600'}`}>
+                        {'Missing: ' + [
+                          !passwordChecks.length    && '8+ characters',
+                          !passwordChecks.uppercase && 'uppercase letter',
+                          !passwordChecks.lowercase && 'lowercase letter',
+                          !passwordChecks.number    && 'number',
+                          !passwordChecks.special   && 'special character',
+                        ].filter(Boolean).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {checkingPwned && <p className={`text-[10px] mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Checking password safety…</p>}
+                {pwnedError && <p className="text-red-500 text-[10px] mt-1">{pwnedError}</p>}
               </div>
               <div className="space-y-1">
                 <Label className={labelCls}>Confirm</Label>
@@ -300,7 +411,15 @@ export default function RegisterPage() {
                     type={showConfirm ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={form.confirm_password}
-                    onChange={set('confirm_password')}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm(f => ({ ...f, confirm_password: val }));
+                      if (val && val !== form.password) {
+                        setConfirmError('Passwords do not match.');
+                      } else {
+                        setConfirmError('');
+                      }
+                    }}
                     className={`${inputCls} pr-10`}
                     style={{ backgroundColor: inputBg, borderColor: inputBorder }}
                   />
@@ -312,6 +431,7 @@ export default function RegisterPage() {
                     <EyeIcon open={showConfirm} />
                   </button>
                 </div>
+                {confirmError && <p className="text-red-500 text-[10px] mt-1">{confirmError}</p>}
               </div>
             </div>
 
@@ -363,7 +483,7 @@ export default function RegisterPage() {
             <Button
               className="w-full text-white font-semibold mt-2 bg-[#4F6BED] hover:bg-[#3D57D6]"
               onClick={handleRegister}
-              disabled={loading}
+              disabled={loading || checkingPwned}
             >
               {loading ? 'Creating account…' : 'Create Account'}
             </Button>

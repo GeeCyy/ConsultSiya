@@ -189,6 +189,14 @@ function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: st
 
 const MONTH_NAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+const PROOF_LINK_PREFIXES = [
+  'https://drive.google.com/',
+  'https://docs.google.com/',
+  'https://onedrive.live.com/',
+  'https://1drv.ms/',
+];
+const isValidProofLink = (url: string) => PROOF_LINK_PREFIXES.some(p => url.startsWith(p));
+
 // ── Full-width Academic Calendar ─────────────────────────────────────────────
 
 function FullCalendar({
@@ -659,6 +667,7 @@ export default function StudentDashboard() {
   const [proofPanelId, setProofPanelId]         = useState<number | null>(null);
   const [proofMode, setProofMode]               = useState<'file' | 'link'>('file');
   const [proofLinkValue, setProofLinkValue]     = useState('');
+  const [proofLinkError, setProofLinkError]     = useState('');
   const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
   const [viewingFile, setViewingFile]           = useState<number | null>(null);
   const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
@@ -941,6 +950,11 @@ export default function StudentDashboard() {
   const handleProofLinkSubmit = async (id: number) => {
     const link = proofLinkValue.trim();
     if (!link) { toast.error('Please enter a valid link.'); return; }
+    if (!isValidProofLink(link)) {
+      setProofLinkError('Link must be from Google Drive, Google Docs, or OneDrive.');
+      return;
+    }
+    setProofLinkError('');
     setSubmittingProofId(id);
     try {
       const data = await api.post(`/api/consultations/${id}/proof`, { link }, token!);
@@ -2221,23 +2235,36 @@ export default function StudentDashboard() {
                               <input
                                 type="url"
                                 value={proofLinkValue}
-                                onChange={e => setProofLinkValue(e.target.value)}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setProofLinkValue(val);
+                                  if (val.trim() && !isValidProofLink(val.trim())) {
+                                    setProofLinkError('Invalid link. Please use a Google Drive or OneDrive link.');
+                                  } else {
+                                    setProofLinkError('');
+                                  }
+                                }}
                                 placeholder="https://drive.google.com/…"
                                 className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
-                                  isDark
-                                    ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
-                                    : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
+                                  proofLinkError
+                                    ? 'border border-red-500 outline-none ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                    : isDark
+                                      ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
+                                      : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
                                 }`}
                               />
                               <button
                                 onClick={() => handleProofLinkSubmit(c.id)}
-                                disabled={submittingProofId === c.id || !proofLinkValue.trim()}
+                                disabled={submittingProofId === c.id || !proofLinkValue.trim() || (!!proofLinkValue.trim() && !isValidProofLink(proofLinkValue.trim()))}
                                 className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
                                 {submittingProofId === c.id
                                   ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
                                   : 'Submit'}
                               </button>
                             </div>
+                            {proofLinkError && (
+                              <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>
+                            )}
                           </div>
                         )}
                       </div>

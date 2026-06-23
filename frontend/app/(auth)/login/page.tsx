@@ -78,6 +78,7 @@ function LoginContent() {
           ? 'Account created! Please wait for admin approval before logging in.'
           : 'Account created! You can now log in.'
       );
+      router.replace('/login');
       const timer = setTimeout(() => setSuccess(''), 5000);
       return () => clearTimeout(timer);
     }
