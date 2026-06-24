@@ -568,7 +568,28 @@ export default function BookProfPage() {
                   const matched = findMatchingSlot(slots, dateStr);
                   setSelectedSlot(matched ?? null);
                   const autoMode = matched?.mode === 'OL' ? 'OL' : matched?.mode === 'BOTH' ? 'BOTH' : 'F2F';
-                  setBookForm(f => ({ ...f, date: dateStr, time: '', mode: autoMode, preferredMode: '' }));
+                  const phtPs = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', hour12: false,
+                  }).formatToParts(new Date());
+                  const pg2 = (t: string) => phtPs.find(p => p.type === t)?.value ?? '00';
+                  const phtTodayAuto = `${pg2('year')}-${pg2('month')}-${pg2('day')}`;
+                  const phtMinsAuto  = parseInt(pg2('hour'), 10) * 60 + parseInt(pg2('minute'), 10);
+                  const isDateToday  = dateStr === phtTodayAuto;
+                  let autoTime = '';
+                  if (matched) {
+                    const autoRanges = matched.time_ranges?.length
+                      ? matched.time_ranges
+                      : [{ time_start: matched.time_start, time_end: matched.time_end }];
+                    for (const r of autoRanges) {
+                      const ts = getTimeSlots(r.time_start.slice(0, 5), r.time_end.slice(0, 5));
+                      const avail = isDateToday
+                        ? ts.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > phtMinsAuto; })
+                        : ts;
+                      if (avail.length > 0) { autoTime = avail[0]; break; }
+                    }
+                  }
+                  setBookForm(f => ({ ...f, date: dateStr, time: autoTime, mode: autoMode, preferredMode: '' }));
                   if (matched) {
                     const key = `${matched.id}-${dateStr}`;
                     if (bookedTimes[key] === undefined) {
@@ -611,12 +632,17 @@ export default function BookProfPage() {
                 <div className="space-y-4">
                   {(() => {
                     const now = new Date();
-                    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                    const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                    const phtParts = new Intl.DateTimeFormat('en-CA', {
+                      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+                      hour: '2-digit', minute: '2-digit', hour12: false,
+                    }).formatToParts(now);
+                    const phtGet = (type: string) => phtParts.find(p => p.type === type)?.value ?? '00';
+                    const todayStr = `${phtGet('year')}-${phtGet('month')}-${phtGet('day')}`;
+                    const currentTimeMins = parseInt(phtGet('hour'), 10) * 60 + parseInt(phtGet('minute'), 10);
                     const isToday = bookForm.date === todayStr;
                     return timeRanges.map((range, ri) => {
                     let slots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
-                    if (isToday) slots = slots.filter(t => t > currentTimeStr);
+                    if (isToday) slots = slots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > currentTimeMins; });
                     const session = parseInt(range.time_start.slice(0, 2), 10) < 12 ? 'Morning' : 'Afternoon';
                     return (
                       <div key={ri}>

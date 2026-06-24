@@ -1441,7 +1441,7 @@ export default function ProfessorDashboard() {
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   const visibleConsultations = consultations.filter(
-    c => c.status === 'rescheduled' || ((c.status === 'pending' || c.status === 'confirmed') && c.date >= todayStr)
+    c => c.status === 'confirmed' || c.status === 'rescheduled' || (c.status === 'pending' && c.date >= todayStr)
   );
   const stats = {
     total: visibleConsultations.length,
