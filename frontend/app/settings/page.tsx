@@ -788,26 +788,26 @@ export default function SettingsPage() {
                   >
                     {role.charAt(0).toUpperCase() + role.slice(1)}
                   </span>
-                </div>
 
-                {/* Profile completion bar */}
-                {completionItems.length > 0 && (
-                  <div className="w-full mt-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-[10px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Profile</span>
-                      <span className={`text-[10px] font-bold ${completionPct === 100 ? 'text-emerald-400' : 'text-sky-400'}`}>{completionPct}%</span>
+                  {/* Profile completion bar — nested here so it stacks under the badge on mobile */}
+                  {completionItems.length > 0 && (
+                    <div className="w-full mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-[10px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Profile</span>
+                        <span className={`text-[10px] font-bold ${completionPct === 100 ? 'text-emerald-400' : 'text-sky-400'}`}>{completionPct}%</span>
+                      </div>
+                      <div className={`h-1.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-200'}`}>
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${completionPct === 100 ? 'bg-emerald-400' : 'bg-gradient-to-r from-[#0369A1] to-[#0EA5E9]'}`}
+                          style={{ width: `${completionPct}%` }}
+                        />
+                      </div>
+                      {firstMissing && (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-tight">Add {firstMissing.label}</p>
+                      )}
                     </div>
-                    <div className={`h-1.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-200'}`}>
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${completionPct === 100 ? 'bg-emerald-400' : 'bg-gradient-to-r from-[#0369A1] to-[#0EA5E9]'}`}
-                        style={{ width: `${completionPct}%` }}
-                      />
-                    </div>
-                    {firstMissing && (
-                      <p className="text-[10px] text-gray-500 mt-1 leading-tight">Add {firstMissing.label}</p>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Nav tabs */}

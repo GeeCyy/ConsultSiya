@@ -51,8 +51,11 @@ async function autoMarkMissed(professorId = null) {
     const sql = `
       UPDATE consultations
       SET status = 'missed'
-      WHERE status IN ('pending', 'confirmed')
-        AND (date + COALESCE(time, '23:59:00'::time)) < (NOW() AT TIME ZONE 'Asia/Manila')
+      WHERE status = 'pending'
+        AND (date + COALESCE(
+          (SELECT s.time_end FROM schedules s WHERE s.id = consultations.schedule_id),
+          '23:59:00'::time
+        )) < (NOW() AT TIME ZONE 'Asia/Manila')
         ${professorId ? 'AND professor_id = $1' : ''}
       RETURNING id
     `;

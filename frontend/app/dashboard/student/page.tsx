@@ -1813,6 +1813,27 @@ export default function StudentDashboard() {
                           if (a.date) return -1; if (b.date) return 1;
                           return DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
                         });
+                        const slotsForChips = (() => {
+                          const phtParts = new Intl.DateTimeFormat('en-CA', {
+                            timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', hour12: false,
+                          }).formatToParts(new Date());
+                          const pg = (t: string) => phtParts.find(p => p.type === t)?.value ?? '00';
+                          const phtToday = `${pg('year')}-${pg('month')}-${pg('day')}`;
+                          const phtMins  = parseInt(pg('hour'), 10) * 60 + parseInt(pg('minute'), 10);
+                          return slotsSorted.filter(s => {
+                            if (!s.date) return true;
+                            if (s.date < phtToday) return false;
+                            if (s.date > phtToday) return true;
+                            const ranges = s.time_ranges?.length
+                              ? s.time_ranges
+                              : [{ time_start: s.time_start, time_end: s.time_end }];
+                            return ranges.some(r => {
+                              const [h, m] = r.time_end.slice(0, 5).split(':').map(Number);
+                              return h * 60 + m > phtMins;
+                            });
+                          });
+                        })();
                         const isExpanded    = bookExpandedId === prof.professor_id;
                         const alreadyBooked = bookedProfIds.has(prof.professor_id);
 
@@ -1848,7 +1869,7 @@ export default function StudentDashboard() {
 
                               {/* Date chips */}
                               <div className="flex flex-wrap gap-1.5 mt-3">
-                                {slotsSorted.slice(0, isExpanded ? undefined : 3).map(s => {
+                                {slotsForChips.slice(0, isExpanded ? undefined : 3).map(s => {
                                   const dateObj  = s.date ? new Date(s.date + 'T12:00:00') : null;
                                   const dayAbbr  = dateObj ? dateObj.toLocaleDateString('en-PH', { weekday: 'short' }) : s.day.slice(0, 3);
                                   const dateShort = dateObj ? dateObj.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
@@ -1865,9 +1886,9 @@ export default function StudentDashboard() {
                                     </span>
                                   );
                                 })}
-                                {!isExpanded && slotsSorted.length > 3 && (
+                                {!isExpanded && slotsForChips.length > 3 && (
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>
-                                    +{slotsSorted.length - 3} more
+                                    +{slotsForChips.length - 3} more
                                   </span>
                                 )}
                               </div>
