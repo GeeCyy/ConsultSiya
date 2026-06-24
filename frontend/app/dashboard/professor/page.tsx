@@ -858,8 +858,10 @@ export default function ProfessorDashboard() {
   // Export filters
   const [exportDateFrom, setExportDateFrom] = useState('');
   const [exportDateTo, setExportDateTo] = useState('');
+  const [exportTerm, setExportTerm] = useState('');
   const [exportStatus, setExportStatus] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [histTermExporting, setHistTermExporting] = useState<string | null>(null);
 
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
@@ -1400,6 +1402,40 @@ export default function ProfessorDashboard() {
       XLSX.utils.book_append_sheet(wb, ws, 'Advising Records');
       XLSX.writeFile(wb, `advising-report-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}.xlsx`);
       toast.success(`Excel downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
+    }
+  };
+
+  const handleHistTermExport = async (termLabel: string, items: Consultation[], format: 'pdf' | 'excel') => {
+    if (histTermExporting) return;
+    const key = `${termLabel}-${format}`;
+    setHistTermExporting(key);
+    try {
+      const dates = items.map(c => c.date).sort();
+      const dateFrom = dates[0];
+      const dateTo   = dates[dates.length - 1];
+      const params   = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, status: 'all' });
+      const endpoint = format === 'pdf' ? '/api/reports/pdf' : '/api/reports/excel';
+      const ext      = format === 'pdf' ? 'pdf' : 'xlsx';
+      const resp = await fetch(`${API_URL}${endpoint}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        toast.error(err.error || `Failed to generate ${format.toUpperCase()}.`);
+        return;
+      }
+      const blob = await resp.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `archive-${termLabel.replace(/[^a-z0-9]/gi, '-')}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${format.toUpperCase()} downloaded (${items.length} record${items.length !== 1 ? 's' : ''}).`);
+    } catch {
+      toast.error(`Failed to generate ${format.toUpperCase()}. Please try again.`);
+    } finally {
+      setHistTermExporting(null);
     }
   };
 
@@ -3021,7 +3057,7 @@ export default function ProfessorDashboard() {
                     return (
                       <div key={quarter}>
                         {/* Term header + summary */}
-                        <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center gap-3 mb-3 flex-wrap">
                           <p className={`text-[11px] font-semibold uppercase tracking-wider ${ts}`}>{quarter}</p>
                           <span className={`text-xs ${tm}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
@@ -3322,14 +3358,52 @@ export default function ProfessorDashboard() {
               {/* Filters card */}
               <div className={`rounded-2xl p-5 mb-5 ${card}`}>
                 <p className={`text-sm font-semibold mb-4 ${tp}`}>Filter Records</p>
+
+                {/* Term dropdown */}
+                {(() => {
+                  const termOptions = groupByQuarter(consultations)
+                    .map(([label, items]) => {
+                      const dates = items.map(c => c.date).sort();
+                      return { label, dateFrom: dates[0], dateTo: dates[dates.length - 1] };
+                    });
+                  if (termOptions.length === 0) return null;
+                  return (
+                    <div className="mb-4">
+                      <label className={labelCls}>Academic Term</label>
+                      <CustomSelect
+                        value={exportTerm}
+                        onChange={v => {
+                          const selected = termOptions.find(o => o.label === v);
+                          if (selected) {
+                            setExportTerm(selected.label);
+                            setExportDateFrom(selected.dateFrom);
+                            setExportDateTo(selected.dateTo);
+                          } else {
+                            setExportTerm('');
+                            setExportDateFrom('');
+                            setExportDateTo('');
+                          }
+                        }}
+                        isDark={isDark}
+                        wrapperClassName="w-full"
+                        className="w-full px-3 py-2 text-sm"
+                        options={[
+                          { value: '', label: 'All Terms' },
+                          ...termOptions.map(o => ({ value: o.label, label: o.label })),
+                        ]}
+                      />
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className={labelCls}>Date From</label>
-                    <input type="date" value={exportDateFrom} onChange={e => setExportDateFrom(e.target.value)} className={inputCls} />
+                    <input type="date" value={exportDateFrom} onChange={e => { setExportDateFrom(e.target.value); setExportTerm(''); }} className={inputCls} />
                   </div>
                   <div>
                     <label className={labelCls}>Date To</label>
-                    <input type="date" value={exportDateTo} onChange={e => setExportDateTo(e.target.value)} className={inputCls} />
+                    <input type="date" value={exportDateTo} onChange={e => { setExportDateTo(e.target.value); setExportTerm(''); }} className={inputCls} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

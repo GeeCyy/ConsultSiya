@@ -391,6 +391,108 @@ router.delete('/calendar-overrides/:id', authenticate, authorize('admin'), async
   }
 });
 
+// ── Term Archive ──────────────────────────────────────────────────────────────
+
+// SQL fragment (aliased to c) — computes term label, using stored columns when present
+// or falling back to date-based heuristic (Mapúa trimester calendar).
+const TERM_LABEL_SQL = `COALESCE(
+    CASE WHEN c.academic_term IS NOT NULL AND c.academic_year IS NOT NULL
+      THEN c.academic_term || ' A.Y. ' || c.academic_year
+      ELSE NULL END,
+    CASE
+      WHEN EXTRACT(MONTH FROM c.date) BETWEEN 8 AND 11
+        THEN '1st Trimester A.Y. ' || EXTRACT(YEAR FROM c.date)::int || '-' || (EXTRACT(YEAR FROM c.date)::int + 1)
+      WHEN EXTRACT(MONTH FROM c.date) = 12
+        THEN '2nd Trimester A.Y. ' || EXTRACT(YEAR FROM c.date)::int || '-' || (EXTRACT(YEAR FROM c.date)::int + 1)
+      WHEN EXTRACT(MONTH FROM c.date) BETWEEN 1 AND 2
+        THEN '2nd Trimester A.Y. ' || (EXTRACT(YEAR FROM c.date)::int - 1) || '-' || EXTRACT(YEAR FROM c.date)::int
+      ELSE '3rd Trimester A.Y. ' || (EXTRACT(YEAR FROM c.date)::int - 1) || '-' || EXTRACT(YEAR FROM c.date)::int
+    END)`;
+
+// Same fragment without table alias — used in DELETE (no JOIN context)
+const TERM_LABEL_RAW = `COALESCE(
+    CASE WHEN academic_term IS NOT NULL AND academic_year IS NOT NULL
+      THEN academic_term || ' A.Y. ' || academic_year
+      ELSE NULL END,
+    CASE
+      WHEN EXTRACT(MONTH FROM date) BETWEEN 8 AND 11
+        THEN '1st Trimester A.Y. ' || EXTRACT(YEAR FROM date)::int || '-' || (EXTRACT(YEAR FROM date)::int + 1)
+      WHEN EXTRACT(MONTH FROM date) = 12
+        THEN '2nd Trimester A.Y. ' || EXTRACT(YEAR FROM date)::int || '-' || (EXTRACT(YEAR FROM date)::int + 1)
+      WHEN EXTRACT(MONTH FROM date) BETWEEN 1 AND 2
+        THEN '2nd Trimester A.Y. ' || (EXTRACT(YEAR FROM date)::int - 1) || '-' || EXTRACT(YEAR FROM date)::int
+      ELSE '3rd Trimester A.Y. ' || (EXTRACT(YEAR FROM date)::int - 1) || '-' || EXTRACT(YEAR FROM date)::int
+    END)`;
+
+// GET /api/admin/archive — list of distinct terms with consultation counts
+router.get('/archive', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ${TERM_LABEL_SQL} AS term_label,
+        COUNT(*)::int AS total,
+        MIN(c.date)::text AS earliest_date,
+        MAX(c.date)::text AS latest_date
+      FROM consultations c
+      GROUP BY term_label
+      ORDER BY MIN(c.date) DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[archive list]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/archive/:term — all consultations for a given term label
+router.get('/archive/:term', authenticate, authorize('admin'), async (req, res) => {
+  const termLabel = decodeURIComponent(req.params.term);
+  try {
+    const result = await pool.query(`
+      SELECT
+        c.id, c.date::text AS date, c.status, c.mode,
+        c.nature_of_advising, c.nature_of_advising_specify,
+        c.notes, c.is_archived,
+        s.full_name AS student_name, s.student_number, s.program,
+        p.full_name AS professor_name, p.department,
+        sch.day, sch.time_start, sch.time_end,
+        cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
+        ${TERM_LABEL_SQL} AS term_label
+      FROM consultations c
+      JOIN students s ON c.student_id = s.id
+      JOIN professors p ON c.professor_id = p.id
+      JOIN schedules sch ON c.schedule_id = sch.id
+      LEFT JOIN consultation_details cd ON cd.consultation_id = c.id
+      WHERE ${TERM_LABEL_SQL} = $1
+      ORDER BY c.date ASC, sch.time_start ASC
+    `, [termLabel]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[archive term]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/archive/:term — permanently delete all consultations for a term (admin only)
+// Body must include { confirmed: true } to prevent accidental calls.
+router.delete('/archive/:term', authenticate, authorize('admin'), async (req, res) => {
+  const termLabel = decodeURIComponent(req.params.term);
+  const { confirmed } = req.body;
+  if (!confirmed) {
+    return res.status(400).json({ error: 'Must include confirmed: true in the request body to delete an archive.' });
+  }
+  try {
+    const result = await pool.query(
+      `DELETE FROM consultations WHERE ${TERM_LABEL_RAW} = $1`,
+      [termLabel]
+    );
+    res.json({ message: `Deleted ${result.rowCount} consultation record${result.rowCount !== 1 ? 's' : ''} for "${termLabel}".`, deleted: result.rowCount });
+  } catch (err) {
+    console.error('[archive delete]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/fix-proof/:consultationId
 // Inspects and optionally re-uploads a local proof file to Cloudinary.
 // Pass ?dry=true to only inspect without uploading.
