@@ -126,6 +126,11 @@ UPDATE schedules SET mode = 'OL' WHERE location = 'Online Only' AND mode IS NULL
 UPDATE schedules SET mode = 'FF' WHERE mode IS NULL;
 UPDATE schedules SET location = NULL WHERE location = 'Online Only';
 
+-- Term archive: track academic term context and soft-archive flag per consultation
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS academic_term TEXT;
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS academic_year TEXT;
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

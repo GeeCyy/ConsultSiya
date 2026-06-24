@@ -118,11 +118,13 @@ const addExcelSheet = (workbook, professor, rows) => {
 
 // ── PDF HTML template (FM-AS-19-00 exact format) ─────────────────────────────
 
-function getCurrentTerm() {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year  = now.getFullYear();
-  // Mapúa QTR boundaries (approximate):
+// Derive the Mapúa QTR term from a specific date (defaults to today).
+// Using the earliest consultation date keeps historical exports accurate.
+function getTermForDate(date) {
+  const d     = date instanceof Date ? date : new Date(date);
+  const month = d.getMonth() + 1;
+  const year  = d.getFullYear();
+  // Mapúa QTR boundaries:
   // 1st QTR: Aug–Oct   AY year/(year+1)
   // 2nd QTR: Nov–Jan   AY year/(year+1) or (year-1)/year
   // 3rd QTR: Feb–Apr   AY (year-1)/year
@@ -145,7 +147,11 @@ function formatAdvisingDate(dateStr) {
 }
 
 function buildReportHtml(sections) {
-  const { qtr, ay } = getCurrentTerm();
+  // Use the earliest consultation date across all sections to determine the correct term.
+  // Falls back to today only when there are no rows (empty export).
+  const allDates = sections.flatMap(s => s.rows.map(r => r.date)).filter(Boolean);
+  const refDate  = allDates.length > 0 ? allDates.sort()[0] : new Date();
+  const { qtr, ay } = getTermForDate(refDate);
   const termLabel   = `${ordinal(qtr.replace(/\D/g, ''))} QTR  Term, AY${ay}`;
   const baseUrl     = process.env.BASE_URL || 'http://localhost:5001';
   const logoTag     = MAPUA_LOGO_B64

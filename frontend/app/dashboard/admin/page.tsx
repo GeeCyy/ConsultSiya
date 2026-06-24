@@ -231,7 +231,36 @@ function fmtDateTime(isoStr: string): string {
   return `${date} · ${time}`;
 }
 
-type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar';
+type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar' | 'archive';
+
+type ArchiveTerm = {
+  term_label: string;
+  total: number;
+  earliest_date: string;
+  latest_date: string;
+};
+
+type ArchiveConsultation = {
+  id: number;
+  date: string;
+  status: string;
+  mode: string | null;
+  nature_of_advising: string | null;
+  nature_of_advising_specify: string | null;
+  student_name: string;
+  student_number: string;
+  program: string | null;
+  professor_name: string;
+  department: string | null;
+  day: string | null;
+  time_start: string | null;
+  time_end: string | null;
+  action_taken: string | null;
+  referral: string | null;
+  referral_specify: string | null;
+  remarks: string | null;
+  term_label: string;
+};
 type ReportPeriod = '' | 'week' | 'year' | 'semester';
 
 export default function AdminDashboard() {
@@ -315,6 +344,14 @@ export default function AdminDashboard() {
   const [annFormOpen, setAnnFormOpen] = useState(false);
   const [annDeleteId, setAnnDeleteId] = useState<number | null>(null);
 
+  // Term Archive
+  const [archiveTerms, setArchiveTerms] = useState<ArchiveTerm[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveSelectedTerm, setArchiveSelectedTerm] = useState<string | null>(null);
+  const [archiveRecords, setArchiveRecords] = useState<ArchiveConsultation[]>([]);
+  const [archiveRecordsLoading, setArchiveRecordsLoading] = useState(false);
+  const [archiveSearch, setArchiveSearch] = useState('');
+
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   // ── Term configuration ────────────────────────────────────────────────────────
@@ -361,7 +398,7 @@ export default function AdminDashboard() {
     if (!token) { router.push('/login'); return; }
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab') as Tab;
-    const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar'];
+    const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar', 'archive'];
     if (t && valid.includes(t)) setTab(t);
     fetchAll();
   }, []);
@@ -415,6 +452,69 @@ export default function AdminDashboard() {
     setLbStudents(Array.isArray(lbS) ? lbS.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
     setLbTopics(Array.isArray(lbT) ? lbT : []);
     setLoading(false);
+  };
+
+  const fetchArchiveTerms = async () => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!t) return;
+    setArchiveLoading(true);
+    try {
+      const data = await api.get('/api/admin/archive', t);
+      setArchiveTerms(Array.isArray(data) ? data : []);
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
+  const fetchArchiveRecords = async (termLabel: string) => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!t) return;
+    setArchiveRecordsLoading(true);
+    try {
+      const data = await api.get(`/api/admin/archive/${encodeURIComponent(termLabel)}`, t);
+      setArchiveRecords(Array.isArray(data) ? data : []);
+    } finally {
+      setArchiveRecordsLoading(false);
+    }
+  };
+
+  const handleArchiveDelete = (termLabel: string, total: number) => {
+    openConfirmModal(
+      'Delete Archive',
+      `Permanently delete all ${total} consultation record${total !== 1 ? 's' : ''} for "${termLabel}"? This action cannot be undone.`,
+      async () => {
+        const t = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        if (!t) throw new Error('Not authenticated.');
+        const res = await fetch(`${API_URL}/api/admin/archive/${encodeURIComponent(termLabel)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ confirmed: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Delete failed.');
+        setArchiveTerms(prev => prev.filter(x => x.term_label !== termLabel));
+        if (archiveSelectedTerm === termLabel) {
+          setArchiveSelectedTerm(null);
+          setArchiveRecords([]);
+        }
+      }
+    );
+  };
+
+  const handleArchiveExport = async (termLabel: string, format: 'pdf' | 'excel') => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!t) return;
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+    const endpoint = format === 'pdf' ? '/api/reports/pdf' : '/api/reports/excel';
+    // Find date range for this term from loaded archive terms
+    const termInfo = archiveTerms.find(x => x.term_label === termLabel);
+    const params = new URLSearchParams({ professor_id: 'all', status: 'all' });
+    if (termInfo) {
+      params.set('date_from', termInfo.earliest_date);
+      params.set('date_to',   termInfo.latest_date);
+    }
+    const key = `archive-export-${termLabel}`;
+    await handleDownload(`${endpoint}?${params.toString()}`, `archive-${termLabel.replace(/[^a-z0-9]/gi, '-')}.${ext}`, key);
   };
 
   const refreshCalOverrides = async () => {
@@ -833,6 +933,7 @@ export default function AdminDashboard() {
     { key: 'schedules',     label: 'Schedules' },
     { key: 'reports',       label: 'Reports' },
     { key: 'history',       label: 'History' },
+    { key: 'archive',       label: 'Term Archive' },
     { key: 'calendar',      label: 'Calendar' },
   ];
 
@@ -1586,6 +1687,223 @@ export default function AdminDashboard() {
                     </div>
                   );
                 })()}
+              </>
+            )}
+
+            {/* ── Term Archive ── */}
+            {tab === 'archive' && (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-7">
+                  <div>
+                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Term Archive</h1>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Long-term consultation records organized by academic term
+                    </p>
+                  </div>
+                  {!archiveSelectedTerm && (
+                    <button
+                      onClick={fetchArchiveTerms}
+                      disabled={archiveLoading}
+                      className={`h-8 px-4 rounded-lg text-xs font-semibold transition-all ${
+                        archiveLoading ? 'opacity-50 cursor-not-allowed' : ''
+                      } ${isDark ? 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      {archiveLoading ? 'Loading…' : 'Refresh'}
+                    </button>
+                  )}
+                  {archiveSelectedTerm && (
+                    <button
+                      onClick={() => { setArchiveSelectedTerm(null); setArchiveRecords([]); setArchiveSearch(''); }}
+                      className={`h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 ${isDark ? 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                      All Terms
+                    </button>
+                  )}
+                </div>
+
+                {/* Load prompt on first visit */}
+                {archiveTerms.length === 0 && !archiveLoading && !archiveSelectedTerm && (
+                  <div className={`flex flex-col items-center justify-center py-20 rounded-2xl border ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white'}`}>
+                    <svg className="w-10 h-10 mb-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0v10l-8 4m0-10L4 7m8 4v10" />
+                    </svg>
+                    <p className={`font-medium text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Term archive not loaded</p>
+                    <p className={`text-xs mt-1 mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Click below to load all archived terms</p>
+                    <button
+                      onClick={fetchArchiveTerms}
+                      className="px-5 py-2 rounded-lg text-sm font-semibold bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] text-white hover:scale-[1.02] transition-transform"
+                    >
+                      Load Archive
+                    </button>
+                  </div>
+                )}
+
+                {archiveLoading && (
+                  <div className="flex items-center justify-center py-20">
+                    <div className="w-7 h-7 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+
+                {/* Term cards list */}
+                {!archiveLoading && !archiveSelectedTerm && archiveTerms.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {archiveTerms.map(term => (
+                      <div
+                        key={term.term_label}
+                        className={`rounded-2xl p-5 border flex flex-col gap-4 ${isDark ? 'bg-[#161616] border-white/5' : 'bg-white border-gray-200'}`}
+                      >
+                        <div>
+                          <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Academic Term</p>
+                          <p className={`text-sm font-bold leading-snug ${isDark ? 'text-white' : 'text-gray-900'}`}>{term.term_label}</p>
+                          <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {term.total} record{term.total !== 1 ? 's' : ''} &middot; {
+                              new Date(term.earliest_date).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })
+                            } – {
+                              new Date(term.latest_date).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })
+                            }
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-auto">
+                          <button
+                            onClick={() => { setArchiveSelectedTerm(term.term_label); fetchArchiveRecords(term.term_label); }}
+                            className={`flex-1 min-w-[80px] py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${isDark ? 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10' : 'bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                          >
+                            View Records
+                          </button>
+                          <button
+                            onClick={() => handleArchiveExport(term.term_label, 'excel')}
+                            disabled={exporting === `archive-export-${term.term_label}`}
+                            className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                              exporting === `archive-export-${term.term_label}` ? 'opacity-50 cursor-not-allowed' : ''
+                            } ${isDark ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}
+                          >
+                            Excel
+                          </button>
+                          <button
+                            onClick={() => handleArchiveExport(term.term_label, 'pdf')}
+                            disabled={exporting === `archive-export-${term.term_label}`}
+                            className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                              exporting === `archive-export-${term.term_label}` ? 'opacity-50 cursor-not-allowed' : ''
+                            } ${isDark ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20' : 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100'}`}
+                          >
+                            PDF
+                          </button>
+                          <button
+                            onClick={() => handleArchiveDelete(term.term_label, term.total)}
+                            className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Records view for selected term */}
+                {archiveSelectedTerm && (
+                  <>
+                    <div className={`flex items-center justify-between mb-4 p-4 rounded-xl border ${isDark ? 'bg-[#161616] border-white/5' : 'bg-white border-gray-200'}`}>
+                      <div>
+                        <p className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Viewing</p>
+                        <p className={`text-sm font-bold mt-0.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>{archiveSelectedTerm}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleArchiveExport(archiveSelectedTerm, 'excel')}
+                          className={`h-8 px-3 rounded-lg text-xs font-semibold ${isDark ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}
+                        >
+                          Export Excel
+                        </button>
+                        <button
+                          onClick={() => handleArchiveExport(archiveSelectedTerm, 'pdf')}
+                          className={`h-8 px-3 rounded-lg text-xs font-semibold ${isDark ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20' : 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100'}`}
+                        >
+                          Export PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            const t = archiveTerms.find(x => x.term_label === archiveSelectedTerm);
+                            if (t) handleArchiveDelete(t.term_label, t.total);
+                          }}
+                          className="h-8 px-3 rounded-lg text-xs font-semibold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
+                        >
+                          Delete Archive
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative mb-4">
+                      <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" /></svg>
+                      <input
+                        type="text"
+                        placeholder="Search student or adviser…"
+                        value={archiveSearch}
+                        onChange={e => setArchiveSearch(e.target.value)}
+                        className={`w-full pl-9 pr-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-[#0EA5E9]/50 ${isDark ? 'bg-[#161616] text-white border-white/5 placeholder-gray-600' : 'bg-white text-gray-900 border-gray-200 placeholder-gray-400'}`}
+                      />
+                    </div>
+
+                    {archiveRecordsLoading ? (
+                      <div className="flex items-center justify-center py-16">
+                        <div className="w-7 h-7 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : (() => {
+                      const q = archiveSearch.toLowerCase();
+                      const filtered = archiveRecords.filter(c =>
+                        !q ||
+                        c.student_name?.toLowerCase().includes(q) ||
+                        c.professor_name?.toLowerCase().includes(q) ||
+                        c.student_number?.toLowerCase().includes(q)
+                      );
+                      if (filtered.length === 0) {
+                        return (
+                          <div className={`flex flex-col items-center justify-center py-16 rounded-2xl border ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white'}`}>
+                            <p className={`font-medium text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No records found</p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className={`rounded-2xl border overflow-hidden ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white'}`}>
+                          <div className="overflow-x-auto">
+                            <table className="w-full table-fixed min-w-[720px]">
+                              <thead>
+                                <tr className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                                  <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[100px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Date</th>
+                                  <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[140px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Student</th>
+                                  <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[140px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Adviser</th>
+                                  <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Purpose</th>
+                                  <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[140px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Action Taken</th>
+                                  <th className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 w-[120px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
+                                {filtered.map(c => (
+                                  <tr key={c.id} className={`transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50'}`}>
+                                    <td className={`px-4 py-3 text-xs font-semibold whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                      {new Date(c.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </td>
+                                    <td className={`px-4 py-3 text-xs font-semibold truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{c.student_name}</td>
+                                    <td className={`px-4 py-3 text-xs font-semibold truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{c.professor_name}</td>
+                                    <td className={`px-4 py-3 text-xs font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      <span className="line-clamp-2">{natureLabel({ nature_of_advising: c.nature_of_advising ?? '', nature_of_advising_specify: c.nature_of_advising_specify })}</span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <ActionBadge action_taken={c.action_taken} referral={c.referral} referral_specify={c.referral_specify} />
+                                    </td>
+                                    <td className="px-4 py-3"><StatusBadge status={c.status} isDark={isDark} /></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
               </>
             )}
 
