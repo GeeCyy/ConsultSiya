@@ -40,6 +40,7 @@ export interface LeftSidebarProps {
   pendingConsultations?: PendingConsult[];
   announcements?: AnnItem[];
   storageKey?: string;
+  hideDesktopSidebar?: boolean;
 }
 
 function relTime(iso: string): string {
@@ -150,6 +151,7 @@ export default function LeftSidebar({
   pendingConsultations: pendingProp,
   announcements: annProp,
   storageKey: storageKeyProp,
+  hideDesktopSidebar,
 }: LeftSidebarProps) {
   const router = useRouter();
   const pendingConsultations = pendingProp ?? [];
@@ -416,7 +418,7 @@ export default function LeftSidebar({
   return (
     <>
       {/* ── Desktop sidebar (lg+) ── */}
-      <aside className="hidden lg:flex flex-col w-60 flex-shrink-0 h-screen sticky top-0 overflow-hidden">
+      <aside className={hideDesktopSidebar ? 'hidden' : 'hidden lg:flex flex-col w-60 flex-shrink-0 h-screen sticky top-0 overflow-hidden'}>
         <SidebarContent />
       </aside>
 
