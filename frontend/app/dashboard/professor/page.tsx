@@ -457,11 +457,12 @@ function ProfCalendar({
   }, []);
 
   useEffect(() => {
-    if (selected) {
-      requestAnimationFrame(() =>
-        calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      );
-    }
+    if (!selected) return;
+    setTimeout(() => {
+      if (window.innerWidth < 1024) {
+        detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 60);
   }, [selected]);
 
   const storageKey = `consulta_notes_prof_${profKey}`;
@@ -606,7 +607,7 @@ function ProfCalendar({
 
           <div className={`grid grid-cols-7 divide-x divide-y border-b ${isDark ? 'divide-white/[0.08] border-white/[0.08]' : 'divide-gray-300 border-gray-300'}`}>
             {Array.from({ length: firstDow }, (_, i) => (
-              <div key={`e${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
+              <div key={`e${i}`} className={`min-h-[60px] sm:min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
             ))}
             {Array.from({ length: daysInMonth }, (_, i) => {
               const day = i + 1;
@@ -623,7 +624,7 @@ function ProfCalendar({
 
               return (
                 <button key={ds} onClick={() => setSelected(isSel ? null : ds)}
-                  className={`min-h-[88px] p-2 text-left flex flex-col transition-all duration-150 focus:outline-none group ${
+                  className={`min-h-[60px] sm:min-h-[88px] p-1.5 sm:p-2 text-left flex flex-col transition-all duration-150 focus:outline-none group ${
                     isBlocked
                       ? isDark ? 'bg-red-950/30 hover:bg-red-950/40' : 'bg-red-50/70 hover:bg-red-50'
                       : isSel
@@ -632,7 +633,7 @@ function ProfCalendar({
                       ? isDark ? 'bg-sky-500/[0.07] hover:bg-sky-500/[0.12]' : 'bg-sky-50/60 hover:bg-sky-50/90'
                       : isDark ? 'hover:bg-white/[0.025]' : 'hover:bg-blue-50/30'
                   }`}>
-                  <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold transition-all ${
+                  <div className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full text-xs sm:text-sm font-semibold transition-all ${
                     isT
                       ? 'bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-lg shadow-sky-500/40'
                       : isBlocked
@@ -643,7 +644,7 @@ function ProfCalendar({
                   }`}>{day}</div>
 
                   {(evLabel || (isBlocked && !evLabel)) && (
-                    <p className={`text-[9px] font-semibold leading-tight truncate w-full mt-1 ${
+                    <p className={`hidden sm:block text-[9px] font-semibold leading-tight truncate w-full mt-1 ${
                       isBlocked ? isDark ? 'text-red-400' : 'text-red-500'
                       : evColor === 'blue'   ? 'text-blue-400'
                       : evColor === 'green'  ? 'text-emerald-400'
@@ -664,12 +665,12 @@ function ProfCalendar({
               );
             })}
             {Array.from({ length: (7 - ((firstDow + daysInMonth) % 7)) % 7 }, (_, i) => (
-              <div key={`t${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
+              <div key={`t${i}`} className={`min-h-[60px] sm:min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
             ))}
           </div>
 
           {/* Legend — acts as the visual border between calendar and detail panel */}
-          <div className={`flex items-center gap-4 px-4 py-2.5 border-t text-xs font-medium ${isDark ? 'border-white/[0.08] text-gray-500 bg-[#17181a]' : 'border-gray-200 text-gray-400 bg-gray-50/70'}`}>
+          <div className={`flex items-center gap-x-4 gap-y-1.5 flex-wrap px-4 py-2.5 border-t text-xs font-medium ${isDark ? 'border-white/[0.08] text-gray-500 bg-[#17181a]' : 'border-gray-200 text-gray-400 bg-gray-50/70'}`}>
             {([
               { label: 'Pending',   cls: 'bg-amber-400',   shadow: 'shadow-amber-400/60'   },
               { label: 'Confirmed', cls: 'bg-blue-400',    shadow: 'shadow-blue-400/60'    },
@@ -2168,7 +2169,7 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
-      <main ref={mainScrollRef} onScroll={e => setNavScrolled((e.currentTarget as HTMLElement).scrollTop > 8)} className="flex-1 overflow-y-auto flex flex-col" style={{ paddingTop: '64px', ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
+      <main ref={mainScrollRef} onScroll={e => setNavScrolled((e.currentTarget as HTMLElement).scrollTop > 8)} className="flex-1 overflow-y-auto flex flex-col pt-14 lg:pt-16" style={{ ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
@@ -2213,7 +2214,7 @@ export default function ProfessorDashboard() {
             const initials = profile.full_name.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
 
             return (
-            <div className="px-6 py-6 flex flex-col gap-6 flex-1">
+            <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 flex flex-col gap-5 sm:gap-6 flex-1">
 
               {/* ── Welcome header + stat card ── */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -2243,8 +2244,8 @@ export default function ProfessorDashboard() {
 
                 {/* Right: stats card */}
                 <div
-                  className={`flex items-center gap-5 px-7 py-3.5 flex-shrink-0 rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
-                  style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+                  className={`grid grid-cols-2 sm:flex sm:items-center gap-x-5 gap-y-3 sm:gap-5 px-5 sm:px-7 py-4 sm:py-3.5 flex-shrink-0 rounded-2xl sm:rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
+                  style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
                 >
                   {([
                     { value: tTotal,        label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
@@ -2252,7 +2253,7 @@ export default function ProfessorDashboard() {
                     { value: tCompleted,    label: 'Completed',      numColor: '#059669', darkNumColor: '#6EE7B7' },
                     { value: totalStudents, label: 'Students',       numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
                   ] as const).map((s, i, arr) => (
-                    <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `pr-5 border-r ${isDark ? 'border-white/20' : 'border-gray-400'}` : ''}`}>
+                    <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `sm:pr-5 sm:border-r ${isDark ? 'sm:border-white/20' : 'sm:border-gray-400'}` : ''}`}>
                       <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
                       <span className={`text-[11px] font-medium mt-1 ${ts}`}>{s.label}</span>
                     </div>
@@ -2364,7 +2365,7 @@ export default function ProfessorDashboard() {
                       {chartBars.map(b => (
                         <div
                           key={b.label}
-                          className={`flex-1 flex flex-col items-center justify-between py-5 px-2 rounded-xl transition-colors ${
+                          className={`flex-1 flex flex-col items-center justify-between py-3 sm:py-5 px-1 sm:px-2 rounded-xl transition-colors ${
                             b.isToday
                               ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
                               : b.total > 0
@@ -2372,14 +2373,14 @@ export default function ProfessorDashboard() {
                                 : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
                           }`}
                         >
-                          <span className={`text-xs font-semibold uppercase tracking-widest leading-none ${
+                          <span className={`text-[9px] sm:text-xs font-semibold uppercase tracking-wider leading-none ${
                             b.isToday ? 'text-sky-100' : isDark ? (b.total > 0 ? 'text-gray-300' : 'text-gray-400') : (b.total > 0 ? 'text-gray-500' : 'text-gray-400')
                           }`}>{b.label}</span>
-                          <span className={`text-4xl font-bold leading-none my-3 ${
+                          <span className={`text-2xl sm:text-4xl font-bold leading-none my-2 sm:my-3 ${
                             b.isToday ? 'text-white' : b.total > 0 ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-gray-500' : 'text-gray-300')
                           }`}>{b.total > 0 ? b.total : '–'}</span>
                           {/* Student avatars */}
-                          <div className="flex items-center justify-center h-8">
+                          <div className="hidden sm:flex items-center justify-center h-8">
                             {b.students.length > 0 ? (
                               <div className="flex -space-x-1.5">
                                 {b.students.map((s, si) => (
@@ -2596,7 +2597,7 @@ export default function ProfessorDashboard() {
           })()
 
         : tab === 'consultations' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
               <p className="text-gray-600 text-sm mt-1">Review and manage student consultation requests</p>
@@ -3001,7 +3002,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'calendar' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
 
             {/* ── Full month calendar ── */}
             <div className="mb-6 sm:mb-8">
@@ -3105,7 +3106,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'schedules' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Manage Schedules</h1>
               <p className="text-gray-600 text-sm mt-1">Add or edit your available consultation time slots</p>
@@ -3379,7 +3380,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'history' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
             {/* Header + search/filter */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5 sm:mb-6">
               <div className="flex-1">
@@ -3468,8 +3469,9 @@ export default function ProfessorDashboard() {
                           </span>
                         </div>
 
-                        <div className={`overflow-hidden ${card}`} style={isDark ? undefined : glassStyle}>
-                          <table className="w-full table-fixed">
+                        <div className={`rounded-2xl overflow-hidden ${card}`} style={isDark ? undefined : glassStyle}>
+                          <div className="overflow-x-auto">
+                          <table className="w-full table-fixed" style={{ minWidth: '560px' }}>
                             <colgroup>
                               <col className="w-[96px]" />
                               <col className="w-[22%]" />
@@ -3611,6 +3613,7 @@ export default function ProfessorDashboard() {
                                 })}
                               </tbody>
                             </table>
+                          </div>{/* /overflow-x-auto */}
                         </div>
                       </div>
                     );
@@ -3621,7 +3624,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'profile' ? (
-          <div className="px-3 sm:px-8 py-6 sm:py-10">
+          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
             <div>
 
               {/* Avatar hero */}
@@ -3751,7 +3754,7 @@ export default function ProfessorDashboard() {
           const inputCls = `w-full rounded-xl px-3 py-2 text-sm border ${isDark ? 'bg-[#2b2d31] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-800'} focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/40`;
           const labelCls = `block text-xs font-semibold uppercase tracking-wider mb-1.5 ${tm}`;
           return (
-            <div className="min-h-[75vh] flex items-center justify-center px-3 sm:px-8 py-8">
+            <div className="min-h-[75vh] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8">
               <div className="w-full max-w-xl">
               <div className="mb-6 text-center">
                 <h1 className={`text-2xl font-bold ${tp}`}>Export Report</h1>
