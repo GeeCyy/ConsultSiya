@@ -164,7 +164,8 @@ STRICT RULES:
 - Never make up features or pages that don't exist in ConsultSiya.
 - Never answer general knowledge questions, math, coding help, or anything completely outside academic consultation context.
 - For navigation, use only the "action" field — never embed links, URLs, route paths, or tab names with slashes inside the "message" text.
-- When you have REAL-TIME DATA with today's consultations, your "message" MUST include the full numbered list — never just say "Here are your consultations:" and stop. Write every entry with \\n between lines. Example format: "Here's what's on your plate today:\\n\\n1. 08:00 — Juan dela Cruz | Confirmed | Online\\n   Concern: Thesis concerns\\n\\n2. 10:00 — Ana Reyes | Pending | F2F\\n   Concern: OJT matters\\n\\nHeads up on any pending ones!"
+- ANTI-HALLUCINATION RULE: When REAL-TIME DATA is injected at the end of this prompt, you MUST only report information that appears verbatim in that data section — student names, student numbers, dates, statuses, and concerns. NEVER invent, generate, or guess names or booking records. If the real-time data is empty or says "none", explicitly say there are no results. This rule overrides any tendency to fill in helpful-sounding examples.
+- When you have REAL-TIME DATA with today's consultations, your "message" MUST include the full numbered list — never just say "Here are your consultations:" and stop. Write every entry with \\n between lines. Example format: "Here's what's on your plate today:\\n\\n1. 08:00 — [Student A Name] | Confirmed | Online\\n   Concern: Thesis concerns\\n\\n2. 10:00 — [Student B Name] | Pending | F2F\\n   Concern: OJT matters\\n\\nHeads up on any pending ones!"
 - When you have REAL-TIME DATA with weekly counts, your "message" MUST include the full breakdown — write out every status with its count, then add an encouraging remark. Example: "Here's your week at a glance:\\n\\n• 3 Pending — waiting on your confirmation\\n• 2 Confirmed — upcoming sessions\\n• 5 Completed — great work!\\n• 1 Cancelled\\n• 0 Missed\\n\\nLooks like a busy week — stay on top of those pending requests!"
 - Write every response with warmth, personality, and helpful context. Avoid robotic one-liners like "You can do X by tapping the button below." Lead with useful info, then invite them to tap. Example: instead of "You can export your report by tapping the button below", write "Your consultation records are ready to export as a PDF or Excel file — perfect for keeping your advising records up to date. Tap below to head to the Export page!"
 - Never end a response with just "tap the button below" as the entire message — always give helpful context first.
@@ -436,6 +437,11 @@ router.post(
       ];
       const isSummaryQuestion = SUMMARY_KEYWORDS.some(k => latestMsg.includes(k));
       const isTodayQuestion   = TODAY_KEYWORDS.some(k => latestMsg.includes(k));
+      // Detects "who booked", "which students", "list students", etc. — needs individual records, not just counts
+      const isAskingStudentList = (
+        latestMsg.includes('who') ||
+        (latestMsg.includes('student') && (latestMsg.includes('book') || latestMsg.includes('consult') || latestMsg.includes('appoint')))
+      );
 
       // "Who are the available professors for today/this week/this month?"
       const isProfAvailQuestion = (
@@ -535,25 +541,54 @@ router.post(
       }
 
       if (isSummaryQuestion && !isTodayQuestion && req.user.role === 'professor') {
-        const summary = await pool.query(
-          `SELECT
-            COUNT(*) FILTER (WHERE status = 'pending')   AS pending,
-            COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
-            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-            COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
-            COUNT(*) FILTER (WHERE status = 'missed')    AS missed,
-            COUNT(*) FILTER (WHERE
-              c.date >= date_trunc('week', CURRENT_DATE)
-              AND c.date < date_trunc('week', CURRENT_DATE) + INTERVAL '7 days'
-            ) AS this_week,
-            COUNT(DISTINCT c.student_id) AS unique_students
-           FROM consultations c
-           JOIN professors p ON c.professor_id = p.id
-           WHERE p.user_id = $1`,
-          [req.user.id]
-        );
-        const r = summary.rows[0];
-        dbContext = `\n\nREAL-TIME CONSULTATION DATA (speak directly to the professor using "you"):
+        if (isAskingStudentList) {
+          // Professor asked "who booked this week?" — fetch individual student records
+          const rows = await pool.query(
+            `SELECT c.date::text, c.time::text, c.status, c.mode,
+                    c.nature_of_advising, c.nature_of_advising_specify,
+                    s.full_name AS student_name, s.student_number
+             FROM consultations c
+             JOIN students   s ON c.student_id   = s.id
+             JOIN professors p ON c.professor_id = p.id
+             WHERE p.user_id = $1
+               AND c.date >= date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+               AND c.date <  (date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila') + INTERVAL '7 days')::date
+             ORDER BY c.date, c.time NULLS LAST`,
+            [req.user.id]
+          );
+          if (rows.rows.length === 0) {
+            dbContext = '\n\nREAL-TIME DATA: No students have booked consultations with you this week (Monday–Sunday). Do NOT invent or guess any student names.';
+          } else {
+            const lines = rows.rows.map((r, idx) => {
+              const time    = r.time ? r.time.slice(0, 5) : 'TBD';
+              const mode    = r.mode === 'BOTH' ? 'F2F & Online' : r.mode === 'F2F' ? 'Face-to-Face' : 'Online';
+              const concern = cleanConcern(r.nature_of_advising_specify || r.nature_of_advising);
+              const status  = r.status.charAt(0).toUpperCase() + r.status.slice(1);
+              return `${idx + 1}. ${r.date} ${time} — ${r.student_name} (${r.student_number || 'N/A'}) | ${status} | ${mode} | Concern: ${concern}`;
+            });
+            dbContext = `\n\nREAL-TIME DATA — ONLY use the names and details listed here. NEVER invent or add any name not present in this list:\nThis week's student consultations (${rows.rows.length} total):\n${lines.join('\n')}`;
+          }
+        } else {
+          // General summary — counts only, no individual names needed
+          const summary = await pool.query(
+            `SELECT
+              COUNT(*) FILTER (WHERE status = 'pending')   AS pending,
+              COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
+              COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+              COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+              COUNT(*) FILTER (WHERE status = 'missed')    AS missed,
+              COUNT(*) FILTER (WHERE
+                c.date >= date_trunc('week', CURRENT_DATE)
+                AND c.date < date_trunc('week', CURRENT_DATE) + INTERVAL '7 days'
+              ) AS this_week,
+              COUNT(DISTINCT c.student_id) AS unique_students
+             FROM consultations c
+             JOIN professors p ON c.professor_id = p.id
+             WHERE p.user_id = $1`,
+            [req.user.id]
+          );
+          const r = summary.rows[0];
+          dbContext = `\n\nREAL-TIME CONSULTATION DATA (speak directly to the professor using "you"):
 - Consultations this week: ${r.this_week}
 - Pending (need your confirmation): ${r.pending}
 - Confirmed (upcoming): ${r.confirmed}
@@ -561,6 +596,7 @@ router.post(
 - Cancelled: ${r.cancelled}
 - Missed: ${r.missed}
 - Total unique students advised: ${r.unique_students}`;
+        }
       }
 
       const roleInstruction = req.user.role === 'professor'
