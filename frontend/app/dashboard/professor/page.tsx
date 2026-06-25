@@ -7,7 +7,6 @@ import * as XLSX from 'xlsx';
 import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar from '@/components/LeftSidebar';
-import MatrixCalendar from '@/components/MatrixCalendar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 import CustomSelect from '@/components/CustomSelect';
 
@@ -533,9 +532,24 @@ function ProfCalendar({
     green: 'bg-emerald-400', yellow: 'bg-yellow-400', purple: 'bg-purple-400',
   };
 
+  const calGlassStyle = isDark ? {
+    background: 'rgba(22,23,26,0.96)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    borderRadius: '16px',
+    border: '1px solid rgba(255,255,255,0.07)',
+  } as const : {
+    background: 'rgba(255, 255, 255, 0.82)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
+    borderRadius: '16px',
+    boxShadow: '0 8px 32px rgba(99, 102, 241, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05)',
+  } as const;
+
   const cardCls = isDark
     ? 'bg-[#1e1f22] border-white/[0.06] shadow-[0_24px_80px_rgba(0,0,0,0.90),0_8px_32px_rgba(0,0,0,0.70),0_2px_8px_rgba(0,0,0,0.50)]'
-    : 'bg-white border-gray-200/80 shadow-[0_24px_80px_rgba(0,0,0,0.22),0_8px_32px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.08)]';
+    : '';
   const tp = isDark ? 'text-white'    : 'text-gray-900';
   const tm = isDark ? 'text-gray-400' : 'text-gray-500';
 
@@ -547,7 +561,7 @@ function ProfCalendar({
   const selDateObj      = selected ? new Date(selected + 'T12:00:00') : null;
 
   return (
-    <div ref={calendarRef} className={`rounded-2xl border overflow-hidden ${cardCls}`}>
+    <div ref={calendarRef} className={`rounded-2xl overflow-hidden ${isDark ? 'border' : ''} ${cardCls}`} style={calGlassStyle}>
 
       {/* ── Header ── */}
       <div className={`flex items-center justify-between px-5 py-3.5 border-b
@@ -567,7 +581,7 @@ function ProfCalendar({
           }`}>Today</button>
         </div>
         <div className="flex items-center gap-4">
-          <div className={`hidden md:flex items-center gap-3 text-[10px] font-medium ${tm}`}>
+          <div className={`hidden md:flex items-center gap-3.5 text-xs font-medium ${tm}`}>
             {([
               { label: 'Pending',   cls: 'bg-amber-400',   shadow: 'shadow-amber-400/60'   },
               { label: 'Confirmed', cls: 'bg-blue-400',    shadow: 'shadow-blue-400/60'    },
@@ -577,7 +591,7 @@ function ProfCalendar({
               { label: 'Note',      cls: 'bg-violet-400',  shadow: 'shadow-violet-400/60'  },
             ] as const).map(l => (
               <span key={l.label} className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full shadow-sm ${l.cls} ${l.shadow}`} />
+                <span className={`w-2.5 h-2.5 rounded-full shadow-sm ${l.cls} ${l.shadow}`} />
                 {l.label}
               </span>
             ))}
@@ -835,6 +849,12 @@ export default function ProfessorDashboard() {
   const [loading, setLoading] = useState(true);
   const [authReady, setAuthReady] = useState(false);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const [topNavNotifOpen, setTopNavNotifOpen] = useState(false);
+  const [topNavProfileOpen, setTopNavProfileOpen] = useState(false);
+  const topNavNotifRef        = useRef<HTMLDivElement>(null);
+  const topNavNotifPanelRef   = useRef<HTMLDivElement>(null);
+  const topNavProfileRef      = useRef<HTMLDivElement>(null);
+  const topNavProfilePanelRef = useRef<HTMLDivElement>(null);
 
   const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
 
@@ -866,7 +886,7 @@ export default function ProfessorDashboard() {
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
   const [newSchedDate, setNewSchedDate] = useState('');
-  const [newSchedMode, setNewSchedMode] = useState<'F2F' | 'Online' | 'Both'>('F2F');
+  const [newSchedMode, setNewSchedMode] = useState<'F2F' | 'Online'>('F2F');
   const [newSchedAnnouncement, setNewSchedAnnouncement] = useState('');
   const [newSchedMeetingLink, setNewSchedMeetingLink] = useState('');
   const [schedError, setSchedError] = useState('');
@@ -877,7 +897,7 @@ export default function ProfessorDashboard() {
   const [editingScheduleSlot, setEditingScheduleSlot] = useState<Schedule | null>(null);
   const [editSched, setEditSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
   const [editSchedDate, setEditSchedDate] = useState('');
-  const [editSchedMode, setEditSchedMode] = useState<'F2F' | 'Online' | 'Both'>('F2F');
+  const [editSchedMode, setEditSchedMode] = useState<'F2F' | 'Online'>('F2F');
   const [editSchedAnnouncement, setEditSchedAnnouncement] = useState('');
   const [editSchedMeetingLink, setEditSchedMeetingLink] = useState('');
   const [editSchedError, setEditSchedError] = useState('');
@@ -1003,6 +1023,30 @@ export default function ProfessorDashboard() {
     if (!authReady || !token) return;
     if (tab === 'calendar' || tab === 'consultations') markMissed();
   }, [tab, authReady]);
+
+  // Close desktop top-nav notification panel on outside click
+  useEffect(() => {
+    if (!topNavNotifOpen) return;
+    const handler = (e: MouseEvent) => {
+      const inBtn   = topNavNotifRef.current?.contains(e.target as Node);
+      const inPanel = topNavNotifPanelRef.current?.contains(e.target as Node);
+      if (!inBtn && !inPanel) setTopNavNotifOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [topNavNotifOpen]);
+
+  // Close desktop top-nav profile dropdown on outside click
+  useEffect(() => {
+    if (!topNavProfileOpen) return;
+    const handler = (e: MouseEvent) => {
+      const inBtn   = topNavProfileRef.current?.contains(e.target as Node);
+      const inPanel = topNavProfilePanelRef.current?.contains(e.target as Node);
+      if (!inBtn && !inPanel) setTopNavProfileOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [topNavProfileOpen]);
 
   const fetchAll = async () => {
     // Mark overdue consultations before loading so the list is already accurate
@@ -1246,7 +1290,7 @@ export default function ProfessorDashboard() {
         return;
       }
     }
-    const resolvedMode = newSchedMode === 'Both' ? 'BOTH' : newSchedMode === 'Online' ? 'OL' : 'FF';
+    const resolvedMode = newSchedMode === 'Online' ? 'OL' : 'FF';
     const resolvedLocation = newSchedMode === 'Online' ? '' : newSched.location;
     setPendingSched({ ...newSched, location: resolvedLocation, mode: resolvedMode });
     setShowConfirmSched(true);
@@ -1256,7 +1300,7 @@ export default function ProfessorDashboard() {
     if (!pendingSched) return;
     setShowConfirmSched(false);
     const announcement = newSchedAnnouncement.trim() || undefined;
-    const meeting_link = (newSchedMode === 'Online' || newSchedMode === 'Both') ? (newSchedMeetingLink.trim() || undefined) : undefined;
+    const meeting_link = newSchedMode === 'Online' ? (newSchedMeetingLink.trim() || undefined) : undefined;
     const payload = { ...pendingSched, date: newSchedDate, announcement, meeting_link };
     const data = await api.post('/api/schedules', payload, token!);
     if (data.error) { setSchedError(data.error); return; }
@@ -1272,9 +1316,8 @@ export default function ProfessorDashboard() {
   // Schedule edit modal
   const openEditModal = (s: Schedule) => {
     setEditingScheduleSlot(s);
-    const slotMode: 'F2F' | 'Online' | 'Both' =
+    const slotMode: 'F2F' | 'Online' =
       s.mode === 'OL' ? 'Online' :
-      s.mode === 'BOTH' ? 'Both' :
       s.mode === 'FF' ? 'F2F' :
       s.location === 'Online Only' ? 'Online' : 'F2F';
     setEditSchedMode(slotMode);
@@ -1299,9 +1342,9 @@ export default function ProfessorDashboard() {
       if (!r.time_start || !r.time_end) { setEditSchedError('Please fill in all time range fields.'); return; }
       if (r.time_start >= r.time_end) { setEditSchedError('End time must be after start time in each range.'); return; }
     }
-    const resolvedMode = editSchedMode === 'Both' ? 'BOTH' : editSchedMode === 'Online' ? 'OL' : 'FF';
+    const resolvedMode = editSchedMode === 'Online' ? 'OL' : 'FF';
     const resolvedLocation = editSchedMode === 'Online' ? '' : editSched.location;
-    const meeting_link = (editSchedMode === 'Online' || editSchedMode === 'Both') ? (editSchedMeetingLink.trim() || undefined) : undefined;
+    const meeting_link = editSchedMode === 'Online' ? (editSchedMeetingLink.trim() || undefined) : undefined;
     setPendingEdit({ id: editingScheduleSlot!.id, ...editSched, location: resolvedLocation, date: editSchedDate, announcement: editSchedAnnouncement.trim() || undefined, meeting_link, mode: resolvedMode });
     setShowConfirmEdit(true);
   };
@@ -1556,7 +1599,16 @@ export default function ProfessorDashboard() {
   );
 
   // Shared style helpers for the home tab
-  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white border border-sky-100 shadow-[0_8px_30px_rgba(0,0,0,0.22),0_3px_10px_rgba(0,0,0,0.14),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.28),0_6px_16px_rgba(0,0,0,0.16),0_2px_6px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
+  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'hover:-translate-y-0.5 transition-all duration-200';
+  const glassStyle = {
+    background: 'rgba(255, 255, 255, 0.82)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
+    borderRadius: '16px',
+    boxShadow: '0 8px 32px rgba(99, 102, 241, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05)',
+  } as const;
+  const glassStyleSm = { ...glassStyle, borderRadius: '12px' } as const;
   const tp        = isDark ? 'text-white'    : 'text-gray-900';
   const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
   const tm        = isDark ? 'text-gray-400' : 'text-gray-500';
@@ -1564,7 +1616,7 @@ export default function ProfessorDashboard() {
     ? isDark ? 'bg-blue-500/20 text-blue-300'      : 'bg-blue-50 text-blue-600'
     : isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700';
   const modeDot   = (m: string) => m === 'Online' ? 'bg-blue-400' : 'bg-emerald-400';
-  const cardRaw    = isDark ? 'bg-[#252525]' : 'bg-white';
+  const cardRaw    = isDark ? 'bg-[#252525]' : '';
   const innerCard  = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-gray-50 border-gray-100';
   const dividerCls = isDark ? 'divide-white/5' : 'divide-gray-100';
   const borderSoft = isDark ? 'border-white/5' : 'border-gray-200';
@@ -1580,6 +1632,15 @@ export default function ProfessorDashboard() {
     : 'border border-red-300 text-red-500 bg-transparent font-semibold rounded-[10px] transition-colors duration-150 hover:bg-red-50 hover:border-red-400';
   const btnSuccess   = 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-[10px] transition-colors duration-150';
 
+  const handleNavSignOut = () => {
+    const tourStudent = localStorage.getItem('consulta-tour-done-student');
+    const tourProf    = localStorage.getItem('consulta-tour-done-professor');
+    localStorage.clear();
+    if (tourStudent) localStorage.setItem('consulta-tour-done-student', tourStudent);
+    if (tourProf)    localStorage.setItem('consulta-tour-done-professor', tourProf);
+    router.push('/login');
+  };
+
   const handleTabChange = (next: ProfessorTab) => {
     setTab(next);
     router.replace(`?view=${next}`, { scroll: false });
@@ -1588,14 +1649,22 @@ export default function ProfessorDashboard() {
   // Block all rendering until token + role are confirmed — prevents flash of wrong layout
   if (!authReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: isDark ? '#1e2235' : '#EEF2FF' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: isDark ? '#1e2235' : 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }}>
         <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
+    <div className={`h-screen flex overflow-hidden relative ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
+      {/* Mapua logo full-page watermark */}
+      <img
+        src="/mapua-logo.png"
+        alt=""
+        aria-hidden
+        className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.18]' : 'opacity-[0.12]'}`}
+        style={isDark ? { filter: 'drop-shadow(0 0 80px rgba(14,165,233,0.6)) drop-shadow(0 0 40px rgba(99,102,241,0.4)) drop-shadow(0 0 120px rgba(14,165,233,0.3))' } : { filter: 'drop-shadow(0 0 30px rgba(99,102,241,0.15))' }}
+      />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <ConfirmModal
@@ -1607,22 +1676,217 @@ export default function ProfessorDashboard() {
         onCancel={closeConfirm}
       />
 
-      <LeftSidebar
-        role="professor"
-        navItems={PROF_NAV_ITEMS}
-        activeTab={tab === 'profile' ? 'home' : tab}
-        onTabChange={(t) => handleTabChange(t as ProfessorTab)}
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
-        profileName={profile.full_name}
-        profileAvatar={profile.avatar}
-        pendingConsultations={consultations.filter(c => c.status === 'pending')}
-        announcements={announcements}
-        storageKey={`prof_read_notifs_${profile.email || 'default'}`}
-      />
+      <div className="lg:hidden">
+        <LeftSidebar
+          role="professor"
+          navItems={PROF_NAV_ITEMS}
+          activeTab={tab === 'profile' ? 'home' : tab}
+          onTabChange={(t) => handleTabChange(t as ProfessorTab)}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          profileName={profile.full_name}
+          profileAvatar={profile.avatar}
+          pendingConsultations={consultations.filter(c => c.status === 'pending')}
+          announcements={announcements}
+          storageKey={`prof_read_notifs_${profile.email || 'default'}`}
+          hideDesktopSidebar={true}
+        />
+      </div>
+
+      {/* ── Desktop Top Navbar — 3 floating pills (sibling to content area so position:fixed is viewport-relative) ── */}
+      <div
+        className="hidden lg:flex"
+        style={{ position: 'fixed', top: '12px', left: '16px', right: '16px', zIndex: 9999, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
+
+        {/* Pill 1 — Logo */}
+        <div className={`relative flex items-center gap-2.5 px-4 py-2 rounded-full shadow-md flex-shrink-0 overflow-hidden ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
+          {/* Mapua logo watermark background */}
+          <img src="/mapua-logo.png" alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-10 pointer-events-none select-none" />
+          <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
+            <img src="/consulta-logo.png" alt="Consulta" className="w-full h-full object-contain scale-[1.6]" />
+          </div>
+          <div className="relative">
+            <p className={`font-bold text-sm leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>Consulta</p>
+            <p className={`text-[9px] leading-none mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>MAPUA SOIT</p>
+          </div>
+        </div>
+
+        {/* Pill 2 — Nav Links */}
+        <div className={`flex items-center gap-0.5 px-3 py-2 rounded-full shadow-md ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
+          {PROF_NAV_ITEMS.map(item => {
+            const isActive = (tab === 'profile' ? 'home' : tab) === item.key;
+            const navPendBadge = item.key === 'consultations' ? consultations.filter(c => c.status === 'pending').length : 0;
+            return (
+              <button
+                key={item.key}
+                onClick={() => handleTabChange(item.key as ProfessorTab)}
+                className={`relative flex items-center gap-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'bg-[#0369A1] text-white px-4 py-1.5'
+                    : isDark
+                      ? 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] px-3 py-1.5'
+                      : 'text-gray-800 hover:bg-gray-100 px-3 py-1.5'
+                }`}
+              >
+                {item.label}
+                {navPendBadge > 0 && (
+                  <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full text-[9px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-[#0EA5E9] text-white'}`}>
+                    {navPendBadge > 9 ? '9+' : navPendBadge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Pill 3 — Right Icons */}
+        <div className={`flex items-center gap-1 px-4 py-2 rounded-full shadow-md flex-shrink-0 ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
+
+          {/* Notification bell */}
+          <div className="relative" ref={topNavNotifRef}>
+            <button
+              onClick={() => setTopNavNotifOpen(o => !o)}
+              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+              </svg>
+              {consultations.filter(c => c.status === 'pending').length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-[#CC0000] text-white text-[9px] font-bold flex items-center justify-center">
+                  {consultations.filter(c => c.status === 'pending').length > 9 ? '9+' : consultations.filter(c => c.status === 'pending').length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Dark mode toggle */}
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Light Mode' : 'Dark Mode'}
+            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            {isDark ? (
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" /></svg>
+            ) : (
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" /></svg>
+            )}
+          </button>
+
+          {/* Professor name + dropdown trigger */}
+          <div className="relative" ref={topNavProfileRef}>
+            <button
+              onClick={() => { setTopNavProfileOpen(o => !o); setTopNavNotifOpen(false); }}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-200 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <span className="text-sm font-medium truncate max-w-[140px]">{profile.full_name || 'Professor'}</span>
+              <svg
+                className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${topNavProfileOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop notification dropdown */}
+      {topNavNotifOpen && (
+        <div ref={topNavNotifPanelRef} className={`hidden lg:block fixed top-[72px] right-4 z-[9999] w-80 rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'}`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+            <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Notifications
+              {consultations.filter(c => c.status === 'pending').length > 0 && (
+                <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">
+                  {consultations.filter(c => c.status === 'pending').length} new
+                </span>
+              )}
+            </p>
+            <button onClick={() => setTopNavNotifOpen(false)} className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="overflow-y-auto max-h-80">
+            {consultations.filter(c => c.status === 'pending').length > 0 && (
+              <div className={`px-4 py-1.5 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Pending Requests</span>
+              </div>
+            )}
+            {consultations.filter(c => c.status === 'pending').slice(0, 6).map(c => (
+              <div key={`tnc-${c.id}`} className={`border-b ${isDark ? 'border-white/5 bg-white/[0.03]' : 'border-gray-100 bg-blue-50/60'}`}>
+                <button
+                  onClick={() => { handleTabChange('consultations'); setTopNavNotifOpen(false); }}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-blue-50'}`}
+                >
+                  <span className="text-base flex-shrink-0 mt-0.5">📅</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-medium leading-snug ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                      <span className="font-semibold">{c.student_name}</span> booked a consultation
+                    </p>
+                    <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {new Date(c.date.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                  <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 bg-[#CC0000]" />
+                </button>
+              </div>
+            ))}
+            {announcements.length > 0 && (
+              <div className={`px-4 py-1.5 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Announcements</span>
+              </div>
+            )}
+            {announcements.slice(0, 3).map(a => (
+              <div key={`tna-${a.id}`} className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                <button
+                  onClick={() => setTopNavNotifOpen(false)}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
+                >
+                  <span className="text-base flex-shrink-0 mt-0.5">{a.type === 'warning' ? '⚠️' : '📢'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-medium leading-snug ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{a.title || a.body.slice(0, 60)}</p>
+                  </div>
+                </button>
+              </div>
+            ))}
+            {consultations.filter(c => c.status === 'pending').length === 0 && announcements.length === 0 && (
+              <div className="px-4 py-8 text-center">
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No notifications</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Profile dropdown */}
+      {topNavProfileOpen && (
+        <div ref={topNavProfilePanelRef} className="hidden lg:block fixed top-[72px] right-4 z-[9999] min-w-[150px] rounded-xl bg-white shadow-md border border-gray-100 overflow-hidden">
+          <button
+            onClick={() => { router.push('/settings'); setTopNavProfileOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors text-left"
+          >
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Settings
+          </button>
+          <div className="h-px bg-gray-100" />
+          <button
+            onClick={() => { handleNavSignOut(); setTopNavProfileOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3 3v1" />
+            </svg>
+            Sign Out
+          </button>
+        </div>
+      )}
 
       {/* ── Content area ── */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden" style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)', minHeight: '100vh' } : undefined}>
         <div className="lg:hidden h-14 flex-shrink-0" />
 
       {/* Confirmation dialogs */}
@@ -1743,7 +2007,7 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto flex flex-col" style={{ paddingTop: '80px', ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
@@ -1770,147 +2034,278 @@ export default function ProfessorDashboard() {
               d.setDate(weekMonday.getDate() + i);
               const ds = toLocalDateStr(d);
               const items = consultations.filter(c => c.date.slice(0, 10) === ds && c.status !== 'cancelled');
+              const uniqueStudents = Array.from(
+                new Map(items.map(c => [c.student_name, { name: c.student_name, avatar: c.student_avatar }])).values()
+              ).slice(0, 3);
               return {
                 label: lbl,
                 date: ds,
                 isToday: ds === todayStr,
-                // for the stacked bar: pending bucket includes missed (past pending that weren't attended)
                 pending:   items.filter(c => c.status === 'pending' || c.status === 'missed').length,
-                // confirmed bucket includes completed (resolved consultations)
                 confirmed: items.filter(c => c.status === 'confirmed' || c.status === 'completed').length,
                 completed: items.filter(c => c.status === 'completed').length,
                 total: items.length,
+                students: uniqueStudents,
+                overflow: Math.max(0, new Map(items.map(c => [c.student_name, true])).size - 3),
               };
             });
             const initials = profile.full_name.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
 
             return (
-            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+            <div className="px-6 py-6 flex flex-col gap-6 flex-1">
 
-              {/* ── Section 1: Welcome header ── */}
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              {/* ── Welcome header + stat card ── */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                {/* Left: greeting */}
                 <div>
-                  <p className={`text-[11px] font-bold uppercase tracking-[0.15em] mb-1 ${tm}`}>
+                  <p
+                    className={`text-[11px] font-bold uppercase tracking-[0.15em] mb-1 ${isDark ? 'text-gray-400' : 'text-gray-800'}`}
+                    style={!isDark ? { textShadow: '0 1px 4px rgba(255,255,255,0.8)' } : undefined}
+                  >
                     MAPUA UNIVERSITY · SOIT ADVISING PORTAL
                   </p>
-                  <h1 className={`text-2xl sm:text-3xl font-extrabold leading-tight ${tp}`}>
+                  <h1
+                    className={`text-2xl sm:text-3xl font-extrabold leading-tight ${tp}`}
+                    style={!isDark ? { textShadow: '0 2px 8px rgba(255,255,255,0.7)' } : undefined}
+                  >
                     {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
                   </h1>
-                  <p className={`text-sm mt-1 ${ts}`}>
+                  <p
+                    className={`text-sm mt-1 font-medium ${isDark ? 'text-gray-400' : 'text-gray-800'}`}
+                    style={!isDark ? { textShadow: '0 1px 4px rgba(255,255,255,0.8)' } : undefined}
+                  >
                     {visibleConsultations.length > 0
                       ? `You have ${stats.pending} pending and ${stats.confirmed} confirmed this week.`
                       : 'No upcoming consultations this week.'}
                   </p>
                 </div>
-                {/* Quick pills */}
-                <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0 sm:mt-1">
-                  {currentWeek && (
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                      Week {currentWeek} of {term.totalWeeks}
-                    </span>
-                  )}
-                  {pendingCount > 0 && (
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                      {pendingCount} pending
-                    </span>
-                  )}
-                  {approvedThisWeek > 0 && (
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                      {approvedThisWeek} approved this week
-                    </span>
-                  )}
-                </div>
-              </div>
 
-              {/* ── Section 2: Stat cards + Rankings panel ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_35%] gap-4 lg:items-stretch">
-
-                {/* Stat cards — fill row height set by Rankings panel */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Right: stats card */}
+                <div
+                  className={`flex items-center gap-5 px-7 py-3.5 flex-shrink-0 ${isDark ? 'bg-white/[0.06] border border-white/10' : ''}`}
+                  style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+                >
                   {([
-                    {
-                      value: tTotal,
-                      label: 'Total Requests',
-                      sub: 'this term',
-                      numColor: '#0EA5E9', darkNumColor: '#7DD3FC',
-                      lightBg: 'linear-gradient(135deg, #EEF2FF, #DBEAFE)', lightBorder: '#BFDBFE',
-                      darkBg: 'linear-gradient(135deg, rgba(14,165,233,0.25), rgba(14,165,233,0.12))', darkBorder: 'rgba(56,189,248,0.2)',
-                      lightShadow: '0 8px 30px rgba(14,165,233,0.32), 0 3px 12px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)',
-                      lightHoverShadow: '0 16px 48px rgba(14,165,233,0.42), 0 6px 18px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.09)',
-                      darkShadow: '0 10px 40px rgba(14,165,233,0.20), 0 4px 12px rgba(14,165,233,0.12)',
-                      darkHoverShadow: '0 20px 60px rgba(14,165,233,0.30), 0 8px 20px rgba(14,165,233,0.18)',
-                    },
-                    {
-                      value: tApproved,
-                      label: 'Approved',
-                      sub: 'confirmations',
-                      numColor: '#7C3AED', darkNumColor: '#C4B5FD',
-                      lightBg: 'linear-gradient(135deg, #F5F3FF, #EDE9FE)', lightBorder: '#DDD6FE',
-                      darkBg: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(124,58,237,0.12))', darkBorder: 'rgba(167,139,250,0.2)',
-                      lightShadow: '0 8px 30px rgba(124,58,237,0.32), 0 3px 12px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)',
-                      lightHoverShadow: '0 16px 48px rgba(124,58,237,0.42), 0 6px 18px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.09)',
-                      darkShadow: '0 10px 40px rgba(124,58,237,0.20), 0 4px 12px rgba(124,58,237,0.12)',
-                      darkHoverShadow: '0 20px 60px rgba(124,58,237,0.30), 0 8px 20px rgba(124,58,237,0.18)',
-                    },
-                    {
-                      value: tCompleted,
-                      label: 'Completed',
-                      sub: 'sessions done',
-                      numColor: '#059669', darkNumColor: '#6EE7B7',
-                      lightBg: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)', lightBorder: '#A7F3D0',
-                      darkBg: 'linear-gradient(135deg, rgba(5,150,105,0.25), rgba(5,150,105,0.12))', darkBorder: 'rgba(52,211,153,0.2)',
-                      lightShadow: '0 8px 30px rgba(5,150,105,0.32), 0 3px 12px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)',
-                      lightHoverShadow: '0 16px 48px rgba(5,150,105,0.42), 0 6px 18px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.09)',
-                      darkShadow: '0 10px 40px rgba(5,150,105,0.20), 0 4px 12px rgba(5,150,105,0.12)',
-                      darkHoverShadow: '0 20px 60px rgba(5,150,105,0.30), 0 8px 20px rgba(5,150,105,0.18)',
-                    },
-                    {
-                      value: totalStudents,
-                      label: 'Students',
-                      sub: 'unique advisees',
-                      numColor: '#7C3AED', darkNumColor: '#C4B5FD',
-                      lightBg: 'linear-gradient(135deg, #F5F3FF, #EDE9FE)', lightBorder: '#DDD6FE',
-                      darkBg: 'linear-gradient(135deg, rgba(124,58,237,0.30), rgba(168,85,247,0.15))', darkBorder: 'rgba(192,132,252,0.2)',
-                      lightShadow: '0 8px 30px rgba(124,58,237,0.32), 0 3px 12px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)',
-                      lightHoverShadow: '0 16px 48px rgba(124,58,237,0.42), 0 6px 18px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.09)',
-                      darkShadow: '0 10px 40px rgba(124,58,237,0.20), 0 4px 12px rgba(124,58,237,0.12)',
-                      darkHoverShadow: '0 20px 60px rgba(124,58,237,0.30), 0 8px 20px rgba(124,58,237,0.18)',
-                    },
-                  ] as const).map(s => (
-                    <div
-                      key={s.label}
-                      className="rounded-2xl p-5 border h-[200px] flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5"
-                      style={{
-                        background: isDark ? s.darkBg : s.lightBg,
-                        borderColor: isDark ? s.darkBorder : s.lightBorder,
-                        boxShadow: isDark ? s.darkShadow : s.lightShadow,
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isDark ? s.darkHoverShadow : s.lightHoverShadow; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isDark ? s.darkShadow : s.lightShadow; }}
-                    >
-                      <div>
-                        <p className="text-4xl sm:text-5xl font-black leading-none tracking-tight"
-                          style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</p>
-                        <p className={`text-sm font-semibold mt-3 uppercase tracking-wide ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{s.label}</p>
-                        <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{s.sub}</p>
-                      </div>
-                      <div className="h-1 rounded-full opacity-20"
-                        style={{ background: isDark ? s.darkNumColor : s.numColor }} />
+                    { value: tTotal,        label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
+                    { value: tApproved,     label: 'Approved',       numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
+                    { value: tCompleted,    label: 'Completed',      numColor: '#059669', darkNumColor: '#6EE7B7' },
+                    { value: totalStudents, label: 'Students',       numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
+                  ] as const).map((s, i, arr) => (
+                    <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `pr-5 border-r ${isDark ? 'border-white/20' : 'border-gray-400'}` : ''}`}>
+                      <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
+                      <span className={`text-[11px] font-medium mt-1 ${ts}`}>{s.label}</span>
                     </div>
                   ))}
                 </div>
+              </div>
 
-                {/* Rankings panel */}
-                <div className={`rounded-2xl border p-4 flex flex-col ${card}`} style={{ height: '200px' }}>
+              {/* ── Bento grid — single row, all columns stretch to same height ── */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-[240px_1fr_300px] gap-5 items-stretch">
 
-                  {/* Tab toggle */}
+                {/* ── Col 1: Profile card ── */}
+                <div
+                  className={`rounded-2xl overflow-hidden flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                  style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                >
+                  <div className={`flex-shrink-0 px-6 pt-7 pb-6 ${isDark ? 'bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent' : 'bg-gradient-to-br from-sky-50 to-white'}`}>
+                    <div className="flex flex-col items-center text-center mb-8">
+                      <div className="rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#0EA5E9]/30 mb-4" style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)', width: '80px', height: '80px' }}>
+                        {profile.avatar && !profile.avatar.startsWith('/uploads/')
+                          ? <img src={profile.avatar} alt={profile.full_name} className="w-full h-full object-cover" />
+                          : <span className="text-2xl font-bold text-white">{initials}</span>}
+                      </div>
+                      <p className={`text-xl font-bold ${tp}`}>{profile.full_name}</p>
+                      <p className={`text-sm mt-1 ${ts}`}>{profile.department || 'Professor'}</p>
+                      <p className="text-xs mt-1 font-medium text-sky-400">MAPUA SOIT</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-sky-900/30">
+                        <span className="text-white text-3xl font-black leading-none">{currentWeek ?? '–'}</span>
+                        <span className="text-sky-100 text-[9px] font-bold uppercase tracking-wide">WK</span>
+                      </div>
+                      <div>
+                        <p className={`text-lg font-semibold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                        <p className={`text-sm mt-1 ${tm}`}>{term.label}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`flex-1 flex flex-col px-6 pt-6 pb-7 border-t ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
+                    <div className="space-y-5">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-sm font-medium ${ts}`}>Term Progress</span>
+                          <span className="text-sm font-bold text-emerald-500">{Math.round(termProgress)}%</span>
+                        </div>
+                        <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
+                          <div className="h-full bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] rounded-full transition-all duration-700" style={{ width: `${termProgress}%` }} />
+                        </div>
+                        <div className="flex justify-between mt-1.5">
+                          <span className={`text-xs ${tm}`}>Start</span>
+                          <span className={`text-xs ${tm}`}>Finals W{term.finalsWeek}</span>
+                          <span className={`text-xs ${tm}`}>End</span>
+                        </div>
+                      </div>
+                      <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/10 border border-white/10' : 'divide-gray-200 border border-gray-200'}`}>
+                        {([
+                          { label: 'Days to Finals',  value: daysToFinals,   color: 'text-orange-500', dot: 'bg-orange-400', bg: isDark ? 'bg-white/[0.04]' : 'bg-orange-50/80' },
+                          { label: 'Days to End',      value: daysToEnd,      color: 'text-pink-500',   dot: 'bg-pink-400',   bg: isDark ? 'bg-white/[0.04]' : 'bg-pink-50/80'   },
+                          { label: 'Weeks Remaining',  value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, color: 'text-blue-500', dot: 'bg-blue-400', bg: isDark ? 'bg-white/[0.04]' : 'bg-blue-50/80' },
+                        ] as const).map(m => (
+                          <div key={m.label} className={`flex items-center justify-between px-4 py-3 ${m.bg}`}>
+                            <div className="flex items-center gap-2.5">
+                              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${m.dot}`} />
+                              <span className={`text-base font-medium ${ts}`}>{m.label}</span>
+                            </div>
+                            <span className={`text-xl font-bold ${m.color}`}>{m.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handleTabChange('export')}
+                        className="w-full mt-2 py-2.5 rounded-xl text-sm font-semibold transition-all bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 hover:-translate-y-0.5"
+                      >
+                        Export Records
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Col 2: Center column wrapper — flex-col so Today's Schedule can flex-1 ── */}
+                <div className="flex flex-col gap-5">
+
+                  {/* Weekly Overview */}
+                  <div
+                    className={`p-5 rounded-2xl flex-shrink-0 ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                    style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className={`text-xl font-bold ${tp}`}>Weekly Overview</h3>
+                        <p className={`text-sm ${tm} mt-0.5`}>Consultations breakdown for this week</p>
+                      </div>
+                      <button onClick={() => handleTabChange('consultations')} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
+                        View all →
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {([
+                        { label: 'Upcoming',  value: scheduledCount, bg: isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'         : 'bg-blue-50 text-blue-600 border-blue-100'         },
+                        { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                        { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'       : 'bg-amber-50 text-amber-700 border-amber-100'       },
+                      ] as const).map(s => (
+                        <span key={s.label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border ${s.bg}`}>
+                          <span className="text-base font-black leading-none">{s.value}</span>
+                          {s.label}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5 mt-2">
+                      {chartBars.map(b => (
+                        <div
+                          key={b.label}
+                          className={`flex-1 flex flex-col items-center justify-between py-5 px-2 rounded-xl transition-colors ${
+                            b.isToday
+                              ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
+                              : b.total > 0
+                                ? isDark ? 'bg-white/[0.06] ring-1 ring-white/[0.15]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
+                                : isDark ? 'bg-white/[0.025] ring-1 ring-white/[0.08]' : 'bg-gray-50 ring-1 ring-gray-300'
+                          }`}
+                        >
+                          <span className={`text-xs font-semibold uppercase tracking-widest leading-none ${
+                            b.isToday ? 'text-sky-100' : isDark ? (b.total > 0 ? 'text-gray-400' : 'text-gray-600') : (b.total > 0 ? 'text-gray-500' : 'text-gray-400')
+                          }`}>{b.label}</span>
+                          <span className={`text-4xl font-bold leading-none my-3 ${
+                            b.isToday ? 'text-white' : b.total > 0 ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-gray-700' : 'text-gray-300')
+                          }`}>{b.total > 0 ? b.total : '–'}</span>
+                          {/* Student avatars */}
+                          <div className="flex items-center justify-center h-8">
+                            {b.students.length > 0 ? (
+                              <div className="flex -space-x-1.5">
+                                {b.students.map((s, si) => (
+                                  <div key={si} className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold ring-2 ${b.isToday ? 'ring-[#0EA5E9]' : isDark ? 'ring-[#252525]' : 'ring-white'} overflow-hidden`}
+                                    style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}
+                                    title={s.name}>
+                                    {s.avatar && !s.avatar.startsWith('/uploads/')
+                                      ? <img src={s.avatar} alt={s.name} className="w-full h-full object-cover" />
+                                      : <span className="text-white">{s.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}</span>}
+                                  </div>
+                                ))}
+                                {b.overflow > 0 && (
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center ring-2 ${b.isToday ? 'ring-[#0EA5E9] bg-sky-300/30 text-white' : isDark ? 'ring-[#252525] bg-white/10 text-gray-300' : 'ring-white bg-gray-100 text-gray-500'} text-[9px] font-bold flex-shrink-0`}>
+                                    +{b.overflow}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex gap-1 items-center">
+                                {b.pending > 0 && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${b.isToday ? 'bg-amber-300 ring-1 ring-white/80' : 'bg-amber-400'}`} />}
+                                {b.confirmed > 0 && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${b.isToday ? 'bg-emerald-300 ring-1 ring-white/80' : 'bg-emerald-400'}`} />}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className={`mt-4 pt-3 border-t flex items-center gap-4 ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
+                      <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className={`text-xs font-medium ${tm}`}>Pending</span></div>
+                      <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /><span className={`text-xs font-medium ${tm}`}>Confirmed</span></div>
+                      <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0EA5E9]" /><span className={`text-xs font-medium ${tm}`}>Today</span></div>
+                    </div>
+                  </div>
+
+                  {/* Today's Schedule — grows to fill remaining column height */}
+                  <div
+                    className={`p-6 rounded-2xl flex-1 flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                    style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                  >
+                    <p className={`text-base font-semibold mb-3 flex-shrink-0 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Today's Schedule</p>
+                    {todayConsultations.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {todayConsultations.map(c => {
+                          const isPending   = c.status === 'pending';
+                          const isConfirmed = c.status === 'confirmed';
+                          return (
+                            <div key={c.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isDark ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'bg-gray-50 hover:bg-gray-100'} transition-colors`}>
+                              <span className={`text-sm font-mono tabular-nums w-12 flex-shrink-0 ${tm}`}>
+                                {(c.time || c.time_start)?.slice(0, 5)}
+                              </span>
+                              <div className={`w-px h-3.5 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+                              <span className={`text-base font-semibold flex-1 truncate ${tp}`}>{c.student_name}</span>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                isPending   ? (isDark ? 'bg-amber-500/15 text-amber-300'   : 'bg-amber-50 text-amber-700')
+                              : isConfirmed ? (isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700')
+                              :               (isDark ? 'bg-white/5 text-gray-400'          : 'bg-gray-100 text-gray-500')
+                              }`}>
+                                {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                              </span>
+                              <span className={`text-[10px] flex-shrink-0 ${tm}`}>
+                                {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'F2F' : 'Online'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                        <svg className="w-10 h-10 opacity-40 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                        </svg>
+                        <span className="text-base">No consultations scheduled for today</span>
+                      </div>
+                    )}
+                  </div>
+
+                </div>{/* /center column wrapper */}
+
+                {/* ── Col 3: Rankings card ── */}
+                <div
+                  className={`p-4 rounded-2xl flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                  style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                >
                   <div className="flex-shrink-0 flex gap-1.5 mb-3">
                     {(['rankings', 'consulted'] as const).map(v => (
                       <button key={v} onClick={() => setLbView(v)}
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                        className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-all border ${
                           lbView === v
                             ? isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-300'
                             : isDark ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25' : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
@@ -1919,61 +2314,55 @@ export default function ProfessorDashboard() {
                       </button>
                     ))}
                   </div>
-
-                  {/* Scrollable tab content */}
                   <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400/30">
-
-                    {/* Rankings: 2-column with center divider */}
                     {lbView === 'rankings' && (
-                      <div className="grid gap-3 h-full" style={{ gridTemplateColumns: '1fr 1px 1fr' }}>
-
-                        {/* Top Professors */}
-                        <div className="min-w-0">
-                          <div className={`flex items-center gap-1 px-1.5 py-1 rounded-md mb-1.5 ${isDark ? 'bg-amber-500/10' : 'bg-amber-50'}`}>
-                            <span className="text-[10px] leading-none">🏆</span>
-                            <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>Professors</p>
+                      <div className="space-y-4">
+                        {/* Professors section */}
+                        <div>
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-amber-100 border border-amber-300'}`}>
+                            <span className="text-base leading-none">🏆</span>
+                            <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>Professors</p>
                           </div>
-                          <div className="space-y-0.5">
+                          <div className="space-y-1.5">
                             {lbProfs.slice(0, 3).map((item, i) => {
                               const isMe = item.label === profile.full_name;
+                              const medal = ['🥇','🥈','🥉'][i];
                               return (
-                                <div key={item.rank} className={`flex items-center gap-1 py-1 px-1 rounded-lg transition-colors ${isMe ? (isDark ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'bg-amber-100 ring-1 ring-amber-300/60') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
-                                  <span className="text-xs leading-none w-4 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                                  <span className={`flex-1 text-[10px] truncate font-semibold min-w-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>{item.label}</span>
-                                  {isMe && <span className={`text-[8px] font-black px-1 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-white'}`}>you</span>}
-                                  <span className={`text-[10px] font-black tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-600') : tp}`}>{item.count}</span>
+                                <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isMe ? (isDark ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'bg-amber-50 ring-1 ring-amber-300/60') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
+                                  <span className="text-lg leading-none w-6 text-center flex-shrink-0">{medal}</span>
+                                  <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>{item.label}</span>
+                                  {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-white'}`}>you</span>}
+                                  <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-600') : tp}`}>{item.count}</span>
                                 </div>
                               );
                             })}
-                            {lbProfs.length === 0 && <p className={`text-[10px] ${tm} py-1 px-1`}>No data.</p>}
+                            {lbProfs.length === 0 && <p className={`text-sm ${tm} py-1 px-2`}>No data.</p>}
                           </div>
                         </div>
-
-                        {/* Vertical divider */}
-                        <div className={`self-stretch ${isDark ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
-
-                        {/* Top Students */}
-                        <div className="min-w-0">
-                          <div className={`flex items-center gap-1 px-1.5 py-1 rounded-md mb-1.5 ${isDark ? 'bg-sky-500/10' : 'bg-sky-50'}`}>
-                            <span className="text-[10px] leading-none">🎓</span>
-                            <p className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>Students</p>
+                        {/* Divider */}
+                        <div className={`border-t ${isDark ? 'border-white/20' : 'border-gray-300'}`} />
+                        {/* Students section */}
+                        <div>
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-indigo-500/20 border border-indigo-500/30' : 'bg-indigo-100 border border-indigo-300'}`}>
+                            <span className="text-base leading-none">🎓</span>
+                            <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Students</p>
                           </div>
-                          <div className="space-y-0.5">
-                            {lbStudents.slice(0, 3).map((item, i) => (
-                              <div key={item.rank} className={`flex items-center gap-1 py-1 px-1 rounded-lg transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
-                                <span className="text-xs leading-none w-4 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                                <span className={`flex-1 text-[10px] truncate font-semibold min-w-0 ${ts}`}>{item.label}</span>
-                                <span className={`text-[10px] font-black tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
-                              </div>
-                            ))}
-                            {lbStudents.length === 0 && <p className={`text-[10px] ${tm} py-1 px-1`}>No data.</p>}
+                          <div className="space-y-1.5">
+                            {lbStudents.slice(0, 3).map((item, i) => {
+                              const medal = ['🥇','🥈','🥉'][i];
+                              return (
+                                <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
+                                  <span className="text-lg leading-none w-6 text-center flex-shrink-0">{medal}</span>
+                                  <span className={`flex-1 text-base truncate font-semibold min-w-0 ${ts}`}>{item.label}</span>
+                                  <span className={`text-base font-bold tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
+                                </div>
+                              );
+                            })}
+                            {lbStudents.length === 0 && <p className={`text-sm ${tm} py-1 px-2`}>No data.</p>}
                           </div>
                         </div>
-
                       </div>
                     )}
-
-                    {/* Top Topics */}
                     {lbView === 'consulted' && (() => {
                       const RANK_CFG = [
                         { medal: '🥇', border: 'border-amber-400', rowBg: isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50', fill: 'from-amber-400 to-yellow-300', track: isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60' },
@@ -2015,238 +2404,31 @@ export default function ProfessorDashboard() {
                         </div>
                       );
                     })()}
-
                   </div>
-
-                </div>
-              </div>
-
-              {/* ── Section 3: Widget grid ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-                {/* Profile + term card */}
-                <div className={`lg:col-span-4 rounded-2xl overflow-hidden border ${card}`}>
-                  <div className={`px-5 pt-5 pb-4 ${isDark ? 'bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent' : 'bg-gradient-to-br from-sky-50 to-blue-50/30'}`}>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#0EA5E9]/30" style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}>
-                        {profile.avatar && !profile.avatar.startsWith('/uploads/')
-                          ? <img src={profile.avatar} alt={profile.full_name} className="w-full h-full object-cover" />
-                          : <span className="text-lg font-bold" style={{ color: '#fff' }}>{initials}</span>}
-                      </div>
-                      <div className="min-w-0">
-                        <p className={`text-sm font-bold truncate ${tp}`}>{profile.full_name}</p>
-                        <p className={`text-xs ${ts}`}>{profile.department || 'Professor'}</p>
-                        <p className="text-[10px] mt-0.5 font-medium text-sky-400">MAPUA SOIT</p>
+                  {/* Top Topics preview — pinned to bottom of rankings card */}
+                  {lbView === 'rankings' && lbTopics.length > 0 && (
+                    <div className={`flex-shrink-0 mt-4 pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                      <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>🔥 Top Topics</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {lbTopics.slice(0, 3).map(t => (
+                          <button key={t.label} onClick={() => setLbView('consulted')}
+                            className={`text-sm font-semibold px-2.5 py-1 rounded-full transition-colors ${isDark ? 'bg-white/[0.06] text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                            {t.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-sky-900/30">
-                        <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                        <span className="text-sky-100 text-[8px] font-bold uppercase tracking-wide">WK</span>
-                      </div>
-                      <div>
-                        <p className={`text-base font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
-                        <p className={`text-[10px] ${tm}`}>{term.label}</p>
-                      </div>
+                  )}
+                  {lbView === 'rankings' && lbTopics.length === 0 && tTotal > 0 && (
+                    <div className={`flex-shrink-0 mt-4 pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                      <p className={`text-xs font-semibold ${tm}`}>
+                        🎯 {Math.round((tCompleted / tTotal) * 100)}% completion rate this term
+                      </p>
                     </div>
-                  </div>
-
-                  <div className={`px-5 pt-4 pb-5 border-t space-y-3 ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                    {/* Term progress bar */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`text-xs font-medium ${ts}`}>Term Progress</span>
-                        <span className="text-xs font-bold text-emerald-500">{Math.round(termProgress)}%</span>
-                      </div>
-                      <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
-                        <div className="h-full bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] rounded-full transition-all duration-700" style={{ width: `${termProgress}%` }} />
-                      </div>
-                      <div className="flex justify-between mt-1">
-                        <span className={`text-[9px] ${tm}`}>Start</span>
-                        <span className={`text-[9px] ${tm}`}>Finals W{term.finalsWeek}</span>
-                        <span className={`text-[9px] ${tm}`}>End</span>
-                      </div>
-                    </div>
-                    {/* Milestone metrics */}
-                    {([
-                      { label: 'Days to Finals',    value: daysToFinals,   color: 'text-orange-400', dot: 'bg-orange-400' },
-                      { label: 'Days to End',        value: daysToEnd,      color: 'text-pink-400',   dot: 'bg-pink-400'   },
-                      { label: 'Weeks Remaining',    value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, color: 'text-blue-400', dot: 'bg-blue-400' },
-                    ] as const).map(m => (
-                      <div key={m.label} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
-                          <span className={`text-xs ${ts}`}>{m.label}</span>
-                        </div>
-                        <span className={`text-sm font-bold ${m.color}`}>{m.value}</span>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => handleTabChange('export')}
-                      className="w-full mt-1 py-2 rounded-xl text-xs font-semibold transition-all bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 hover:-translate-y-0.5"
-                    >
-                      Export Records
-                    </button>
-                  </div>
+                  )}
                 </div>
 
-                {/* Weekly overview: metric chips + bar chart + today */}
-                <div className={`lg:col-span-8 rounded-2xl border p-5 flex flex-col ${card}`}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className={`text-sm font-semibold ${tp}`}>Weekly Overview</h3>
-                      <p className={`text-xs ${tm} mt-0.5`}>Consultations breakdown for this week</p>
-                    </div>
-                    <button onClick={() => handleTabChange('consultations')} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
-                      View all →
-                    </button>
-                  </div>
-
-                  {/* Metric chips row */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {([
-                      { label: 'Upcoming',  value: scheduledCount, bg: isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'       : 'bg-blue-50 text-blue-600 border-blue-100'       },
-                      { label: 'Completed', value: completedCount, bg: isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-                      { label: 'Pending',   value: pendingCount,   bg: isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'     : 'bg-amber-50 text-amber-700 border-amber-100'     },
-                    ] as const).map(s => (
-                      <span key={s.label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${s.bg}`}>
-                        <span className="text-sm font-black leading-none">{s.value}</span>
-                        {s.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* 7-day pill strip — full width, taller pills */}
-                  <div className="flex gap-1.5 mt-2">
-                    {chartBars.map(b => (
-                      <div
-                        key={b.label}
-                        className={`flex-1 flex flex-col items-center justify-between py-4 px-1 rounded-xl transition-colors ${
-                          b.isToday
-                            ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
-                            : b.total > 0
-                              ? isDark
-                                ? 'bg-white/[0.06] ring-1 ring-white/[0.08]'
-                                : 'bg-white ring-1 ring-gray-200 shadow-sm'
-                              : isDark
-                                ? 'bg-white/[0.025] ring-1 ring-white/[0.04]'
-                                : 'bg-gray-50 ring-1 ring-gray-100'
-                        }`}
-                      >
-                        {/* Day label */}
-                        <span className={`text-[10px] font-bold uppercase tracking-widest leading-none ${
-                          b.isToday
-                            ? 'text-sky-100'
-                            : isDark
-                              ? b.total > 0 ? 'text-gray-400' : 'text-gray-600'
-                              : b.total > 0 ? 'text-gray-500' : 'text-gray-400'
-                        }`}>
-                          {b.label}
-                        </span>
-
-                        {/* Count */}
-                        <span className={`text-2xl font-black leading-none my-2 ${
-                          b.isToday
-                            ? 'text-white'
-                            : b.total > 0
-                              ? isDark ? 'text-white' : 'text-gray-800'
-                              : isDark ? 'text-gray-700' : 'text-gray-300'
-                        }`}>
-                          {b.total > 0 ? b.total : '–'}
-                        </span>
-
-                        {/* Status dots */}
-                        <div className="flex gap-1 h-2 items-center justify-center">
-                          {b.pending > 0 && (
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              b.isToday ? 'bg-amber-300 ring-1 ring-white/80' : 'bg-amber-400'
-                            }`} />
-                          )}
-                          {b.confirmed > 0 && (
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              b.isToday ? 'bg-emerald-300 ring-1 ring-white/80' : 'bg-emerald-400'
-                            }`} />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Today's Schedule — full-width section below the pills */}
-                  <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                      Today's Schedule
-                    </p>
-                    {todayConsultations.length > 0 ? (
-                      <div className="flex flex-col gap-1">
-                        {todayConsultations.map(c => {
-                          const isPending   = c.status === 'pending';
-                          const isConfirmed = c.status === 'confirmed';
-                          return (
-                            <div key={c.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isDark ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'bg-gray-50 hover:bg-gray-100'} transition-colors`}>
-                              <span className={`text-[11px] font-mono tabular-nums w-10 flex-shrink-0 ${tm}`}>
-                                {(c.time || c.time_start)?.slice(0, 5)}
-                              </span>
-                              <div className={`w-px h-3.5 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
-                              <span className={`text-xs font-semibold flex-1 truncate ${tp}`}>
-                                {c.student_name}
-                              </span>
-                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                                isPending
-                                  ? isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'
-                                  : isConfirmed
-                                    ? isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'
-                                    : isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'
-                              }`}>
-                                {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
-                              </span>
-                              <span className={`text-[10px] flex-shrink-0 ${tm}`}>
-                                {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'F2F' : 'Online'}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className={`flex items-center gap-2 py-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                        <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                        </svg>
-                        <span className="text-xs">No consultations scheduled for today</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Legend */}
-                  <div className={`mt-4 pt-3 border-t flex items-center gap-4 ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      <span className={`text-[10px] ${tm}`}>Pending</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className={`text-[10px] ${tm}`}>Confirmed</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#0EA5E9]" />
-                      <span className={`text-[10px] ${tm}`}>Today</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>{/* /widget grid */}
-
-              {/* ── Section 4: Full Calendar ── */}
-              <ProfCalendar
-                consultations={consultations}
-                schedules={schedules}
-                dateLabelMap={dateLabelMap}
-                dateColorMap={dateColorMap}
-                isDark={isDark}
-                calOverrides={calOverrides}
-                profKey={profile.email || 'prof'}
-              />
-
+              </div>{/* /bento grid */}
 
             </div>
             );
@@ -2256,7 +2438,7 @@ export default function ProfessorDashboard() {
           <div className="px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
-              <p className="text-gray-500 text-sm mt-1">Review and manage student consultation requests</p>
+              <p className="text-gray-600 text-sm mt-1">Review and manage student consultation requests</p>
             </div>
 
             {/* ── Stats ── */}
@@ -2266,7 +2448,7 @@ export default function ProfessorDashboard() {
                 { label: 'Pending',   value: stats.pending,   color: 'text-amber-400' },
                 { label: 'Confirmed', value: stats.confirmed, color: 'text-blue-400' },
               ].map(s => (
-                <div key={s.label} className={`rounded-xl px-4 py-3 ${card}`}>
+                <div key={s.label} className={`px-4 py-3 ${card}`} style={isDark ? undefined : glassStyleSm}>
                   <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
                   <p className={`text-xs mt-0.5 ${tm}`}>{s.label}</p>
                 </div>
@@ -2274,7 +2456,7 @@ export default function ProfessorDashboard() {
             </div>
 
             {/* ── Search / Filter / Sort bar ── */}
-            <div className={`rounded-2xl border p-4 mb-4 flex flex-col sm:flex-row gap-3 ${card}`}>
+            <div className={`p-4 mb-4 flex flex-col sm:flex-row gap-3 ${card}`} style={isDark ? undefined : glassStyle}>
               {/* Search */}
               <div className="relative flex-1 min-w-0">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2357,12 +2539,12 @@ export default function ProfessorDashboard() {
             )}
 
             {visibleConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${card}`}>
+              <div className={`flex flex-col items-center justify-center py-24 ${card}`} style={isDark ? undefined : glassStyle}>
                 <p className={`font-medium text-sm ${ts}`}>No consultations yet</p>
                 <p className={`text-xs mt-1 ${tm}`}>Students will appear here once they book a slot</p>
               </div>
             ) : displayedConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-16 rounded-2xl ${card}`}>
+              <div className={`flex flex-col items-center justify-center py-16 ${card}`} style={isDark ? undefined : glassStyle}>
                 <svg className="w-8 h-8 text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -2391,11 +2573,12 @@ export default function ProfessorDashboard() {
                   {displayedConsultations.map(c => (
                     <div
                       key={c.id}
-                      className={`rounded-2xl overflow-hidden transition-all ${card} ${
+                      className={`overflow-hidden transition-all ${card} ${
                         selectedIds.has(c.id)
                           ? isDark ? 'ring-2 ring-sky-500/50' : 'ring-2 ring-sky-400'
-                          : isDark ? 'hover:border-white/10' : 'hover:border-gray-300'
+                          : ''
                       }`}
+                      style={isDark ? undefined : glassStyle}
                     >
                       <div className="p-5">
                         <div className="flex items-start gap-3">
@@ -2597,16 +2780,24 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'calendar' ? (
-          <div className="flex h-full">
+          <div className="flex">
           <div className="flex-1 min-w-0 px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Booking Calendar</h1>
-              <p className="text-gray-500 text-sm mt-1">Matrix view of consultation schedule by time and day</p>
+              <p className="text-gray-600 text-sm mt-1">Monthly view of your consultation schedule</p>
             </div>
 
-            {/* ── Matrix calendar ── */}
+            {/* ── Full month calendar ── */}
             <div className="mb-6 sm:mb-8">
-              <MatrixCalendar consultations={consultations} isDark={isDark} />
+              <ProfCalendar
+                consultations={consultations}
+                schedules={schedules}
+                dateLabelMap={dateLabelMap}
+                dateColorMap={dateColorMap}
+                isDark={isDark}
+                calOverrides={calOverrides}
+                profKey={profile.email || 'prof'}
+              />
             </div>
 
             {/* ── Date-grouped list ── */}
@@ -2614,7 +2805,7 @@ export default function ProfessorDashboard() {
               Upcoming Bookings List
             </p>
             {visibleConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-12 rounded-2xl ${card}`}>
+              <div className={`flex flex-col items-center justify-center py-12 ${card}`} style={isDark ? { background: 'rgba(22,23,26,0.96)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.07)' } : glassStyle}>
                 <p className={`text-sm ${ts}`}>No upcoming bookings</p>
               </div>
             ) : (
@@ -2624,7 +2815,7 @@ export default function ProfessorDashboard() {
                   .map(([date, consultList]) => {
                     const isPast = new Date(date) < new Date(new Date().toDateString());
                     return (
-                      <div key={date} className={`rounded-2xl overflow-hidden ${cardRaw} ${isPast ? `border ${borderSoft} opacity-60` : `border ${borderMid}`}`}>
+                      <div key={date} className={`rounded-2xl overflow-hidden ${cardRaw} ${isPast ? `border ${borderSoft} opacity-60` : `border ${borderMid}`}`} style={isDark ? { background: 'rgba(22,23,26,0.96)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '16px' } : glassStyle}>
                         <div className={`px-5 py-3 border-b ${borderSoft} flex items-center justify-between`}>
                           <div>
                             <p className={`font-semibold text-sm ${tp}`}>
@@ -2668,7 +2859,7 @@ export default function ProfessorDashboard() {
                 <div className="mt-8">
                   <p className={`text-[11px] font-semibold uppercase tracking-widerst mb-3 ${tm}`}>Your Slots ({upcomingSlots.length})</p>
                   {upcomingSlots.length === 0 ? (
-                    <div className={`text-center py-10 rounded-2xl ${card}`}>
+                    <div className={`text-center py-10 ${card}`} style={isDark ? undefined : glassStyle}>
                       <p className={`text-sm ${ts}`}>No slots created yet.</p>
                     </div>
                   ) : (
@@ -2676,7 +2867,7 @@ export default function ProfessorDashboard() {
                       {upcomingSlots.map(s => {
                         const booked = Number(s.upcoming_count) > 0;
                         return (
-                          <div key={s.id} className={`flex items-center justify-between px-4 py-3 rounded-xl ${card}`}>
+                          <div key={s.id} className={`flex items-center justify-between px-4 py-3 ${card}`} style={isDark ? undefined : glassStyleSm}>
                             <div className="flex items-center gap-3">
                               <span className={`w-2 h-2 rounded-full ${booked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
                               <span className={`text-sm ${tp}`}>
@@ -2703,12 +2894,12 @@ export default function ProfessorDashboard() {
           <div className="px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7">
               <h1 className={`text-2xl font-bold ${tp}`}>Manage Schedules</h1>
-              <p className="text-gray-500 text-sm mt-1">Add or edit your available consultation time slots</p>
+              <p className="text-gray-600 text-sm mt-1">Add or edit your available consultation time slots</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* ── Left: Add new slot form ── */}
-              <div className={`rounded-2xl p-5 ${card}`}>
+              <div className={`p-5 ${card}`} style={isDark ? undefined : glassStyle}>
                 <p className={`text-sm font-semibold mb-4 ${tp}`}>Add New Slot</p>
 
                 {/* Date */}
@@ -2726,7 +2917,7 @@ export default function ProfessorDashboard() {
                 <div className="mb-3">
                   <Label className="text-gray-500 text-xs mb-1.5 block">Mode</Label>
                   <div className={`flex rounded-lg p-0.5 w-full ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
-                    {(['F2F', 'Online', 'Both'] as const).map(m => (
+                    {(['F2F', 'Online'] as const).map(m => (
                       <button
                         key={m}
                         type="button"
@@ -2735,8 +2926,6 @@ export default function ProfessorDashboard() {
                           newSchedMode === m
                             ? m === 'Online'
                               ? 'bg-sky-500 text-white shadow-sm'
-                              : m === 'Both'
-                              ? 'bg-violet-500 text-white shadow-sm'
                               : isDark ? 'bg-white/10 text-white shadow-sm' : 'bg-white border border-gray-200 shadow text-gray-800'
                             : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
                         }`}
@@ -2747,8 +2936,8 @@ export default function ProfessorDashboard() {
                   </div>
                 </div>
 
-                {/* Location — shown for F2F and Both */}
-                {(newSchedMode === 'F2F' || newSchedMode === 'Both') && (
+                {/* Location — shown for F2F */}
+                {newSchedMode === 'F2F' && (
                   <div className="mb-3">
                     <Label className="text-gray-500 text-xs mb-1.5 block">Location <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional)</span></Label>
                     <input
@@ -2861,7 +3050,7 @@ export default function ProfessorDashboard() {
                     const timeStr = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
                       .map(r => `${to12h(r.time_start)}–${to12h(r.time_end)}`).join('  ·  ');
                     return (
-                      <div key={s.id} className={`rounded-xl ${card} ${dimmed ? 'opacity-50' : ''}`}>
+                      <div key={s.id} className={`${card} ${dimmed ? 'opacity-50' : ''}`} style={isDark ? undefined : glassStyleSm}>
                         <div className="px-4 py-3.5">
                           {/* Row 1: date + action buttons */}
                           <div className="flex items-start justify-between gap-2 mb-2">
@@ -3016,7 +3205,7 @@ export default function ProfessorDashboard() {
 
               if (consultations.filter(c => ['completed','missed'].includes(c.status)).length === 0) {
                 return (
-                  <div className={`flex flex-col items-center justify-center py-16 sm:py-24 rounded-2xl ${card}`}>
+                  <div className={`flex flex-col items-center justify-center py-16 sm:py-24 ${card}`} style={isDark ? undefined : glassStyle}>
                     <p className={`font-medium text-sm ${ts}`}>No history yet</p>
                     <p className={`text-xs mt-1 ${tm}`}>Completed advising sessions will appear here</p>
                   </div>
@@ -3025,7 +3214,7 @@ export default function ProfessorDashboard() {
 
               if (historyItems.length === 0) {
                 return (
-                  <div className={`flex flex-col items-center justify-center py-12 rounded-2xl ${card}`}>
+                  <div className={`flex flex-col items-center justify-center py-12 ${card}`} style={isDark ? undefined : glassStyle}>
                     <p className={`font-medium text-sm ${ts}`}>No results</p>
                     <p className={`text-xs mt-1 ${tm}`}>Try adjusting your search or filter</p>
                   </div>
@@ -3065,7 +3254,7 @@ export default function ProfessorDashboard() {
                           </span>
                         </div>
 
-                        <div className={`rounded-2xl overflow-hidden ${card}`}>
+                        <div className={`overflow-hidden ${card}`} style={isDark ? undefined : glassStyle}>
                           <table className="w-full table-fixed">
                             <colgroup>
                               <col className="w-[96px]" />
@@ -3237,7 +3426,7 @@ export default function ProfessorDashboard() {
                 </div>
 
                 <h2 className={`text-xl font-bold mt-4 text-center ${tp}`}>{profile.full_name || '—'}</h2>
-                <p className="text-gray-500 text-sm mt-1 text-center">
+                <p className="text-gray-600 text-sm mt-1 text-center">
                   {profile.department ? `${profile.department} · ` : ''}{profile.email || 'No email set'}
                 </p>
 
@@ -3258,7 +3447,7 @@ export default function ProfessorDashboard() {
                 <div className="space-y-5">
 
                   {/* Personal Information */}
-                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'bg-[#252525] border border-white/10' : ''}`} style={isDark ? undefined : glassStyle}>
                     <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#0EA5E9] uppercase tracking-widest">Personal Information</p>
                     </div>
@@ -3271,7 +3460,7 @@ export default function ProfessorDashboard() {
                   </div>
 
                   {/* Faculty Information */}
-                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'bg-[#252525] border border-white/10' : ''}`} style={isDark ? undefined : glassStyle}>
                     <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#0EA5E9] uppercase tracking-widest">Faculty Information</p>
                     </div>
@@ -3301,7 +3490,7 @@ export default function ProfessorDashboard() {
                 <div className="space-y-5">
 
                   {/* Contact Information */}
-                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'bg-[#252525] border border-white/10' : ''}`} style={isDark ? undefined : glassStyle}>
                     <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#0EA5E9] uppercase tracking-widest">Contact Information</p>
                     </div>
@@ -3318,7 +3507,7 @@ export default function ProfessorDashboard() {
                   </div>
 
                   {/* Account */}
-                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'border border-white/10 bg-[#252525]' : 'border border-gray-200 bg-white shadow-sm'}`}>
+                  <div className={`rounded-2xl overflow-hidden ${isDark ? 'bg-[#252525] border border-white/10' : ''}`} style={isDark ? undefined : glassStyle}>
                     <div className={`px-5 py-3.5 border-b ${borderMid}`}>
                       <p className="text-[10px] font-bold text-[#0EA5E9] uppercase tracking-widest">Account</p>
                     </div>
@@ -3356,7 +3545,7 @@ export default function ProfessorDashboard() {
               </div>
 
               {/* Filters card */}
-              <div className={`rounded-2xl p-5 mb-5 ${card}`}>
+              <div className={`p-5 mb-5 ${card}`} style={isDark ? undefined : glassStyle}>
                 <p className={`text-sm font-semibold mb-4 ${tp}`}>Filter Records</p>
 
                 {/* Term dropdown */}
@@ -3442,7 +3631,8 @@ export default function ProfessorDashboard() {
               {/* Download buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button onClick={() => handleExport('excel')}
-                  className={`rounded-2xl p-5 text-left transition-all group hover:border-emerald-500/20 hover:bg-emerald-500/5 ${card}`}>
+                  className={`p-5 text-left transition-all group ${card}`}
+                  style={isDark ? undefined : glassStyle}>
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3 group-hover:bg-emerald-500/20 transition-colors">
                     <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z" />
@@ -3452,7 +3642,8 @@ export default function ProfessorDashboard() {
                   <p className={`text-xs mt-1 ${tm}`}>Download as .xlsx — open in Excel or Sheets</p>
                 </button>
                 <button onClick={() => handleExport('pdf')} disabled={pdfExporting}
-                  className={`rounded-2xl p-5 text-left transition-all group hover:border-blue-500/20 hover:bg-blue-500/5 ${card} ${pdfExporting ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                  className={`p-5 text-left transition-all group ${card} ${pdfExporting ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  style={isDark ? undefined : glassStyle}>
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:bg-blue-500/20 transition-colors">
                     {pdfExporting
                       ? <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -3601,7 +3792,7 @@ export default function ProfessorDashboard() {
             <div>
               <Label className="text-gray-500 text-xs mb-1.5 block">Mode</Label>
               <div className={`flex rounded-lg p-0.5 w-full ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
-                {(['F2F', 'Online', 'Both'] as const).map(m => (
+                {(['F2F', 'Online'] as const).map(m => (
                   <button
                     key={m}
                     type="button"
@@ -3610,8 +3801,6 @@ export default function ProfessorDashboard() {
                       editSchedMode === m
                         ? m === 'Online'
                           ? 'bg-sky-500 text-white shadow-sm'
-                          : m === 'Both'
-                          ? 'bg-violet-500 text-white shadow-sm'
                           : isDark ? 'bg-white/10 text-white shadow-sm' : 'bg-white border border-gray-200 shadow text-gray-800'
                         : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
                     }`}
@@ -3621,7 +3810,7 @@ export default function ProfessorDashboard() {
                 ))}
               </div>
             </div>
-            {(editSchedMode === 'F2F' || editSchedMode === 'Both') && (
+            {editSchedMode === 'F2F' && (
               <div>
                 <Label className="text-gray-500 text-xs mb-1.5 block">Location <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
                 <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}

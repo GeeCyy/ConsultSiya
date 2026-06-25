@@ -456,7 +456,7 @@ function FullCalendar({
             }`}>
 
               <div className={`sticky top-0 z-10 relative px-4 pt-4 pb-3 border-b
-                ${isDark ? 'border-white/[0.06] bg-[#17181a]' : 'border-gray-100/80 bg-gray-50 backdrop-blur-sm'}`}>
+                ${isDark ? 'border-white/[0.06] bg-[#17181a]' : 'border-gray-100/80 bg-gray-50'}`}>
                 <div className={`absolute top-0 left-0 right-0 h-[3px] ${
                   selIsBlocked
                     ? 'bg-gradient-to-r from-red-500 to-red-400'
@@ -1064,11 +1064,11 @@ export default function StudentDashboard() {
   const mostConsultedTopics = myTopics;
 
   // Style tokens
-  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white border border-gray-200 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
+  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white/[0.88] border border-white/90 shadow-[0_8px_32px_rgba(99,102,241,0.14),0_4px_16px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 transition-all duration-200';
   const tp        = isDark ? 'text-white'    : 'text-gray-900';
   const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
   const tm        = isDark ? 'text-gray-400' : 'text-gray-500';
-  const innerCard = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-sky-50/40 border-sky-100/70';
+  const innerCard = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-white/30 border-white/50';
   const hoverBg   = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-sky-50/60';
 
   const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
@@ -1103,7 +1103,7 @@ export default function StudentDashboard() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: isDark ? '#1a1a1a' : '#EEF2FF' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: isDark ? '#1a1a1a' : 'linear-gradient(135deg, #EEF4FF 0%, #E0EAFF 50%, #D6E4FF 100%)' }}>
         <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -1112,7 +1112,7 @@ export default function StudentDashboard() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
+    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #EEF4FF 0%, #E0EAFF 50%, #D6E4FF 100%)' } : undefined}>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <ConfirmModal
@@ -1143,7 +1143,7 @@ export default function StudentDashboard() {
         <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
         <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto" style={!isDark ? { background: 'linear-gradient(135deg, #EEF4FF 0%, #E0EAFF 50%, #D6E4FF 100%)' } : undefined}>
         {loading ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
@@ -1201,70 +1201,12 @@ export default function StudentDashboard() {
               {/* 4 stat cards */}
               <div className="lg:col-span-12 grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {([
-                  {
-                    value: allConsultsTotal,
-                    label: 'Total Requests',
-                    sub: 'all time',
-                    numColor: '#0EA5E9',
-                    darkNumColor: '#7DD3FC',
-                    lightBg: 'linear-gradient(135deg, #EEF2FF, #DBEAFE)',
-                    lightBorder: '#BFDBFE',
-                    darkBg: 'linear-gradient(135deg, rgba(14,165,233,0.25), rgba(14,165,233,0.12))',
-                    darkBorder: 'rgba(56,189,248,0.2)',
-                    shadow: '0 10px 40px rgba(14,165,233,0.20), 0 4px 12px rgba(14,165,233,0.12)',
-                    hoverShadow: '0 20px 60px rgba(14,165,233,0.30), 0 8px 20px rgba(14,165,233,0.18)',
-                  },
-                  {
-                    value: confirmedCount,
-                    label: 'Confirmed',
-                    sub: 'approved',
-                    numColor: '#7C3AED',
-                    darkNumColor: '#C4B5FD',
-                    lightBg: 'linear-gradient(135deg, #F5F3FF, #EDE9FE)',
-                    lightBorder: '#DDD6FE',
-                    darkBg: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(124,58,237,0.12))',
-                    darkBorder: 'rgba(167,139,250,0.2)',
-                    shadow: '0 10px 40px rgba(124,58,237,0.20), 0 4px 12px rgba(124,58,237,0.12)',
-                    hoverShadow: '0 20px 60px rgba(124,58,237,0.30), 0 8px 20px rgba(124,58,237,0.18)',
-                  },
-                  {
-                    value: allConsultsCompleted,
-                    label: 'Completed',
-                    sub: 'sessions done',
-                    numColor: '#059669',
-                    darkNumColor: '#6EE7B7',
-                    lightBg: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)',
-                    lightBorder: '#A7F3D0',
-                    darkBg: 'linear-gradient(135deg, rgba(5,150,105,0.25), rgba(5,150,105,0.12))',
-                    darkBorder: 'rgba(52,211,153,0.2)',
-                    shadow: '0 10px 40px rgba(5,150,105,0.20), 0 4px 12px rgba(5,150,105,0.12)',
-                    hoverShadow: '0 20px 60px rgba(5,150,105,0.30), 0 8px 20px rgba(5,150,105,0.18)',
-                  },
-                  {
-                    value: daysToFinals,
-                    label: 'Days to Finals',
-                    sub: finalsDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }),
-                    numColor: '#EA580C',
-                    darkNumColor: '#FDBA74',
-                    lightBg: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)',
-                    lightBorder: '#FED7AA',
-                    darkBg: 'linear-gradient(135deg, rgba(234,88,12,0.25), rgba(234,88,12,0.12))',
-                    darkBorder: 'rgba(251,146,60,0.2)',
-                    shadow: '0 10px 40px rgba(234,88,12,0.20), 0 4px 12px rgba(234,88,12,0.12)',
-                    hoverShadow: '0 20px 60px rgba(234,88,12,0.30), 0 8px 20px rgba(234,88,12,0.18)',
-                  },
+                  { value: allConsultsTotal,     label: 'Total Requests', sub: 'all time',      numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
+                  { value: confirmedCount,        label: 'Confirmed',      sub: 'approved',      numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
+                  { value: allConsultsCompleted,  label: 'Completed',      sub: 'sessions done', numColor: '#059669', darkNumColor: '#6EE7B7' },
+                  { value: daysToFinals, label: 'Days to Finals', sub: finalsDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }), numColor: '#EA580C', darkNumColor: '#FDBA74' },
                 ] as const).map(s => (
-                  <div
-                    key={s.label}
-                    className="rounded-2xl p-3 border transition-all duration-200 hover:-translate-y-0.5 group"
-                    style={{
-                      background: isDark ? s.darkBg : s.lightBg,
-                      borderColor: isDark ? s.darkBorder : s.lightBorder,
-                      boxShadow: s.shadow,
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = s.hoverShadow; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = s.shadow; }}
-                  >
+                  <div key={s.label} className={`rounded-2xl p-3 group ${card}`}>
                     <p
                       className="text-2xl sm:text-3xl font-black leading-none tracking-tight"
                       style={{ color: isDark ? s.darkNumColor : s.numColor }}
@@ -1284,7 +1226,7 @@ export default function StudentDashboard() {
 
               {/* Profile + term card */}
               <div className={`lg:col-span-3 rounded-2xl overflow-hidden border ${card}`}>
-                <div className={`px-5 pt-5 pb-4 ${isDark ? 'bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent' : 'bg-gradient-to-br from-blue-50 to-indigo-50/40'}`}>
+                <div className={`px-5 pt-5 pb-4 ${isDark ? 'bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent' : 'bg-white/20'}`}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#0EA5E9]/30" style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}>
                       {profile.avatar && !profile.avatar.startsWith('/uploads/')
