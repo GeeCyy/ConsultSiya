@@ -582,21 +582,6 @@ function ProfCalendar({
           }`}>Today</button>
         </div>
         <div className="flex items-center gap-4">
-          <div className={`hidden md:flex items-center gap-3.5 text-xs font-medium ${tm}`}>
-            {([
-              { label: 'Pending',   cls: 'bg-amber-400',   shadow: 'shadow-amber-400/60'   },
-              { label: 'Confirmed', cls: 'bg-blue-400',    shadow: 'shadow-blue-400/60'    },
-              { label: 'Completed', cls: 'bg-emerald-400', shadow: 'shadow-emerald-400/60' },
-              { label: 'Cancelled', cls: 'bg-red-400',     shadow: 'shadow-red-400/60'     },
-              { label: 'My Slot',   cls: 'bg-sky-400',     shadow: 'shadow-sky-400/60'     },
-              { label: 'Note',      cls: 'bg-violet-400',  shadow: 'shadow-violet-400/60'  },
-            ] as const).map(l => (
-              <span key={l.label} className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full shadow-sm ${l.cls} ${l.shadow}`} />
-                {l.label}
-              </span>
-            ))}
-          </div>
           <div className={`flex gap-0.5 p-0.5 rounded-lg ${isDark ? 'bg-white/[0.05]' : 'bg-gray-100'}`}>
             <button onClick={prevMonth} className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400 hover:text-white' : 'hover:bg-white text-gray-500 hover:text-gray-800 hover:shadow-sm'}`}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
@@ -682,20 +667,37 @@ function ProfCalendar({
               <div key={`t${i}`} className={`min-h-[88px] ${isDark ? 'bg-[#17181a]/60' : 'bg-gray-50/50'}`} />
             ))}
           </div>
+
+          {/* Legend — acts as the visual border between calendar and detail panel */}
+          <div className={`flex items-center gap-4 px-4 py-2.5 border-t text-xs font-medium ${isDark ? 'border-white/[0.08] text-gray-500 bg-[#17181a]' : 'border-gray-200 text-gray-400 bg-gray-50/70'}`}>
+            {([
+              { label: 'Pending',   cls: 'bg-amber-400',   shadow: 'shadow-amber-400/60'   },
+              { label: 'Confirmed', cls: 'bg-blue-400',    shadow: 'shadow-blue-400/60'    },
+              { label: 'Completed', cls: 'bg-emerald-400', shadow: 'shadow-emerald-400/60' },
+              { label: 'Cancelled', cls: 'bg-red-400',     shadow: 'shadow-red-400/60'     },
+              { label: 'My Slot',   cls: 'bg-sky-400',     shadow: 'shadow-sky-400/60'     },
+              { label: 'Note',      cls: 'bg-violet-400',  shadow: 'shadow-violet-400/60'  },
+            ] as const).map(l => (
+              <span key={l.label} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full shadow-sm flex-shrink-0 ${l.cls} ${l.shadow}`} />
+                {l.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* ── Detail panel ── */}
         {selected && (
           <div ref={detailRef}
-            style={panelMaxH > 0 ? { height: `${panelMaxH}px` } : undefined}
-            className={`w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 border-t lg:border-t-0 lg:border-l flex flex-col overflow-y-auto scroll-smooth
+            style={panelMaxH > 0 ? { height: `${panelMaxH}px`, ...(isDark ? {} : { boxShadow: '-6px 0 24px rgba(0,0,0,0.07)' }) } : (isDark ? {} : { boxShadow: '-6px 0 24px rgba(0,0,0,0.07)' })}
+            className={`w-full lg:w-[440px] xl:w-[520px] flex-shrink-0 flex flex-col overflow-y-auto scroll-smooth
             ${isDark
-              ? 'border-white/[0.06] bg-[#17181a]'
-              : 'border-gray-100 bg-gray-50/60'
+              ? 'border-t lg:border-t-0 lg:border-l border-white/[0.06] bg-[#17181a]'
+              : 'bg-white border-l border-gray-200'
             }`}>
 
-            <div className={`sticky top-0 z-10 relative px-4 pt-4 pb-3 border-b
-              ${isDark ? 'border-white/[0.06] bg-[#17181a]' : 'border-gray-100/80 bg-gray-50 backdrop-blur-sm'}`}>
+            <div className={`sticky top-0 z-10 relative px-5 pt-4 pb-3 border-b
+              ${isDark ? 'border-white/[0.06] bg-[#17181a]' : 'border-gray-100 bg-white'}`}>
               <div className={`absolute top-0 left-0 right-0 h-[3px] ${
                 selIsBlocked
                   ? 'bg-gradient-to-r from-red-500 to-red-400'
@@ -730,7 +732,7 @@ function ProfCalendar({
             </div>
 
             {/* Student Bookings section */}
-            <div className="px-4 pt-3.5 pb-2">
+            <div className="px-5 pt-3.5 pb-2">
               <div className="flex items-center gap-2 mb-2.5">
                 <span className="w-1.5 h-3.5 rounded-full bg-blue-500 flex-shrink-0" />
                 <p className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -758,7 +760,7 @@ function ProfCalendar({
             </div>
 
             {/* My Schedule section */}
-            <div className="px-4 pt-2 pb-3">
+            <div className="px-5 pt-2 pb-3">
               <div className="flex items-center gap-2 mb-2.5">
                 <span className="w-1.5 h-3.5 rounded-full bg-sky-400 flex-shrink-0" />
                 <p className={`text-[10px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -792,7 +794,7 @@ function ProfCalendar({
             </div>
 
             {/* Notes section */}
-            <div className={`px-4 pt-3 pb-4 mt-auto border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+            <div className={`px-5 pt-3 pb-5 mt-auto border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-3.5 rounded-full bg-violet-500 flex-shrink-0" />
@@ -814,16 +816,17 @@ function ProfCalendar({
                 className={`w-full resize-none text-[11px] rounded-xl px-3 py-2.5 outline-none transition-all leading-relaxed
                   ${isDark
                     ? 'bg-white/[0.04] border border-white/[0.08] text-gray-200 placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(139,92,246,0.12)]'
-                    : 'bg-white border border-gray-200 text-gray-700 placeholder-gray-300 shadow-sm focus:border-violet-400 focus:shadow-[0_0_0_3px_rgba(139,92,246,0.10)]'
+                    : 'bg-white/60 border border-gray-100 text-gray-700 placeholder-gray-300 focus:border-violet-300 focus:bg-white focus:shadow-[0_0_0_3px_rgba(139,92,246,0.08)]'
                   }`}
               />
               <div className="flex justify-end mt-2">
                 <button
                   onMouseDown={e => { e.preventDefault(); saveNote(); }}
+                  style={!isDark ? { color: '#ffffff' } : undefined}
                   className={`text-[11px] font-bold px-4 py-1.5 rounded-lg transition-all flex items-center gap-1.5
                     ${isDark
                       ? 'bg-gradient-to-br from-violet-500/20 to-purple-500/20 text-violet-300 hover:from-violet-500/30 hover:to-purple-500/30 border border-violet-500/25 shadow-md shadow-violet-900/30'
-                      : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 shadow-md shadow-violet-500/30 hover:shadow-violet-500/50'
+                      : 'bg-violet-700 hover:bg-violet-800 shadow-md shadow-violet-700/40'
                     }`}>
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
@@ -957,6 +960,10 @@ export default function ProfessorDashboard() {
   // Weekly overview modal
   const [weeklyModalOpen, setWeeklyModalOpen] = useState(false);
 
+  // Navbar scroll-aware state
+  const [navScrolled, setNavScrolled] = useState(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
+
   // Theme — mounted guard prevents server/client mismatch
   const [mounted, setMounted] = useState(false);
   const [_isDark, setIsDark] = useState(false);
@@ -993,6 +1000,8 @@ export default function ProfessorDashboard() {
     window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
     setIsDark(next);
   };
+
+  // navScrolled is driven by onScroll on the <main> element — no useEffect needed
 
   // Auth guard — confirm token + role before rendering anything
   useEffect(() => {
@@ -1717,121 +1726,131 @@ export default function ProfessorDashboard() {
         />
       </div>
 
-      {/* Full-width backdrop behind the floating pills — prevents scrolled content bleeding through the gaps */}
+      {/* ── Desktop Top Navbar — full-width, transparent at top / solid when scrolled ── */}
       <div
-        className="hidden lg:block"
+        className="hidden lg:flex items-center h-16 px-6 gap-0 border-b"
         style={{
-          position: 'fixed', top: 0, left: 0, right: 0, height: '76px', zIndex: 9998,
-          background: isDark ? 'rgba(14,15,20,0.82)' : 'rgba(219,234,254,0.75)',
-          backdropFilter: 'blur(14px)',
-          WebkitBackdropFilter: 'blur(14px)',
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+          background: navScrolled
+            ? (isDark ? 'rgba(20,21,26,0.97)' : 'rgba(255,255,255,0.97)')
+            : 'transparent',
+          backdropFilter: navScrolled ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: navScrolled ? 'blur(12px)' : 'none',
+          borderBottomColor: navScrolled
+            ? (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.14)')
+            : 'transparent',
+          boxShadow: navScrolled
+            ? (isDark ? '0 2px 20px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.10)')
+            : 'none',
         }}
-      />
-
-      {/* ── Desktop Top Navbar — 3 floating pills (sibling to content area so position:fixed is viewport-relative) ── */}
-      <div
-        className="hidden lg:flex"
-        style={{ position: 'fixed', top: '12px', left: '16px', right: '16px', zIndex: 9999, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
       >
-
-        {/* Pill 1 — Logo */}
-        <div className={`relative flex items-center gap-2.5 px-5 py-2.5 rounded-full shadow-md flex-shrink-0 overflow-hidden ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
-          {/* Mapua logo watermark background */}
-          <img src="/mapua-logo.png" alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-10 pointer-events-none select-none" />
-          <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
-            <img src="/consulta-logo.png" alt="Consulta" className="w-full h-full object-contain scale-[1.6]" />
+          {/* Logo */}
+          <div className="flex items-center gap-3 pr-6 flex-shrink-0">
+            <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
+              <img src="/consulta-logo.png" alt="Consulta" className="w-full h-full object-contain scale-[1.6]" />
+            </div>
+            <div>
+              <p className="font-bold text-base leading-none transition-colors duration-250" style={{ color: isDark ? '#ffffff' : (navScrolled ? '#111827' : '#1e3a5f') }}>Consulta</p>
+              <p className="text-[9px] leading-none mt-1 tracking-wide transition-colors duration-250" style={{ color: isDark ? '#6b7280' : (navScrolled ? '#9ca3af' : '#4b6d8f') }}>MAPUA SOIT</p>
+            </div>
           </div>
-          <div className="relative">
-            <p className={`font-bold text-sm leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>Consulta</p>
-            <p className={`text-[9px] leading-none mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>MAPUA SOIT</p>
-          </div>
-        </div>
 
-        {/* Pill 2 — Nav Links */}
-        <div className={`flex items-center gap-0.5 px-3 py-2.5 rounded-full shadow-md ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
-          {PROF_NAV_ITEMS.map(item => {
-            const isActive = (tab === 'profile' ? 'home' : tab) === item.key;
-            const navPendBadge = item.key === 'consultations' ? consultations.filter(c => c.status === 'pending').length : 0;
-            return (
+          {/* Divider */}
+          <div className="w-px h-8 flex-shrink-0 mr-2 transition-colors duration-250" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : (navScrolled ? '#e5e7eb' : 'rgba(30,58,95,0.2)') }} />
+
+          {/* Nav links — equal gap between every item */}
+          <div className="flex items-center gap-1">
+            {PROF_NAV_ITEMS.map(item => {
+              const isActive = (tab === 'profile' ? 'home' : tab) === item.key;
+              const navPendBadge = item.key === 'consultations' ? consultations.filter(c => c.status === 'pending').length : 0;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => handleTabChange(item.key as ProfessorTab)}
+                  className={`relative flex items-center gap-1.5 rounded-lg text-[15px] font-semibold whitespace-nowrap transition-colors px-3 pt-2 pb-3 ${
+                    isActive
+                      ? isDark ? 'text-white' : (navScrolled ? 'text-[#0369A1]' : 'text-[#1e3a5f]')
+                      : isDark
+                        ? 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.06]'
+                        : (navScrolled ? 'text-gray-500 hover:text-gray-800 hover:bg-gray-100' : 'text-[#2d5075]/80 hover:text-[#1e3a5f] hover:bg-white/30')
+                  }`}
+                >
+                  {item.label}
+                  {navPendBadge > 0 && (
+                    <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full text-[9px] font-bold ${isActive ? (isDark ? 'bg-white/20 text-white' : 'bg-[#0369A1]/20 text-[#0369A1]') : 'bg-[#0EA5E9] text-white'}`}>
+                      {navPendBadge > 9 ? '9+' : navPendBadge}
+                    </span>
+                  )}
+                  {isActive && (
+                    <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full ${isDark ? 'bg-white' : 'bg-[#0369A1]'}`} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Divider */}
+          <div className="w-px h-8 flex-shrink-0 ml-2 transition-colors duration-250" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : (navScrolled ? '#e5e7eb' : 'rgba(30,58,95,0.2)') }} />
+
+          {/* Right icons */}
+          <div className="flex items-center gap-1 pl-4 flex-shrink-0">
+
+            {/* Notification bell */}
+            <div className="relative" ref={topNavNotifRef}>
               <button
-                key={item.key}
-                onClick={() => handleTabChange(item.key as ProfessorTab)}
-                className={`relative flex items-center gap-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors px-3 pt-2 pb-3 ${
-                  isActive
-                    ? isDark ? 'text-white' : 'text-[#0369A1]'
-                    : isDark
-                      ? 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.06]'
-                      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-                }`}
+                onClick={() => setTopNavNotifOpen(o => !o)}
+                className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
               >
-                {item.label}
-                {navPendBadge > 0 && (
-                  <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full text-[9px] font-bold ${isActive ? (isDark ? 'bg-white/20 text-white' : 'bg-[#0369A1]/20 text-[#0369A1]') : 'bg-[#0EA5E9] text-white'}`}>
-                    {navPendBadge > 9 ? '9+' : navPendBadge}
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                </svg>
+                {consultations.filter(c => c.status === 'pending').length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-[#CC0000] text-white text-[9px] font-bold flex items-center justify-center">
+                    {consultations.filter(c => c.status === 'pending').length > 9 ? '9+' : consultations.filter(c => c.status === 'pending').length}
                   </span>
                 )}
-                {isActive && (
-                  <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full ${isDark ? 'bg-white' : 'bg-[#0369A1]'}`} />
-                )}
               </button>
-            );
-          })}
-        </div>
+            </div>
 
-        {/* Pill 3 — Right Icons */}
-        <div className={`flex items-center gap-1 px-4 py-2.5 rounded-full shadow-md flex-shrink-0 ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
-
-          {/* Notification bell */}
-          <div className="relative" ref={topNavNotifRef}>
+            {/* Dark mode toggle */}
             <button
-              onClick={() => setTopNavNotifOpen(o => !o)}
-              className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
+              onClick={toggleTheme}
+              title={isDark ? 'Light Mode' : 'Dark Mode'}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-              </svg>
-              {consultations.filter(c => c.status === 'pending').length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-[#CC0000] text-white text-[9px] font-bold flex items-center justify-center">
-                  {consultations.filter(c => c.status === 'pending').length > 9 ? '9+' : consultations.filter(c => c.status === 'pending').length}
-                </span>
+              {isDark ? (
+                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" /></svg>
+              ) : (
+                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" /></svg>
               )}
             </button>
-          </div>
 
-          {/* Dark mode toggle */}
-          <button
-            onClick={toggleTheme}
-            title={isDark ? 'Light Mode' : 'Dark Mode'}
-            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            {isDark ? (
-              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" /></svg>
-            ) : (
-              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" /></svg>
-            )}
-          </button>
-
-          {/* Professor name + dropdown trigger */}
-          <div className="relative" ref={topNavProfileRef}>
-            <button
-              onClick={() => { setTopNavProfileOpen(o => !o); setTopNavNotifOpen(false); }}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-200 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-100'}`}
-            >
-              <span className="text-sm font-medium truncate max-w-[140px]">{profile.full_name || 'Professor'}</span>
-              <svg
-                className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${topNavProfileOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            {/* Professor name + dropdown trigger */}
+            <div className="relative" ref={topNavProfileRef}>
+              <button
+                onClick={() => { setTopNavProfileOpen(o => !o); setTopNavNotifOpen(false); }}
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-200 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-100'}`}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+                <span className="text-sm font-medium truncate max-w-[140px]">{profile.full_name || 'Professor'}</span>
+                <svg
+                  className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${topNavProfileOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+
           </div>
-        </div>
       </div>
 
       {/* Desktop notification dropdown */}
       {topNavNotifOpen && (
-        <div ref={topNavNotifPanelRef} className={`hidden lg:block fixed top-[72px] right-4 z-[9999] w-80 rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'}`}>
+        <div ref={topNavNotifPanelRef} className={`hidden lg:block fixed top-[68px] right-4 z-[9999] w-80 rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'}`}>
           <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
             <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Notifications
@@ -1899,7 +1918,7 @@ export default function ProfessorDashboard() {
 
       {/* Profile dropdown */}
       {topNavProfileOpen && (
-        <div ref={topNavProfilePanelRef} className="hidden lg:block fixed top-[72px] right-4 z-[9999] min-w-[150px] rounded-xl bg-white shadow-md border border-gray-100 overflow-hidden">
+        <div ref={topNavProfilePanelRef} className="hidden lg:block fixed top-[68px] right-4 z-[9999] min-w-[150px] rounded-xl bg-white shadow-md border border-gray-100 overflow-hidden">
           <button
             onClick={() => { router.push('/settings'); setTopNavProfileOpen(false); }}
             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors text-left"
@@ -2149,7 +2168,7 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto flex flex-col" style={{ paddingTop: '88px', ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
+      <main ref={mainScrollRef} onScroll={e => setNavScrolled((e.currentTarget as HTMLElement).scrollTop > 8)} className="flex-1 overflow-y-auto flex flex-col" style={{ paddingTop: '64px', ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
@@ -2612,27 +2631,42 @@ export default function ProfessorDashboard() {
                   className={`w-full pl-9 pr-3 py-2 rounded-xl text-sm ${fieldCls}`}
                 />
               </div>
-              {/* Status filter chips */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {(['all', 'pending', 'confirmed', 'rescheduled'] as const).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setConsultStatusFilter(s)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      consultStatusFilter === s
-                        ? s === 'pending'
-                          ? isDark ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40' : 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'
-                        : s === 'confirmed'
-                          ? isDark ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-sky-100 text-sky-700 ring-1 ring-sky-300'
-                        : s === 'rescheduled'
-                          ? isDark ? 'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/40' : 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
-                        : isDark ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-gray-200 text-gray-700 ring-1 ring-gray-300'
-                        : isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
-                  </button>
-                ))}
+              {/* Status filter — Notion-style: dot + label + count */}
+              <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+                {([
+                  { key: 'all',         label: 'All',         dot: isDark ? 'bg-gray-400' : 'bg-gray-500',   count: visibleConsultations.length },
+                  { key: 'pending',     label: 'Pending',     dot: 'bg-amber-400',                           count: visibleConsultations.filter(c => c.status === 'pending').length },
+                  { key: 'confirmed',   label: 'Confirmed',   dot: 'bg-sky-400',                             count: visibleConsultations.filter(c => c.status === 'confirmed').length },
+                  { key: 'rescheduled', label: 'Rescheduled', dot: 'bg-orange-400',                          count: visibleConsultations.filter(c => c.status === 'rescheduled').length },
+                ] as const).map(s => {
+                  const isActive = consultStatusFilter === s.key;
+                  const activeCls =
+                    s.key === 'pending'     ? (isDark ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'   : 'bg-amber-50 text-amber-700 border-amber-200') :
+                    s.key === 'confirmed'   ? (isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'         : 'bg-sky-50 text-sky-700 border-sky-200') :
+                    s.key === 'rescheduled' ? (isDark ? 'bg-orange-500/15 text-orange-300 border-orange-500/30': 'bg-orange-50 text-orange-700 border-orange-200') :
+                                              (isDark ? 'bg-white/8 text-white border-white/15'                : 'bg-gray-100 text-gray-800 border-gray-300');
+                  return (
+                    <button
+                      key={s.key}
+                      onClick={() => setConsultStatusFilter(s.key)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                        isActive
+                          ? activeCls
+                          : isDark
+                            ? 'text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/5 hover:border-white/10'
+                            : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
+                      {s.label}
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ml-0.5 ${
+                        isActive
+                          ? isDark ? 'bg-white/15 text-white' : 'bg-black/8 text-current'
+                          : isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'
+                      }`}>{s.count}</span>
+                    </button>
+                  );
+                })}
               </div>
               {/* Sort */}
               <div className="flex-shrink-0 relative">
@@ -2967,12 +3001,7 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'calendar' ? (
-          <div className="flex">
-          <div className="flex-1 min-w-0 px-3 sm:px-8 py-5 sm:py-8">
-            <div className="mb-5 sm:mb-7">
-              <h1 className={`text-2xl font-bold ${tp}`}>Booking Calendar</h1>
-              <p className="text-gray-600 text-sm mt-1">Monthly view of your consultation schedule</p>
-            </div>
+          <div className="px-3 sm:px-8 py-5 sm:py-8">
 
             {/* ── Full month calendar ── */}
             <div className="mb-6 sm:mb-8">
@@ -3073,8 +3102,6 @@ export default function ProfessorDashboard() {
                 </div>
               );
             })()}
-          </div>
-          <div className="w-64 flex-shrink-0 hidden xl:block" />
           </div>
 
         ) : tab === 'schedules' ? (
