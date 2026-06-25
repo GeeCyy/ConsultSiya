@@ -17,9 +17,10 @@ interface CustomSelectProps {
   wrapperClassName?: string;
   align?: 'left' | 'right';
   forceUp?: boolean;
+  triggerPrefix?: string;
 }
 
-export default function CustomSelect({ value, onChange, options, isDark, className = '', wrapperClassName, align = 'left', forceUp = false }: CustomSelectProps) {
+export default function CustomSelect({ value, onChange, options, isDark, className = '', wrapperClassName, align = 'left', forceUp = false, triggerPrefix = '' }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -76,7 +77,7 @@ export default function CustomSelect({ value, onChange, options, isDark, classNa
           isDark ? 'bg-[#252535] border-white/10 text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-900 hover:border-gray-300'
         } ${className}`}
       >
-        <span className="truncate">{selected?.label ?? ''}</span>
+        <span className="truncate">{triggerPrefix}{selected?.label ?? ''}</span>
         <svg className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>

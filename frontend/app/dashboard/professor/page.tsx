@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import * as XLSX from 'xlsx';
@@ -926,6 +927,10 @@ export default function ProfessorDashboard() {
   const [consultSearch,       setConsultSearch]       = useState('');
   const [consultStatusFilter, setConsultStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'rescheduled'>('all');
   const [consultSortBy,       setConsultSortBy]       = useState<'date' | 'name' | 'status'>('date');
+  const [consultSortDir,      setConsultSortDir]      = useState<'asc' | 'desc'>('desc');
+  const [sortMenuOpen,        setSortMenuOpen]        = useState(false);
+  const sortMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const sortMenuPanelRef = useRef<HTMLDivElement>(null);
 
   // Bulk selection
   const [selectedIds,     setSelectedIds]     = useState<Set<number>>(new Set());
@@ -948,6 +953,9 @@ export default function ProfessorDashboard() {
   const [lbStudents, setLbStudents] = useState<LeaderboardItem[]>([]);
   const [lbTopics,   setLbTopics]   = useState<LeaderboardItem[]>([]);
   const [lbView, setLbView]         = useState<'rankings' | 'consulted'>('rankings');
+
+  // Weekly overview modal
+  const [weeklyModalOpen, setWeeklyModalOpen] = useState(false);
 
   // Theme — mounted guard prevents server/client mismatch
   const [mounted, setMounted] = useState(false);
@@ -1023,6 +1031,20 @@ export default function ProfessorDashboard() {
     if (!authReady || !token) return;
     if (tab === 'calendar' || tab === 'consultations') markMissed();
   }, [tab, authReady]);
+
+  // Weekly overview modal: intercept back button + Escape key
+  useEffect(() => {
+    if (!weeklyModalOpen) return;
+    window.history.pushState({ weeklyModal: true }, '');
+    const onPop = () => setWeeklyModalOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setWeeklyModalOpen(false); };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [weeklyModalOpen]);
 
   // Close desktop top-nav notification panel on outside click
   useEffect(() => {
@@ -1501,11 +1523,12 @@ export default function ProfessorDashboard() {
       return matchSearch && matchStatus;
     })
     .sort((a, b) => {
-      if (consultSortBy === 'name')   return a.student_name.localeCompare(b.student_name);
-      if (consultSortBy === 'status') return a.status.localeCompare(b.status);
+      const dir = consultSortDir === 'asc' ? 1 : -1;
+      if (consultSortBy === 'name')   return dir * a.student_name.localeCompare(b.student_name);
+      if (consultSortBy === 'status') return dir * a.status.localeCompare(b.status);
       const dateA = a.date + (a.time_start || a.time || '');
       const dateB = b.date + (b.time_start || b.time || '');
-      return dateA.localeCompare(dateB);
+      return dir * dateA.localeCompare(dateB);
     });
 
   const toggleSelect    = (id: number) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -1642,6 +1665,7 @@ export default function ProfessorDashboard() {
   };
 
   const handleTabChange = (next: ProfessorTab) => {
+    setWeeklyModalOpen(false);
     setTab(next);
     router.replace(`?view=${next}`, { scroll: false });
   };
@@ -1693,6 +1717,17 @@ export default function ProfessorDashboard() {
         />
       </div>
 
+      {/* Full-width backdrop behind the floating pills — prevents scrolled content bleeding through the gaps */}
+      <div
+        className="hidden lg:block"
+        style={{
+          position: 'fixed', top: 0, left: 0, right: 0, height: '76px', zIndex: 9998,
+          background: isDark ? 'rgba(14,15,20,0.82)' : 'rgba(219,234,254,0.75)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+        }}
+      />
+
       {/* ── Desktop Top Navbar — 3 floating pills (sibling to content area so position:fixed is viewport-relative) ── */}
       <div
         className="hidden lg:flex"
@@ -1700,7 +1735,7 @@ export default function ProfessorDashboard() {
       >
 
         {/* Pill 1 — Logo */}
-        <div className={`relative flex items-center gap-2.5 px-4 py-2 rounded-full shadow-md flex-shrink-0 overflow-hidden ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
+        <div className={`relative flex items-center gap-2.5 px-5 py-2.5 rounded-full shadow-md flex-shrink-0 overflow-hidden ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
           {/* Mapua logo watermark background */}
           <img src="/mapua-logo.png" alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-10 pointer-events-none select-none" />
           <div className="relative flex-shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
@@ -1713,7 +1748,7 @@ export default function ProfessorDashboard() {
         </div>
 
         {/* Pill 2 — Nav Links */}
-        <div className={`flex items-center gap-0.5 px-3 py-2 rounded-full shadow-md ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
+        <div className={`flex items-center gap-0.5 px-3 py-2.5 rounded-full shadow-md ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
           {PROF_NAV_ITEMS.map(item => {
             const isActive = (tab === 'profile' ? 'home' : tab) === item.key;
             const navPendBadge = item.key === 'consultations' ? consultations.filter(c => c.status === 'pending').length : 0;
@@ -1721,19 +1756,22 @@ export default function ProfessorDashboard() {
               <button
                 key={item.key}
                 onClick={() => handleTabChange(item.key as ProfessorTab)}
-                className={`relative flex items-center gap-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`relative flex items-center gap-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors px-3 pt-2 pb-3 ${
                   isActive
-                    ? 'bg-[#0369A1] text-white px-4 py-1.5'
+                    ? isDark ? 'text-white' : 'text-[#0369A1]'
                     : isDark
-                      ? 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.06] px-3 py-1.5'
-                      : 'text-gray-800 hover:bg-gray-100 px-3 py-1.5'
+                      ? 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.06]'
+                      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
                 }`}
               >
                 {item.label}
                 {navPendBadge > 0 && (
-                  <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full text-[9px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-[#0EA5E9] text-white'}`}>
+                  <span className={`inline-flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full text-[9px] font-bold ${isActive ? (isDark ? 'bg-white/20 text-white' : 'bg-[#0369A1]/20 text-[#0369A1]') : 'bg-[#0EA5E9] text-white'}`}>
                     {navPendBadge > 9 ? '9+' : navPendBadge}
                   </span>
+                )}
+                {isActive && (
+                  <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full ${isDark ? 'bg-white' : 'bg-[#0369A1]'}`} />
                 )}
               </button>
             );
@@ -1741,13 +1779,13 @@ export default function ProfessorDashboard() {
         </div>
 
         {/* Pill 3 — Right Icons */}
-        <div className={`flex items-center gap-1 px-4 py-2 rounded-full shadow-md flex-shrink-0 ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
+        <div className={`flex items-center gap-1 px-4 py-2.5 rounded-full shadow-md flex-shrink-0 ${isDark ? 'bg-[#1e1f22]' : 'bg-white'}`} style={{ pointerEvents: 'auto' }}>
 
           {/* Notification bell */}
           <div className="relative" ref={topNavNotifRef}>
             <button
               onClick={() => setTopNavNotifOpen(o => !o)}
-              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
@@ -1885,6 +1923,110 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
+      {/* Weekly Overview Modal */}
+      {weeklyModalOpen && (() => {
+        const toDS = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const _dow = now.getDay();
+        const mon = new Date(now);
+        mon.setDate(now.getDate() + (_dow === 0 ? -6 : 1 - _dow));
+        mon.setHours(0, 0, 0, 0);
+        const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        const weekDays = DAYS.map((lbl, i) => {
+          const d = new Date(mon);
+          d.setDate(mon.getDate() + i);
+          const ds = toDS(d);
+          const items = consultations
+            .filter(c => c.date.slice(0,10) === ds)
+            .sort((a,b) => (a.time || a.time_start).localeCompare(b.time || b.time_start));
+          return { label: lbl, dateStr: ds, dateObj: d, items, isToday: ds === todayStr };
+        });
+        const totalCount = weekDays.reduce((acc, d) => acc + d.items.length, 0);
+        return (
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setWeeklyModalOpen(false)}>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div
+              className={`relative z-10 w-full sm:max-w-2xl flex flex-col shadow-2xl
+                rounded-t-2xl sm:rounded-2xl border-t sm:border
+                max-h-[88vh] sm:max-h-[85vh]
+                ${isDark ? 'border-white/10 bg-[#1e1f22]' : 'border-gray-200 bg-white'}`}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Drag handle (mobile only) */}
+              <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-white/20' : 'bg-gray-300'}`} />
+              </div>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                <div>
+                  <h2 className={`text-base sm:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Weekly Overview</h2>
+                  <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {mon.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} –{' '}
+                    {new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {totalCount > 0 && <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>{totalCount} total</span>}
+                  </p>
+                </div>
+                <button onClick={() => setWeeklyModalOpen(false)} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              {/* Body */}
+              <div className="overflow-y-auto flex-1 px-3 sm:px-5 py-3 sm:py-4 space-y-3">
+                {weekDays.map(day => (
+                  <div key={day.dateStr} className={`rounded-xl overflow-hidden border ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                    {/* Day header */}
+                    <div className={`flex items-center justify-between px-3 sm:px-4 py-2.5 ${
+                      day.isToday
+                        ? 'bg-[#0EA5E9]'
+                        : isDark ? 'bg-white/[0.05]' : 'bg-gray-50'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold uppercase tracking-widest ${day.isToday ? 'text-sky-100' : isDark ? 'text-gray-300' : 'text-gray-600'}`}>{day.label}</span>
+                        <span className={`text-xs font-medium ${day.isToday ? 'text-sky-200' : isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {day.dateObj.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                        </span>
+                        {day.isToday && <span className="text-[9px] font-black uppercase tracking-wider bg-white/20 text-white px-1.5 py-0.5 rounded-full">Today</span>}
+                      </div>
+                      {day.items.length > 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${day.isToday ? 'bg-white/20 text-white' : isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-100 text-sky-600'}`}>{day.items.length}</span>
+                      )}
+                    </div>
+                    {/* Consultations list */}
+                    {day.items.length === 0 ? (
+                      <div className={`px-3 sm:px-4 py-3 text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>No consultations</div>
+                    ) : (
+                      <div className={`divide-y ${isDark ? 'divide-white/[0.05]' : 'divide-gray-100'}`}>
+                        {day.items.map(c => {
+                          const s = STATUS_STYLES[c.status] ?? { darkBg: 'bg-gray-500/15', lightBg: 'bg-gray-100', darkText: 'text-gray-400', lightText: 'text-gray-600', dot: 'bg-gray-400', label: c.status };
+                          return (
+                            <div key={c.id} className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'} transition-colors`}>
+                              <span className={`text-xs font-mono tabular-nums w-12 sm:w-14 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {to12h((c.time || c.time_start)?.slice(0,5) ?? '')}
+                              </span>
+                              <div className={`hidden sm:block w-px h-4 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+                              <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.student_name}</p>
+                                <p className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                  {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'In-Person' : 'Online'}
+                                </p>
+                              </div>
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${isDark ? s.darkBg + ' ' + s.darkText : s.lightBg + ' ' + s.lightText}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                                {s.label}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Content area ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden" style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)', minHeight: '100vh' } : undefined}>
         <div className="lg:hidden h-14 flex-shrink-0" />
@@ -2007,7 +2149,7 @@ export default function ProfessorDashboard() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto flex flex-col" style={{ paddingTop: '80px', ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
+      <main className="flex-1 overflow-y-auto flex flex-col" style={{ paddingTop: '88px', ...(isDark ? { background: 'rgba(18,19,24,0.85)' } : { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }) }}>
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
@@ -2082,7 +2224,7 @@ export default function ProfessorDashboard() {
 
                 {/* Right: stats card */}
                 <div
-                  className={`flex items-center gap-5 px-7 py-3.5 flex-shrink-0 ${isDark ? 'bg-white/[0.06] border border-white/10' : ''}`}
+                  className={`flex items-center gap-5 px-7 py-3.5 flex-shrink-0 rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
                   style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
                 >
                   {([
@@ -2124,7 +2266,7 @@ export default function ProfessorDashboard() {
                         <span className="text-sky-100 text-[9px] font-bold uppercase tracking-wide">WK</span>
                       </div>
                       <div>
-                        <p className={`text-lg font-semibold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                        <p className={`text-sm font-semibold whitespace-nowrap ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
                         <p className={`text-sm mt-1 ${tm}`}>{term.label}</p>
                       </div>
                     </div>
@@ -2183,7 +2325,7 @@ export default function ProfessorDashboard() {
                         <h3 className={`text-xl font-bold ${tp}`}>Weekly Overview</h3>
                         <p className={`text-sm ${tm} mt-0.5`}>Consultations breakdown for this week</p>
                       </div>
-                      <button onClick={() => handleTabChange('consultations')} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
+                      <button onClick={() => setWeeklyModalOpen(true)} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
                         View all →
                       </button>
                     </div>
@@ -2207,15 +2349,15 @@ export default function ProfessorDashboard() {
                             b.isToday
                               ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
                               : b.total > 0
-                                ? isDark ? 'bg-white/[0.06] ring-1 ring-white/[0.15]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
-                                : isDark ? 'bg-white/[0.025] ring-1 ring-white/[0.08]' : 'bg-gray-50 ring-1 ring-gray-300'
+                                ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
+                                : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
                           }`}
                         >
                           <span className={`text-xs font-semibold uppercase tracking-widest leading-none ${
-                            b.isToday ? 'text-sky-100' : isDark ? (b.total > 0 ? 'text-gray-400' : 'text-gray-600') : (b.total > 0 ? 'text-gray-500' : 'text-gray-400')
+                            b.isToday ? 'text-sky-100' : isDark ? (b.total > 0 ? 'text-gray-300' : 'text-gray-400') : (b.total > 0 ? 'text-gray-500' : 'text-gray-400')
                           }`}>{b.label}</span>
                           <span className={`text-4xl font-bold leading-none my-3 ${
-                            b.isToday ? 'text-white' : b.total > 0 ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-gray-700' : 'text-gray-300')
+                            b.isToday ? 'text-white' : b.total > 0 ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-gray-500' : 'text-gray-300')
                           }`}>{b.total > 0 ? b.total : '–'}</span>
                           {/* Student avatars */}
                           <div className="flex items-center justify-center h-8">
@@ -2493,18 +2635,63 @@ export default function ProfessorDashboard() {
                 ))}
               </div>
               {/* Sort */}
-              <div className="flex-shrink-0">
-                <CustomSelect
-                  value={consultSortBy}
-                  onChange={v => setConsultSortBy(v as typeof consultSortBy)}
-                  isDark={isDark}
-                  className="text-xs py-2 px-3"
-                  options={[
-                    { value: 'date', label: 'Sort: Date' },
-                    { value: 'name', label: 'Sort: Name' },
-                    { value: 'status', label: 'Sort: Status' },
-                  ]}
-                />
+              <div className="flex-shrink-0 relative">
+                <button
+                  ref={sortMenuBtnRef}
+                  onClick={() => {
+                    if (!sortMenuOpen) {
+                      const rect = sortMenuBtnRef.current?.getBoundingClientRect();
+                      if (rect && sortMenuPanelRef.current) {
+                        sortMenuPanelRef.current.style.top  = `${rect.bottom + 4}px`;
+                        sortMenuPanelRef.current.style.left = `${rect.left}px`;
+                      }
+                    }
+                    setSortMenuOpen(o => !o);
+                  }}
+                  className={`flex items-center gap-1.5 text-xs py-2 px-3 rounded-lg border transition-colors ${isDark ? 'bg-[#252535] border-white/10 text-white hover:border-white/20' : 'bg-white border-gray-200 text-gray-900 hover:border-gray-300'}`}
+                >
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M6 12h12M10 17h4" />
+                  </svg>
+                  Sort
+                  <svg className={`w-3 h-3 flex-shrink-0 transition-transform ${sortMenuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {sortMenuOpen && typeof document !== 'undefined' && createPortal(
+                  <>
+                    <div className="fixed inset-0 z-[999]" onClick={() => setSortMenuOpen(false)} />
+                    <div
+                      ref={sortMenuPanelRef}
+                      className={`fixed z-[1000] min-w-[150px] rounded-lg border shadow-xl py-1 ${isDark ? 'bg-[#252535] border-white/10' : 'bg-white border-gray-200'}`}
+                      style={{ top: (sortMenuBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 4, right: window.innerWidth - (sortMenuBtnRef.current?.getBoundingClientRect().right ?? 0), left: 'auto' }}
+                    >
+                      {([
+                        { value: 'date',   label: 'Date' },
+                        { value: 'name',   label: 'Name' },
+                        { value: 'status', label: 'Status' },
+                      ] as const).map(opt => (
+                        <button key={opt.value} onClick={() => { setConsultSortBy(opt.value); setSortMenuOpen(false); }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-left transition-colors ${isDark ? 'text-gray-200 hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-opacity ${consultSortBy === opt.value ? (isDark ? 'bg-sky-400' : 'bg-sky-500') : 'opacity-0'}`} />
+                          {opt.label}
+                        </button>
+                      ))}
+                      <div className={`my-1 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`} />
+                      {([
+                        { value: 'asc',  label: 'Ascending' },
+                        { value: 'desc', label: 'Descending' },
+                      ] as const).map(opt => (
+                        <button key={opt.value} onClick={() => { setConsultSortDir(opt.value); setSortMenuOpen(false); }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-left transition-colors ${isDark ? 'text-gray-200 hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-opacity ${consultSortDir === opt.value ? (isDark ? 'bg-sky-400' : 'bg-sky-500') : 'opacity-0'}`} />
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>,
+                  document.body
+                )}
               </div>
             </div>
 
