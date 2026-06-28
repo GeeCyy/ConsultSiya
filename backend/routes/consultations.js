@@ -939,5 +939,33 @@ router.get('/:id/proof', authenticate, async (req, res) => {
   }
 });
 
+// Professor toggles in-session flag on a confirmed consultation
+router.patch('/:id/in-session', authenticate, authorize('professor'), async (req, res) => {
+  const { id } = req.params;
+  const { in_session } = req.body;
+  try {
+    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+    if (!prof.rows[0]) return res.status(404).json({ error: 'Professor profile not found.' });
+
+    const consultation = await pool.query(
+      `SELECT professor_id, status FROM consultations WHERE id = $1`, [id]
+    );
+    if (!consultation.rows[0]) return res.status(404).json({ error: 'Consultation not found.' });
+    if (consultation.rows[0].professor_id !== prof.rows[0].id)
+      return res.status(403).json({ error: 'Access denied.' });
+    if (!['confirmed', 'rescheduled'].includes(consultation.rows[0].status))
+      return res.status(400).json({ error: 'Can only set in-session on confirmed consultations.' });
+
+    const result = await pool.query(
+      `UPDATE consultations SET in_session = $1 WHERE id = $2 RETURNING id, in_session`,
+      [!!in_session, id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.autoMarkMissed = autoMarkMissed;
 module.exports = router;
