@@ -1207,12 +1207,13 @@ export default function StudentDashboard() {
             const uniqueProfs = Array.from(
               new Map(items.map(c => [c.professor_name, { name: c.professor_name, avatar: c.professor_avatar }])).values()
             ).slice(0, 3);
+            const availableSlots = schedules.filter(s => s.date === ds && s.is_available).length;
             return {
               label: lbl, date: ds, isToday: ds === todayStr,
               pending:   items.filter(c => c.status === 'pending').length,
               confirmed: items.filter(c => c.status === 'confirmed' || c.status === 'completed').length,
               completed: items.filter(c => c.status === 'completed').length,
-              total: items.length, professors: uniqueProfs,
+              total: items.length, professors: uniqueProfs, availableSlots,
               overflow: Math.max(0, new Map(items.map(c => [c.professor_name, true])).size - 3),
             };
           });
@@ -1364,7 +1365,9 @@ export default function StudentDashboard() {
                             ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
                             : b.total > 0
                               ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
-                              : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
+                              : b.availableSlots > 0
+                                ? isDark ? 'bg-violet-500/[0.08] ring-1 ring-violet-400/30' : 'bg-violet-50 ring-1 ring-violet-200'
+                                : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
                         }`}
                       >
                         <span className={`text-[9px] sm:text-xs font-semibold uppercase tracking-wider leading-none ${
@@ -1391,6 +1394,10 @@ export default function StudentDashboard() {
                                 </div>
                               )}
                             </div>
+                          ) : b.availableSlots > 0 ? (
+                            <span className={`text-[9px] sm:text-[10px] font-semibold text-center leading-tight ${isDark ? 'text-violet-400' : 'text-violet-500'}`}>
+                              {b.availableSlots} open
+                            </span>
                           ) : (
                             <div className="flex gap-1 items-center">
                               {b.pending > 0 && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${b.isToday ? 'bg-amber-300 ring-1 ring-white/80' : 'bg-amber-400'}`} />}
@@ -1401,10 +1408,11 @@ export default function StudentDashboard() {
                       </div>
                     ))}
                   </div>
-                  <div className={`mt-4 pt-3 border-t flex items-center gap-4 ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
+                  <div className={`mt-4 pt-3 border-t flex items-center gap-4 flex-wrap ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className={`text-xs font-medium ${tm}`}>Pending</span></div>
                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /><span className={`text-xs font-medium ${tm}`}>Confirmed</span></div>
                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0EA5E9]" /><span className={`text-xs font-medium ${tm}`}>Today</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-violet-400" /><span className={`text-xs font-medium ${tm}`}>Available</span></div>
                   </div>
                 </div>
 
