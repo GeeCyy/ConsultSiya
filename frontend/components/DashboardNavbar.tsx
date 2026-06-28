@@ -37,7 +37,7 @@ export interface DashboardNavbarProps {
   isDark: boolean;
   onToggleTheme: () => void;
   notificationCount?: number;
-  scrollRef?: React.RefObject<HTMLElement>;
+  scrollRef?: React.RefObject<HTMLElement | null>;
   // Full notification dropdown (professor-style, all three required together)
   pendingConsultations?: PendingConsult[];
   announcements?: AnnItem[];
