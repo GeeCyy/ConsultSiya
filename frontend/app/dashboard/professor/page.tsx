@@ -112,6 +112,7 @@ type Consultation = {
   student_avatar?: string | null;
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
+  in_session?: boolean;
 };
 
 type TimeRange = { time_start: string; time_end: string };
@@ -909,8 +910,9 @@ export default function ProfessorDashboard() {
   const [showConfirmEdit, setShowConfirmEdit] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string; announcement?: string; meeting_link?: string; mode?: string } & typeof editSched | null>(null);
 
-  const [downloadingForm, setDownloadingForm] = useState<number | null>(null);
-  const [viewingProof, setViewingProof]       = useState<number | null>(null);
+  const [downloadingForm, setDownloadingForm]   = useState<number | null>(null);
+  const [viewingProof, setViewingProof]         = useState<number | null>(null);
+  const [togglingSession, setTogglingSession]   = useState<number | null>(null);
 
   // Meeting link modal (for confirming OL consultations)
   const [meetingLinkConsult, setMeetingLinkConsult] = useState<Consultation | null>(null);
@@ -1283,6 +1285,18 @@ export default function ProfessorDashboard() {
       URL.revokeObjectURL(url);
     } finally {
       setDownloadingForm(null);
+    }
+  };
+
+  const handleToggleInSession = async (c: Consultation) => {
+    setTogglingSession(c.id);
+    try {
+      const next = !c.in_session;
+      const data = await api.patch(`/api/consultations/${c.id}/in-session`, { in_session: next }, token!);
+      if (data.error) { toast.error(data.error); return; }
+      setConsultations(prev => prev.map(x => x.id === c.id ? { ...x, in_session: next } : x));
+    } finally {
+      setTogglingSession(null);
     }
   };
 
@@ -1936,7 +1950,7 @@ export default function ProfessorDashboard() {
             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left"
           >
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3 3v1" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
             </svg>
             Sign Out
           </button>
@@ -2309,16 +2323,16 @@ export default function ProfessorDashboard() {
                       </div>
                       <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/10 border border-white/10' : 'divide-gray-200 border border-gray-200'}`}>
                         {([
-                          { label: 'Days to Finals',  value: daysToFinals,   color: 'text-orange-500', dot: 'bg-orange-400', bg: isDark ? 'bg-white/[0.04]' : 'bg-orange-50/80' },
-                          { label: 'Days to End',      value: daysToEnd,      color: 'text-pink-500',   dot: 'bg-pink-400',   bg: isDark ? 'bg-white/[0.04]' : 'bg-pink-50/80'   },
-                          { label: 'Weeks Remaining',  value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, color: 'text-blue-500', dot: 'bg-blue-400', bg: isDark ? 'bg-white/[0.04]' : 'bg-blue-50/80' },
+                          { label: 'Days to Finals',  value: daysToFinals,   dot: isDark ? 'bg-slate-500' : 'bg-slate-400' },
+                          { label: 'Days to End',      value: daysToEnd,      dot: isDark ? 'bg-slate-500' : 'bg-slate-400' },
+                          { label: 'Weeks Remaining',  value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, dot: isDark ? 'bg-slate-500' : 'bg-slate-400' },
                         ] as const).map(m => (
-                          <div key={m.label} className={`flex items-center justify-between px-4 py-3 ${m.bg}`}>
+                          <div key={m.label} className={`flex items-center justify-between px-4 py-3 ${isDark ? 'bg-white/[0.03]' : 'bg-white'}`}>
                             <div className="flex items-center gap-2.5">
-                              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${m.dot}`} />
-                              <span className={`text-base font-medium ${ts}`}>{m.label}</span>
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot}`} />
+                              <span className={`text-sm font-medium ${ts}`}>{m.label}</span>
                             </div>
-                            <span className={`text-xl font-bold ${m.color}`}>{m.value}</span>
+                            <span className={`text-xl font-bold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>{m.value}</span>
                           </div>
                         ))}
                       </div>
@@ -2422,14 +2436,14 @@ export default function ProfessorDashboard() {
                   >
                     <p className={`text-base font-semibold mb-3 flex-shrink-0 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Today's Schedule</p>
                     {todayConsultations.length > 0 ? (
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-2 overflow-y-auto max-h-60">
                         {todayConsultations.map(c => {
                           const isPending   = c.status === 'pending';
                           const isConfirmed = c.status === 'confirmed';
                           return (
-                            <div key={c.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isDark ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'bg-gray-50 hover:bg-gray-100'} transition-colors`}>
-                              <span className={`text-sm font-mono tabular-nums w-12 flex-shrink-0 ${tm}`}>
-                                {(c.time || c.time_start)?.slice(0, 5)}
+                            <div key={c.id} className={`flex items-center gap-3 px-3 py-3 rounded-lg ${isDark ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'bg-gray-50 hover:bg-gray-100'} transition-colors`}>
+                              <span className={`text-sm font-mono font-bold tabular-nums w-16 flex-shrink-0 ${tp}`}>
+                                {to12h((c.time || c.time_start)?.slice(0, 5) ?? '')}
                               </span>
                               <div className={`w-px h-3.5 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
                               <span className={`text-base font-semibold flex-1 truncate ${tp}`}>{c.student_name}</span>
@@ -2597,28 +2611,22 @@ export default function ProfessorDashboard() {
           })()
 
         : tab === 'consultations' ? (
-          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
-            <div className="mb-5 sm:mb-7">
+          <div className="relative z-[1] px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
+
+            {/* ── Header ── */}
+            <div className="mb-6">
               <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
-              <p className="text-gray-600 text-sm mt-1">Review and manage student consultation requests</p>
+              <p className={`text-sm mt-1 ${tp}`}>Review and manage student consultation requests</p>
             </div>
 
-            {/* ── Stats ── */}
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              {[
-                { label: 'Total',     value: stats.total,     color: tp },
-                { label: 'Pending',   value: stats.pending,   color: 'text-amber-400' },
-                { label: 'Confirmed', value: stats.confirmed, color: 'text-blue-400' },
-              ].map(s => (
-                <div key={s.label} className={`px-4 py-3 ${card}`} style={isDark ? undefined : glassStyleSm}>
-                  <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                  <p className={`text-xs mt-0.5 ${tm}`}>{s.label}</p>
-                </div>
-              ))}
-            </div>
+            {/* ── Bento grid ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
 
-            {/* ── Search / Filter / Sort bar ── */}
-            <div className={`p-4 mb-4 flex flex-col sm:flex-row gap-3 ${card}`} style={isDark ? undefined : glassStyle}>
+              {/* ── Left column: search + list ── */}
+              <div className="flex flex-col gap-4 min-w-0">
+
+                {/* Search / Filter / Sort bar */}
+                <div className={`p-4 rounded-2xl flex flex-col sm:flex-row gap-3 ${isDark ? 'bg-[#252525] border border-white/5' : 'bg-white shadow-sm'}`}>
               {/* Search */}
               <div className="relative flex-1 min-w-0">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2728,11 +2736,11 @@ export default function ProfessorDashboard() {
                   document.body
                 )}
               </div>
-            </div>
+              </div>
 
-            {/* ── Bulk action toolbar ── */}
-            {someSelected && (
-              <div className={`rounded-2xl border px-4 py-3 mb-4 flex items-center gap-3 flex-wrap ${isDark ? 'bg-sky-500/10 border-sky-500/30' : 'bg-sky-50 border-sky-200'}`}>
+                {/* ── Bulk action toolbar ── */}
+                {someSelected && (
+                  <div className={`rounded-2xl border px-4 py-3 flex items-center gap-3 flex-wrap ${isDark ? 'bg-sky-500/10 border-sky-500/30' : 'bg-sky-50 border-sky-200'}`}>
                 <span className="text-sky-400 text-sm font-semibold flex-shrink-0">
                   {selectedIds.size} selected
                 </span>
@@ -2757,51 +2765,50 @@ export default function ProfessorDashboard() {
                 <button onClick={clearSelection} className="text-gray-500 hover:text-gray-300 transition-colors text-xs flex-shrink-0">
                   Clear
                 </button>
-              </div>
-            )}
+                  </div>
+                )}
 
-            {visibleConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-24 ${card}`} style={isDark ? undefined : glassStyle}>
-                <p className={`font-medium text-sm ${ts}`}>No consultations yet</p>
-                <p className={`text-xs mt-1 ${tm}`}>Students will appear here once they book a slot</p>
-              </div>
-            ) : displayedConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-16 ${card}`} style={isDark ? undefined : glassStyle}>
-                <svg className="w-8 h-8 text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <p className={`font-medium text-sm ${ts}`}>No results</p>
-                <p className={`text-xs mt-1 ${tm}`}>Try a different search or filter</p>
+                {visibleConsultations.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center py-24 rounded-2xl ${isDark ? 'bg-[#252525] border border-white/5' : 'bg-white shadow-sm'}`}>
+                    <p className={`font-medium text-sm ${ts}`}>No consultations yet</p>
+                    <p className={`text-xs mt-1 ${tm}`}>Students will appear here once they book a slot</p>
+                  </div>
+                ) : displayedConsultations.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center py-16 rounded-2xl ${isDark ? 'bg-[#252525] border border-white/5' : 'bg-white shadow-sm'}`}>
+                    <svg className="w-8 h-8 text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className={`font-medium text-sm ${ts}`}>No results</p>
+                    <p className={`text-xs mt-1 ${tm}`}>Try a different search or filter</p>
                 <button onClick={() => { setConsultSearch(''); setConsultStatusFilter('all'); }} className="mt-3 text-xs text-sky-400 hover:text-sky-300 transition-colors">
                   Clear filters
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Select-all row */}
-                <div className="flex items-center gap-2 px-1 mb-2">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={() => allSelected ? clearSelection() : selectAll()}
-                    className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
-                  />
-                  <span className={`text-xs ${tm}`}>
-                    {allSelected ? 'Deselect all' : `Select all ${displayedConsultations.length}`}
-                  </span>
-                </div>
+                  </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Select-all row */}
+                    <div className="flex items-center gap-2 px-1">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={() => allSelected ? clearSelection() : selectAll()}
+                        className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
+                      />
+                      <span className={`text-xs ${tm}`}>
+                        {allSelected ? 'Deselect all' : `Select all ${displayedConsultations.length}`}
+                      </span>
+                    </div>
 
-                <div className="space-y-3">
-                  {displayedConsultations.map(c => (
-                    <div
-                      key={c.id}
-                      className={`overflow-hidden transition-all ${card} ${
-                        selectedIds.has(c.id)
-                          ? isDark ? 'ring-2 ring-sky-500/50' : 'ring-2 ring-sky-400'
-                          : ''
-                      }`}
-                      style={isDark ? undefined : glassStyle}
-                    >
+                    <div className="space-y-3">
+                      {displayedConsultations.map(c => (
+                        <div
+                          key={c.id}
+                          className={`rounded-2xl overflow-hidden transition-all hover:shadow-md ${isDark ? 'bg-[#252525] border border-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.40)]' : 'bg-white shadow-sm border border-gray-100 hover:border-gray-200'} ${
+                            selectedIds.has(c.id)
+                              ? isDark ? 'ring-2 ring-sky-500/50' : 'ring-2 ring-sky-400'
+                              : ''
+                          }`}
+                        >
                       <div className="p-5">
                         <div className="flex items-start gap-3">
                           {/* Checkbox */}
@@ -2961,6 +2968,24 @@ export default function ProfessorDashboard() {
                                   Confirm
                                 </button>
                               )}
+                              {c.status === 'confirmed' && (
+                                <button
+                                  onClick={() => handleToggleInSession(c)}
+                                  disabled={togglingSession === c.id}
+                                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                                    c.in_session
+                                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                                      : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
+                                  }`}>
+                                  {togglingSession === c.id
+                                    ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    : c.in_session
+                                      ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                      : <span className="w-2 h-2 rounded-full border-2 border-current" />
+                                  }
+                                  {c.in_session ? 'End Session' : 'Start Session'}
+                                </button>
+                              )}
                               <button onClick={() => openCancelModal(c)}
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-red-400/60 text-red-400 hover:bg-red-950/60' : 'border-red-400 text-red-600 hover:bg-red-50'}`}>
                                 <X className="w-3.5 h-3.5" />
@@ -2980,6 +3005,22 @@ export default function ProfessorDashboard() {
                           )}
                           {c.status === 'rescheduled' && (
                             <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => handleToggleInSession(c)}
+                                disabled={togglingSession === c.id}
+                                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                                  c.in_session
+                                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                                    : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
+                                }`}>
+                                {togglingSession === c.id
+                                  ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                  : c.in_session
+                                    ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                    : <span className="w-2 h-2 rounded-full border-2 border-current" />
+                                }
+                                {c.in_session ? 'End Session' : 'Start Session'}
+                              </button>
                               <button onClick={() => openCancelModal(c)}
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-red-400/60 text-red-400 hover:bg-red-950/60' : 'border-red-400 text-red-600 hover:bg-red-50'}`}>
                                 <X className="w-3.5 h-3.5" />
@@ -2996,9 +3037,69 @@ export default function ProfessorDashboard() {
                       </div>
                     </div>
                   ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* ── Right column ── */}
+              <div className="flex flex-col gap-4">
+
+                {/* This Week's Activity */}
+                <div className={`rounded-2xl p-5 ${isDark ? 'bg-[#252525] border border-white/5' : 'bg-white shadow-sm'}`}>
+                  <h3 className={`font-semibold text-sm mb-4 ${tp}`}>This Week&apos;s Activity</h3>
+                  <div className="flex flex-col gap-2">
+                    {([
+                      { label: 'Upcoming',  value: scheduledCount, numCls: 'text-sky-500',     bgCls: isDark ? 'bg-sky-500/10'     : 'bg-sky-50'    },
+                      { label: 'Completed', value: completedCount, numCls: 'text-emerald-500', bgCls: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50' },
+                      { label: 'Pending',   value: pendingCount,   numCls: 'text-amber-500',   bgCls: isDark ? 'bg-amber-500/10'   : 'bg-amber-50'  },
+                    ] as const).map(s => (
+                      <div key={s.label} className={`flex items-center justify-between px-4 py-3 rounded-xl ${s.bgCls}`}>
+                        <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{s.label}</span>
+                        <span className={`text-xl font-bold ${s.numCls}`}>{s.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </>
-            )}
+
+                {/* Recent Activity */}
+                {(() => {
+                  const recentActivity = [...consultations]
+                    .sort((a, b) => (b.date + (b.time_start || '')).localeCompare(a.date + (a.time_start || '')))
+                    .slice(0, 5);
+                  return (
+                    <div className={`rounded-2xl p-5 ${isDark ? 'bg-[#252525] border border-white/5' : 'bg-white shadow-sm'}`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className={`font-semibold text-sm ${tp}`}>Recent Activity</h3>
+                        <button
+                          onClick={() => handleTabChange('history')}
+                          className="text-xs text-sky-500 hover:text-sky-400 transition-colors font-medium"
+                        >
+                          View all →
+                        </button>
+                      </div>
+                      {recentActivity.length === 0 ? (
+                        <p className={`text-sm text-center py-4 ${tm}`}>No activity yet</p>
+                      ) : (
+                        <div className="flex flex-col">
+                          {recentActivity.map((c, i) => (
+                            <div key={c.id} className={`flex items-center gap-3 py-2.5 ${i < recentActivity.length - 1 ? (isDark ? 'border-b border-white/5' : 'border-b border-gray-100') : ''}`}>
+                              <Avatar name={c.student_name} avatarUrl={c.student_avatar} />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium truncate ${tp}`}>{c.student_name}</p>
+                                <p className={`text-xs ${tm}`}>{fmtDate(c.date, { month: 'short', day: 'numeric' })}</p>
+                              </div>
+                              <StatusBadge status={c.status} isDark={isDark} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+              </div>
+            </div>
           </div>
 
         ) : tab === 'calendar' ? (
@@ -3107,11 +3208,6 @@ export default function ProfessorDashboard() {
 
         ) : tab === 'schedules' ? (
           <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
-            <div className="mb-5 sm:mb-7">
-              <h1 className={`text-2xl font-bold ${tp}`}>Manage Schedules</h1>
-              <p className="text-gray-600 text-sm mt-1">Add or edit your available consultation time slots</p>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* ── Left: Add new slot form ── */}
               <div className={`p-5 ${card}`} style={isDark ? undefined : glassStyle}>
@@ -3380,12 +3476,12 @@ export default function ProfessorDashboard() {
           </div>
 
         ) : tab === 'history' ? (
-          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
+          <div className="relative z-[1] px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
             {/* Header + search/filter */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5 sm:mb-6">
               <div className="flex-1">
                 <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
-                <p className={`text-sm mt-0.5 ${ts}`}>Past advising records grouped by term</p>
+                <p className={`text-sm mt-0.5 ${tp}`}>Past advising records grouped by term</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}>
@@ -3462,106 +3558,115 @@ export default function ProfessorDashboard() {
                       <div key={quarter}>
                         {/* Term header + summary */}
                         <div className="flex items-center gap-3 mb-3 flex-wrap">
-                          <p className={`text-[11px] font-semibold uppercase tracking-wider ${ts}`}>{quarter}</p>
-                          <span className={`text-xs ${tm}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{quarter}</p>
+                          <span className={`text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
                             {completionRate}% completed
                           </span>
                         </div>
 
-                        <div className={`rounded-2xl overflow-hidden ${card}`} style={isDark ? undefined : glassStyle}>
+                        <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm'}`}>
                           <div className="overflow-x-auto">
-                          <table className="w-full table-fixed" style={{ minWidth: '560px' }}>
+                          <table className="w-full" style={{ minWidth: '750px' }}>
                             <colgroup>
-                              <col className="w-[96px]" />
+                              <col className="w-[140px]" />
                               <col className="w-[22%]" />
                               <col />
-                              <col className="w-[20%]" />
+                              <col className="w-[170px]" />
                               <col className="w-[130px]" />
                             </colgroup>
                               <thead>
-                                <tr className={`border-b ${borderSoft}`}>
-                                  <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 ${tm}`}>Date</th>
-                                  <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 ${tm}`}>Student</th>
-                                  <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 ${tm}`}>Purpose</th>
-                                  <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 ${tm}`}>Action Taken</th>
-                                  <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-3 ${tm}`}>Status</th>
+                                <tr className={`border-b ${isDark ? 'border-white/5 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'}`}>
+                                  <th className={`text-left text-xs font-semibold uppercase tracking-widest px-5 py-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Date</th>
+                                  <th className={`text-left text-xs font-semibold uppercase tracking-widest px-5 py-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Student</th>
+                                  <th className={`text-left text-xs font-semibold uppercase tracking-widest px-5 py-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Purpose</th>
+                                  <th className={`text-left text-xs font-semibold uppercase tracking-widest px-5 py-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Action Taken</th>
+                                  <th className={`text-left text-xs font-semibold uppercase tracking-widest px-5 py-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Status</th>
                                 </tr>
                               </thead>
-                              <tbody className={`divide-y ${dividerCls}`}>
+                              <tbody className={`divide-y ${isDark ? 'divide-white/[0.04]' : 'divide-gray-100'}`}>
                                 {items.map(c => {
                                   const isExpanded = expandedHistId === c.id;
                                   const draft = histNotes[c.id] ?? { action_taken: c.action_taken ?? '', remarks: c.remarks ?? '' };
                                   const setDraft = (patch: Partial<typeof draft>) =>
                                     setHistNotes(prev => ({ ...prev, [c.id]: { ...draft, ...patch } }));
+                                  const initials = (c.student_name || '?').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
 
                                   return (
                                     <Fragment key={c.id}>
                                       {/* Main row */}
                                       <tr
                                         onClick={() => setExpandedHistId(isExpanded ? null : c.id)}
-                                        className={`cursor-pointer transition-colors ${isExpanded
-                                          ? isDark ? 'bg-sky-500/[0.08]' : 'bg-sky-50/80'
-                                          : hoverBg
+                                        className={`cursor-pointer transition-colors align-middle ${isExpanded
+                                          ? isDark ? 'bg-sky-500/[0.07]' : 'bg-sky-50'
+                                          : isDark ? 'hover:bg-white/[0.025]' : 'hover:bg-gray-50/70'
                                         }`}
                                       >
-                                        <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                          <div className="flex items-center gap-1.5">
-                                            <svg className={`w-3 h-3 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''} ${tm}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                                        <td className={`px-5 py-4 text-sm whitespace-nowrap align-middle ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                          <div className="flex items-center gap-2">
+                                            <svg className={`w-3.5 h-3.5 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''} ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
                                             {fmtDate(c.date, { month: 'short', day: 'numeric', year: 'numeric' })}
                                           </div>
                                         </td>
-                                        <td className={`px-4 py-3 text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                          <p className="truncate font-medium">{c.student_name}</p>
-                                          <p className={`text-[10px] mt-0.5 truncate ${tm}`}>{c.student_number}</p>
+                                        <td className="px-5 py-4 align-middle">
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>{initials}</div>
+                                            <div className="min-w-0">
+                                              <p className={`truncate text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{c.student_name}</p>
+                                              <p className={`text-xs mt-0.5 truncate font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{c.student_number}</p>
+                                            </div>
+                                          </div>
                                         </td>
-                                        <td className={`px-4 py-3 text-xs ${ts} max-w-0`}>
-                                          <span className="line-clamp-2 break-words">{natureLabel(c)}</span>
+                                        <td className={`px-5 py-4 text-sm align-middle ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                          <span className="line-clamp-2 break-words leading-relaxed">{natureLabel(c)}</span>
                                         </td>
-                                        <td className={`px-4 py-3 text-xs ${ts} max-w-0`}>
+                                        <td className="px-5 py-4 text-sm align-middle">
                                           {c.action_taken
-                                            ? <span className="line-clamp-2 break-words">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
+                                            ? <div className="flex items-center gap-1.5">
+                                                <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                                                <span className={`${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
+                                              </div>
                                             : <button
                                                 onClick={e => { e.stopPropagation(); setExpandedHistId(c.id); }}
-                                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${isDark ? 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10' : 'border-sky-300 text-sky-600 hover:bg-sky-50'}`}
+                                                className={`text-sm font-medium px-3 py-1 rounded-lg border transition-colors ${isDark ? 'border-sky-500/20 text-sky-400 hover:bg-sky-500/10' : 'border-sky-200 text-sky-600 bg-sky-50 hover:bg-sky-100'}`}
                                               >
                                                 + Add note
                                               </button>
                                           }
                                         </td>
-                                        <td className="px-4 py-3"><StatusBadge status={c.status} isDark={isDark} /></td>
+                                        <td className="px-5 py-4 align-middle"><StatusBadge status={c.status} isDark={isDark} /></td>
                                       </tr>
 
                                       {/* Expanded detail row */}
                                       {isExpanded && (
                                         <tr key={`${c.id}-detail`}>
-                                          <td colSpan={5} className={`px-4 py-0 overflow-hidden ${isDark ? 'bg-sky-500/[0.05]' : 'bg-sky-50/60'}`}>
-                                            <div className={`py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full overflow-hidden border-t ${isDark ? 'border-sky-500/10' : 'border-sky-100'}`}>
+                                          <td colSpan={5} className={`px-4 py-0 overflow-hidden ${isDark ? 'bg-[#1e2a35]' : 'bg-slate-50'}`}>
+                                            <div className={`py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full overflow-hidden border-t ${isDark ? 'border-white/[0.06]' : 'border-slate-200'}`}>
 
                                               {/* Left: full details */}
                                               <div className="space-y-3 min-w-0">
                                                 <div>
-                                                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tm}`}>Full Purpose</p>
-                                                  <p className={`text-xs leading-relaxed break-words ${ts}`}>{natureLabel(c) || '—'}</p>
+                                                  <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Full Purpose</p>
+                                                  <p className={`text-sm leading-relaxed break-words ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{natureLabel(c) || '—'}</p>
                                                 </div>
                                                 <div className="flex gap-6 flex-wrap">
                                                   <div>
-                                                    <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tm}`}>Mode</p>
-                                                    <p className={`text-xs ${ts}`}>{c.mode === 'BOTH' ? 'Face-to-Face & Online' : c.mode === 'F2F' ? 'In-Person' : c.mode === 'OL' ? 'Online' : c.mode || '—'}</p>
+                                                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Mode</p>
+                                                    <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{c.mode === 'BOTH' ? 'Face-to-Face & Online' : c.mode === 'F2F' ? 'In-Person' : c.mode === 'OL' ? 'Online' : c.mode || '—'}</p>
                                                   </div>
                                                   <div>
-                                                    <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tm}`}>Time</p>
-                                                    <p className={`text-xs ${ts}`}>{c.time_start ? to12h(c.time_start.slice(0,5)) : '—'}</p>
+                                                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Time</p>
+                                                    <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{c.time_start ? to12h(c.time_start.slice(0,5)) : '—'}</p>
                                                   </div>
                                                   <div>
-                                                    <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tm}`}>Program</p>
-                                                    <p className={`text-xs ${ts}`}>{c.program || '—'}</p>
+                                                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Program</p>
+                                                    <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{c.program || '—'}</p>
                                                   </div>
                                                 </div>
                                                 {c.notes && (
-                                                  <div className={`rounded-lg px-3 py-2.5 border ${isDark ? 'bg-sky-500/[0.06] border-sky-500/15' : 'bg-sky-50 border-sky-100'}`}>
-                                                    <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isDark ? 'text-sky-400/70' : 'text-sky-600/70'}`}>Student&apos;s Note</p>
-                                                    <p className={`text-xs leading-relaxed break-words ${isDark ? 'text-sky-200/80' : 'text-sky-800'}`}>{c.notes}</p>
+                                                  <div className={`rounded-lg px-3 py-2.5 border ${isDark ? 'bg-sky-500/[0.06] border-sky-500/15' : 'bg-white border-slate-200'}`}>
+                                                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-sky-400' : 'text-sky-700'}`}>Student&apos;s Note</p>
+                                                    <p className={`text-sm leading-relaxed break-words ${isDark ? 'text-sky-200/80' : 'text-gray-700'}`}>{c.notes}</p>
                                                   </div>
                                                 )}
                                               </div>
@@ -3569,27 +3674,27 @@ export default function ProfessorDashboard() {
                                               {/* Right: editable notes */}
                                               <div className="space-y-2.5 min-w-0">
                                                 <div>
-                                                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${tm}`}>Action Taken</p>
+                                                  <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Action Taken</p>
                                                   <input
                                                     value={draft.action_taken}
                                                     onChange={e => setDraft({ action_taken: e.target.value })}
                                                     placeholder="e.g. Academic advising, Referred to registrar…"
-                                                    className={`w-full text-xs rounded-lg px-3 py-2 outline-none border transition-colors ${isDark
-                                                      ? 'bg-white/[0.05] border-white/10 text-gray-200 placeholder-white/20 focus:border-sky-500/50'
-                                                      : 'bg-white border-gray-200 text-gray-700 placeholder-gray-300 focus:border-sky-400'
+                                                    className={`w-full text-sm rounded-lg px-3 py-2 outline-none border transition-colors ${isDark
+                                                      ? 'bg-white/[0.05] border-white/10 text-gray-200 placeholder-white/30 focus:border-sky-500/50'
+                                                      : 'bg-white border-slate-300 text-gray-800 placeholder-gray-400 focus:border-sky-400'
                                                     }`}
                                                   />
                                                 </div>
                                                 <div>
-                                                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${tm}`}>Remarks</p>
+                                                  <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Remarks</p>
                                                   <textarea
                                                     value={draft.remarks}
                                                     onChange={e => setDraft({ remarks: e.target.value })}
                                                     placeholder="Additional notes…"
                                                     rows={2}
-                                                    className={`w-full text-xs rounded-lg px-3 py-2 outline-none border resize-none transition-colors ${isDark
-                                                      ? 'bg-white/[0.05] border-white/10 text-gray-200 placeholder-white/20 focus:border-sky-500/50'
-                                                      : 'bg-white border-gray-200 text-gray-700 placeholder-gray-300 focus:border-sky-400'
+                                                    className={`w-full text-sm rounded-lg px-3 py-2 outline-none border resize-none transition-colors ${isDark
+                                                      ? 'bg-white/[0.05] border-white/10 text-gray-200 placeholder-white/30 focus:border-sky-500/50'
+                                                      : 'bg-white border-slate-300 text-gray-800 placeholder-gray-400 focus:border-sky-400'
                                                     }`}
                                                   />
                                                 </div>
@@ -3751,19 +3856,19 @@ export default function ProfessorDashboard() {
 
         ) : (() => {
           const exportRows = getExportRows();
-          const inputCls = `w-full rounded-xl px-3 py-2 text-sm border ${isDark ? 'bg-[#2b2d31] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-800'} focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/40`;
-          const labelCls = `block text-xs font-semibold uppercase tracking-wider mb-1.5 ${tm}`;
+          const inputCls = `w-full rounded-xl px-4 py-3 text-sm border ${isDark ? 'bg-[#2b2d31] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-800'} focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/40`;
+          const labelCls = `block text-xs font-semibold uppercase tracking-wider mb-2 ${tm}`;
           return (
             <div className="min-h-[75vh] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8">
-              <div className="w-full max-w-xl">
-              <div className="mb-6 text-center">
-                <h1 className={`text-2xl font-bold ${tp}`}>Export Report</h1>
-                <p className={`text-sm mt-1 ${tm}`}>Generate a downloadable advising record with custom filters</p>
+              <div className="w-full max-w-2xl">
+              <div className="mb-8 text-center">
+                <h1 className={`text-3xl font-bold ${tp}`}>Export Report</h1>
+                <p className={`text-base mt-2 ${tp}`}>Generate a downloadable advising record with custom filters</p>
               </div>
 
               {/* Filters card */}
-              <div className={`p-5 mb-5 ${card}`} style={isDark ? undefined : glassStyle}>
-                <p className={`text-sm font-semibold mb-4 ${tp}`}>Filter Records</p>
+              <div className={`p-7 mb-5 ${card}`} style={isDark ? undefined : glassStyle}>
+                <p className={`text-base font-semibold mb-5 ${tp}`}>Filter Records</p>
 
                 {/* Term dropdown */}
                 {(() => {
@@ -3848,29 +3953,29 @@ export default function ProfessorDashboard() {
               {/* Download buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button onClick={() => handleExport('excel')}
-                  className={`p-5 text-left transition-all group ${card}`}
+                  className={`p-7 text-left transition-all group ${card}`}
                   style={isDark ? undefined : glassStyle}>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3 group-hover:bg-emerald-500/20 transition-colors">
-                    <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
+                    <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z" />
                     </svg>
                   </div>
-                  <p className={`font-semibold text-sm ${tp}`}>Excel Spreadsheet</p>
-                  <p className={`text-xs mt-1 ${tm}`}>Download as .xlsx — open in Excel or Sheets</p>
+                  <p className={`font-semibold text-base ${tp}`}>Excel Spreadsheet</p>
+                  <p className={`text-sm mt-1.5 ${tm}`}>Download as .xlsx — open in Excel or Sheets</p>
                 </button>
                 <button onClick={() => handleExport('pdf')} disabled={pdfExporting}
-                  className={`p-5 text-left transition-all group ${card} ${pdfExporting ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  className={`p-7 text-left transition-all group ${card} ${pdfExporting ? 'opacity-60 cursor-not-allowed' : ''}`}
                   style={isDark ? undefined : glassStyle}>
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:bg-blue-500/20 transition-colors">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
                     {pdfExporting
-                      ? <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      : <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      ? <div className="w-7 h-7 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      : <svg className="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
                         </svg>
                     }
                   </div>
-                  <p className={`font-semibold text-sm ${tp}`}>{pdfExporting ? 'Generating PDF…' : 'PDF Document'}</p>
-                  <p className={`text-xs mt-1 ${tm}`}>Download as .pdf — landscape layout, MAPUA header</p>
+                  <p className={`font-semibold text-base ${tp}`}>{pdfExporting ? 'Generating PDF…' : 'PDF Document'}</p>
+                  <p className={`text-sm mt-1.5 ${tm}`}>Download as .pdf — landscape layout, MAPUA header</p>
                 </button>
               </div>
               </div>

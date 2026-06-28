@@ -37,6 +37,7 @@ export interface DashboardNavbarProps {
   isDark: boolean;
   onToggleTheme: () => void;
   notificationCount?: number;
+  scrollRef?: React.RefObject<HTMLElement>;
   // Full notification dropdown (professor-style, all three required together)
   pendingConsultations?: PendingConsult[];
   announcements?: AnnItem[];
@@ -78,6 +79,7 @@ export default function DashboardNavbar({
   isDark,
   onToggleTheme,
   notificationCount,
+  scrollRef,
   pendingConsultations: pendingProp,
   announcements: annProp,
   storageKey: storageKeyProp,
@@ -201,15 +203,30 @@ export default function DashboardNavbar({
 
   const handleLogout = () => { localStorage.clear(); router.push('/login'); };
 
+  const [navScrolled, setNavScrolled] = useState(false);
+  useEffect(() => {
+    const el = scrollRef?.current ?? null;
+    const handler = () => setNavScrolled((el ? el.scrollTop : window.scrollY) > 10);
+    if (el) el.addEventListener('scroll', handler);
+    else window.addEventListener('scroll', handler);
+    return () => {
+      if (el) el.removeEventListener('scroll', handler);
+      else window.removeEventListener('scroll', handler);
+    };
+  }, [scrollRef]);
+
   const initials = profileName.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?';
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
 
   // Style tokens
-  const bg        = isDark ? 'bg-[#1f1f1f] border-b border-white/5'   : 'bg-white border-b border-gray-200 shadow-sm';
-  const text      = isDark ? 'text-gray-400'                          : 'text-gray-600';
-  const textHover = isDark ? 'hover:text-white hover:bg-white/5'      : 'hover:text-gray-900 hover:bg-gray-100';
+  const text      = isDark ? 'text-gray-400' : (navScrolled ? 'text-gray-500' : 'text-[#2d5075]/80');
+  const textHover = isDark
+    ? 'hover:text-gray-200 hover:bg-white/[0.06]'
+    : (navScrolled ? 'hover:text-gray-800 hover:bg-gray-100' : 'hover:text-[#1e3a5f] hover:bg-white/30');
   const iconBtn   = `w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-colors ${
-    isDark ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
+    isDark
+      ? 'text-gray-500 hover:text-white hover:bg-white/5'
+      : (navScrolled ? 'text-gray-400 hover:text-gray-700 hover:bg-gray-100' : 'text-[#2d5075]/70 hover:text-[#1e3a5f] hover:bg-white/30')
   }`;
   const dropBg     = isDark ? 'bg-[#303030] border-white/10' : 'bg-white border-black/10';
   const dropHeader = isDark ? 'bg-[#262626] border-white/10' : 'bg-[#f2f3f5] border-black/10';
@@ -226,33 +243,57 @@ export default function DashboardNavbar({
   };
 
   return (
-    <header className={`sticky top-0 z-40 ${bg}`}>
-      <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 h-14">
+    <header
+      className="sticky top-0 z-40 border-b"
+      style={{
+        background: navScrolled
+          ? (isDark ? 'rgba(20,21,26,0.97)' : 'rgba(255,255,255,0.97)')
+          : 'transparent',
+        backdropFilter: navScrolled ? 'blur(12px)' : 'none',
+        WebkitBackdropFilter: navScrolled ? 'blur(12px)' : 'none',
+        borderBottomColor: navScrolled
+          ? (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.14)')
+          : 'transparent',
+        boxShadow: navScrolled
+          ? (isDark ? '0 2px 20px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.10)')
+          : 'none',
+        transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+      }}
+    >
+      <div className="flex items-center gap-0 px-3 sm:px-6 h-16">
         {/* Logo */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <img src="/consulta-logo.png" alt="Consulta" className="h-12 sm:h-14 w-auto object-contain" />
-          <div className="hidden sm:block">
-            <p className={`font-bold text-sm leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>Consulta</p>
-            <p className={`text-[10px] leading-none mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>MAPUA SOIT</p>
+        <div className="flex items-center gap-3 pr-4 flex-shrink-0">
+          <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
+            <img src="/consulta-logo.png" alt="Consulta" className="w-full h-full object-contain scale-[1.6]" />
+          </div>
+          <div>
+            <p className="font-bold text-base leading-none transition-colors duration-250" style={{ color: isDark ? '#ffffff' : (navScrolled ? '#111827' : '#1e3a5f') }}>Consulta</p>
+            <p className="text-[9px] leading-none mt-1 tracking-wide transition-colors duration-250" style={{ color: isDark ? '#6b7280' : (navScrolled ? '#9ca3af' : '#4b6d8f') }}>MAPUA SOIT</p>
           </div>
         </div>
 
-        {/* Role badge */}
-        <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold border border-[#CC0000]/40 text-[#CC0000]">
-          {role.toUpperCase()}
-        </span>
+        {/* Divider */}
+        <div
+          className="w-px h-8 flex-shrink-0 mr-2 transition-colors duration-250"
+          style={{ background: isDark ? 'rgba(255,255,255,0.10)' : (navScrolled ? '#e5e7eb' : 'rgba(30,58,95,0.2)') }}
+        />
 
         {/* Desktop nav items */}
-        <nav className="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <nav className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {navItems.map(item => (
             <button
               key={item.key}
               onClick={() => onTabChange(item.key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                activeTab === item.key ? 'bg-[#CC0000] text-white shadow-sm' : `${text} ${textHover}`
+              className={`relative flex items-center rounded-lg text-[15px] font-semibold whitespace-nowrap transition-colors flex-shrink-0 px-3 pt-2 pb-3 ${
+                activeTab === item.key
+                  ? isDark ? 'text-white' : (navScrolled ? 'text-[#0369A1]' : 'text-[#1e3a5f]')
+                  : `${text} ${textHover}`
               }`}
             >
               {item.label}
+              {activeTab === item.key && (
+                <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full ${isDark ? 'bg-white' : (navScrolled ? 'bg-[#0369A1]' : 'bg-[#1e3a5f]')}`} />
+              )}
             </button>
           ))}
         </nav>
@@ -446,16 +487,24 @@ export default function DashboardNavbar({
             )}
           </button>
 
-          {/* Avatar + dropdown */}
+          {/* Name + dropdown */}
           <div ref={dropdownRef} className="relative">
             <button
               onClick={() => setDropdownOpen(o => !o)}
-              className="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-[#7a0000] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ring-2 ring-[#CC0000]/20 hover:ring-[#CC0000]/60 transition-all focus:outline-none"
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors ${
+                isDark
+                  ? 'text-gray-200 hover:bg-white/5'
+                  : (navScrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-[#1e3a5f] hover:bg-white/30')
+              }`}
               aria-label="Open profile menu"
             >
-              {profileAvatar && !profileAvatar.startsWith('/uploads/')
-                ? <img src={profileAvatar} alt={profileName} className="w-full h-full object-cover" />
-                : initials}
+              <span className="text-sm font-medium truncate max-w-[140px]">{profileName || roleLabel}</span>
+              <svg
+                className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${dropdownOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : (navScrolled ? 'text-gray-500' : 'text-[#2d5075]')}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
 
             {dropdownOpen && (
@@ -507,7 +556,7 @@ export default function DashboardNavbar({
                     }`}
                   >
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
                     </svg>
                     Sign Out
                   </button>

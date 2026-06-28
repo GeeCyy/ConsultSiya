@@ -131,6 +131,9 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS academic_term TEXT;
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS academic_year TEXT;
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
 
+-- In-session flag: professor marks consultation as actively in progress
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS in_session BOOLEAN DEFAULT FALSE;
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

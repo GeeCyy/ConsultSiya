@@ -5,7 +5,7 @@ import { Megaphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import UserProfileCard from '@/components/UserProfileCard';
-import LeftSidebar from '@/components/LeftSidebar';
+import DashboardNavbar from '@/components/DashboardNavbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
 import NavigationTour from '@/components/NavigationTour';
 import { type LeaderboardItem } from '@/components/LeaderboardCard';
@@ -131,6 +131,7 @@ type Consultation = {
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
   professor_avatar?: string | null;
+  in_session?: boolean;
 };
 
 type StudentProfile = {
@@ -665,6 +666,8 @@ export default function StudentDashboard() {
   const [uploadingId, setUploadingId]               = useState<number | null>(null);
   const [downloadingSlip, setDownloadingSlip]       = useState<number | null>(null);
   const [downloadingReceipt, setDownloadingReceipt] = useState<number | null>(null);
+  const [expandedRemarks, setExpandedRemarks]       = useState<Set<number>>(new Set());
+  const mainScrollRef = useRef<HTMLElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const uploadForId   = useRef<number | null>(null);
 
@@ -754,6 +757,24 @@ export default function StudentDashboard() {
     if (!authReady || !token) return;
     fetchData();
   }, [authReady]);
+
+  // Poll every 10 s for in_session changes — silently patches consultations state
+  useEffect(() => {
+    if (!authReady || !token) return;
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await api.get('/api/consultations', token!);
+        if (!Array.isArray(fresh)) return;
+        setConsultations(prev =>
+          prev.map(c => {
+            const updated = (fresh as Consultation[]).find(f => f.id === c.id);
+            return updated ? { ...c, in_session: updated.in_session } : c;
+          })
+        );
+      } catch { /* silent — network hiccup shouldn't disrupt the UI */ }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [authReady, token]);
 
   const fetchData = async () => {
     const [sched, consult, prof, ann, cal, termData, lbS, lbP, notifSettings, topicsData] = await Promise.all([
@@ -1069,11 +1090,11 @@ export default function StudentDashboard() {
   const mostConsultedTopics = myTopics;
 
   // Style tokens
-  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'bg-white/[0.88] border border-white/90 shadow-[0_8px_32px_rgba(99,102,241,0.14),0_4px_16px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 transition-all duration-200';
+  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : 'bg-white border border-gray-200 shadow-[0_8px_32px_rgba(99,102,241,0.10),0_4px_16px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.04)]';
   const tp        = isDark ? 'text-white'    : 'text-gray-900';
   const ts        = isDark ? 'text-gray-400' : 'text-gray-500';
   const tm        = isDark ? 'text-gray-400' : 'text-gray-500';
-  const innerCard = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-white/30 border-white/50';
+  const innerCard = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-gray-50 border-gray-200';
   const hoverBg   = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-sky-50/60';
 
   const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
@@ -1108,7 +1129,7 @@ export default function StudentDashboard() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: isDark ? '#1a1a1a' : 'linear-gradient(135deg, #EEF4FF 0%, #E0EAFF 50%, #D6E4FF 100%)' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: isDark ? '#1a1a1a' : 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' }}>
         <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -1117,7 +1138,16 @@ export default function StudentDashboard() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #EEF4FF 0%, #E0EAFF 50%, #D6E4FF 100%)' } : undefined}>
+    <div className={`h-screen flex flex-col overflow-hidden ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
+
+      {/* Mapua logo full-page watermark */}
+      <img
+        src="/mapua-logo.png"
+        alt=""
+        aria-hidden
+        className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.18]' : 'opacity-[0.12]'}`}
+        style={isDark ? { filter: 'drop-shadow(0 0 80px rgba(14,165,233,0.6)) drop-shadow(0 0 40px rgba(99,102,241,0.4)) drop-shadow(0 0 120px rgba(14,165,233,0.3))' } : { filter: 'drop-shadow(0 0 30px rgba(99,102,241,0.15))' }}
+      />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <ConfirmModal
@@ -1129,7 +1159,7 @@ export default function StudentDashboard() {
         onCancel={closeConfirm}
       />
 
-      <LeftSidebar
+      <DashboardNavbar
         role="student"
         navItems={STUDENT_NAV_ITEMS}
         activeTab={tab}
@@ -1139,16 +1169,16 @@ export default function StudentDashboard() {
         isDark={isDark}
         onToggleTheme={toggleTheme}
         announcements={announcements}
-        pendingConsultations={pendingOnlyConsults}
+        pendingConsultations={statusNotifConsults}
         storageKey={`student_notifs_${profile.email || 'default'}`}
+        scrollRef={mainScrollRef}
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <div className="lg:hidden h-14 flex-shrink-0" />
         <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
         <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
 
-        <main className="flex-1 overflow-y-auto" style={!isDark ? { background: 'linear-gradient(135deg, #EEF4FF 0%, #E0EAFF 50%, #D6E4FF 100%)' } : undefined}>
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto" style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
         {loading ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
@@ -1160,290 +1190,331 @@ export default function StudentDashboard() {
           const studentInitials = profile.full_name.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
           const completionPct = allConsultsTotal > 0 ? Math.round((allConsultsCompleted / allConsultsTotal) * 100) : 0;
 
-          return (
-          <div className="p-4 sm:p-6 space-y-4">
+          const glassCard = isDark
+            ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 10px 40px rgba(0,0,0,0.60),0 4px 12px rgba(0,0,0,0.40)' }
+            : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' };
 
-            {/* ── Section 1: Welcome header ── */}
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          const CHART_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const weekMonday = new Date(now);
+          const _cdow = now.getDay();
+          weekMonday.setDate(now.getDate() + (_cdow === 0 ? -6 : 1 - _cdow));
+          weekMonday.setHours(0, 0, 0, 0);
+          const chartBars = CHART_DAYS.map((lbl, i) => {
+            const d = new Date(weekMonday);
+            d.setDate(weekMonday.getDate() + i);
+            const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            const items = consultations.filter(c => c.date.slice(0, 10) === ds && c.status !== 'cancelled');
+            const uniqueProfs = Array.from(
+              new Map(items.map(c => [c.professor_name, { name: c.professor_name, avatar: c.professor_avatar }])).values()
+            ).slice(0, 3);
+            return {
+              label: lbl, date: ds, isToday: ds === todayStr,
+              pending:   items.filter(c => c.status === 'pending').length,
+              confirmed: items.filter(c => c.status === 'confirmed' || c.status === 'completed').length,
+              completed: items.filter(c => c.status === 'completed').length,
+              total: items.length, professors: uniqueProfs,
+              overflow: Math.max(0, new Map(items.map(c => [c.professor_name, true])).size - 3),
+            };
+          });
+          const weekUpcoming = consultations.filter(c => c.date >= todayStr && c.status === 'confirmed').length;
+
+          return (
+          <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 flex flex-col gap-5 sm:gap-6 flex-1">
+
+            {/* ── Welcome header ── */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <p className={`text-[11px] font-bold uppercase tracking-[0.15em] mb-1 ${tm}`}>
-                  MAPUA UNIVERSITY · SOIT ADVISING PORTAL
-                </p>
-                <h1 className={`text-2xl sm:text-3xl font-extrabold leading-tight ${tp}`}>
+                <h1 className={`text-2xl sm:text-3xl font-extrabold leading-tight ${tp}`}
+                  style={!isDark ? { textShadow: '0 2px 8px rgba(255,255,255,0.7)' } : undefined}>
                   {greetingWord}{firstName ? `, ${firstName}` : ''} 👋
                 </h1>
-                <p className={`text-sm mt-1 ${ts}`}>
+                <p className={`text-sm mt-0.5 font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}
+                  style={!isDark ? { textShadow: '0 1px 4px rgba(255,255,255,0.8)' } : undefined}>
                   {upcomingConsultations.length > 0
                     ? `You have ${upcomingConsultations.length} upcoming consultation${upcomingConsultations.length !== 1 ? 's' : ''}.`
                     : 'No upcoming consultations scheduled.'}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0 sm:mt-1">
-                {currentWeek && (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-sky-500/15 text-sky-300' : 'bg-sky-100 text-sky-800'}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#0EA5E9]" />
-                    Week {currentWeek} of {term.totalWeeks}
-                  </span>
-                )}
-                {allConsultsPending > 0 && (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    {allConsultsPending} pending
-                  </span>
-                )}
-                {confirmedCount > 0 && (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                    {confirmedCount} confirmed
-                  </span>
-                )}
-              </div>
-            </div>
 
-            {/* ── Section 2: Stat cards + Leaderboard ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-
-              {/* 4 stat cards */}
-              <div className="lg:col-span-12 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Stats pill */}
+              <div
+                className={`grid grid-cols-2 sm:flex sm:items-center gap-x-5 gap-y-3 sm:gap-5 px-5 sm:px-7 py-4 sm:py-3.5 flex-shrink-0 rounded-2xl sm:rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
+                style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+              >
                 {([
-                  { value: allConsultsTotal,     label: 'Total Requests', sub: 'all time',      numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
-                  { value: confirmedCount,        label: 'Confirmed',      sub: 'approved',      numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
-                  { value: allConsultsCompleted,  label: 'Completed',      sub: 'sessions done', numColor: '#059669', darkNumColor: '#6EE7B7' },
-                  { value: daysToFinals, label: 'Days to Finals', sub: finalsDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }), numColor: '#EA580C', darkNumColor: '#FDBA74' },
-                ] as const).map(s => (
-                  <div key={s.label} className={`rounded-2xl p-3 group ${card}`}>
-                    <p
-                      className="text-2xl sm:text-3xl font-black leading-none tracking-tight"
-                      style={{ color: isDark ? s.darkNumColor : s.numColor }}
-                    >
-                      {s.value}
-                    </p>
-                    <p className={`text-sm font-semibold mt-1.5 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{s.label}</p>
-                    <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{s.sub}</p>
+                  { value: allConsultsTotal,    label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
+                  { value: confirmedCount,      label: 'Confirmed',      numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
+                  { value: allConsultsCompleted, label: 'Completed',     numColor: '#059669', darkNumColor: '#6EE7B7' },
+                  { value: allConsultsPending,   label: 'Pending',       numColor: '#EA580C', darkNumColor: '#FDBA74' },
+                ] as const).map((s, i, arr) => (
+                  <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `sm:pr-5 sm:border-r ${isDark ? 'sm:border-white/20' : 'sm:border-gray-400'}` : ''}`}>
+                    <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
+                    <span className={`text-[11px] font-medium mt-1 ${ts}`}>{s.label}</span>
                   </div>
                 ))}
               </div>
-
             </div>
 
-            {/* ── Section 3: Widget grid ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* ── Bento grid ── */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-[240px_1fr_300px] gap-5 items-stretch">
 
-              {/* Profile + term card */}
-              <div className={`lg:col-span-3 rounded-2xl overflow-hidden border ${card}`}>
-                <div className={`px-5 pt-5 pb-4 ${isDark ? 'bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent' : 'bg-white/20'}`}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#0EA5E9]/30" style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}>
+              {/* ── Col 1: Profile card ── */}
+              <div className="rounded-2xl overflow-hidden flex flex-col" style={glassCard}>
+                <div className={`flex-shrink-0 px-6 pt-7 pb-6 ${isDark ? 'bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent' : 'bg-gradient-to-br from-sky-50 to-white'}`}>
+                  <div className="flex flex-col items-center text-center mb-8">
+                    <div className="rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 ring-2 ring-[#0EA5E9]/30 mb-4"
+                      style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)', width: '80px', height: '80px' }}>
                       {profile.avatar && !profile.avatar.startsWith('/uploads/')
                         ? <img src={profile.avatar} alt={profile.full_name} className="w-full h-full object-cover" />
-                        : <span className="text-lg font-bold" style={{ color: '#fff' }}>{studentInitials}</span>}
+                        : <span className="text-2xl font-bold text-white">{studentInitials}</span>}
                     </div>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-bold truncate ${tp}`}>{profile.full_name}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{profile.program || 'Student'}</p>
-                      <p className={`text-[10px] mt-0.5 font-medium text-[#0EA5E9]`}>
-                        {profile.year_level ? `Year ${profile.year_level}` : ''}{profile.student_number ? ` · ${profile.student_number}` : ''}
-                      </p>
-                    </div>
+                    <p className={`text-xl font-bold ${tp}`}>{profile.full_name}</p>
+                    <p className={`text-sm mt-1 ${ts}`}>{profile.program || 'Student'}</p>
+                    <p className="text-xs mt-1 font-medium text-sky-400">
+                      {profile.year_level ? `Year ${profile.year_level}` : ''}{profile.student_number ? ` · ${profile.student_number}` : ''}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-[#0EA5E9] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-sky-500/30">
-                      <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                      <span className="text-blue-200 text-[8px] font-bold uppercase tracking-wide">WK</span>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-sky-900/30">
+                      <span className="text-white text-3xl font-black leading-none">{currentWeek ?? '–'}</span>
+                      <span className="text-sky-100 text-[9px] font-bold uppercase tracking-wide">WK</span>
                     </div>
                     <div>
-                      <p className={`text-base font-bold ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
-                      <p className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{term.label}</p>
+                      <p className={`text-sm font-semibold whitespace-nowrap ${tp}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                      <p className={`text-sm mt-1 ${tm}`}>{term.label}</p>
                     </div>
                   </div>
                 </div>
-                <div className={`px-5 pt-4 pb-5 border-t space-y-3 ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className={`text-xs font-medium ${ts}`}>Term Progress</span>
-                      <span className="text-xs font-bold text-emerald-500">{Math.round(termProgress)}%</span>
-                    </div>
-                    <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
-                      <div className="h-full bg-gradient-to-r from-[#0EA5E9] to-sky-300 rounded-full transition-all duration-700" style={{ width: `${termProgress}%` }} />
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className={`text-[9px] ${tm}`}>Start</span>
-                      <span className={`text-[9px] ${tm}`}>Finals W{term.finalsWeek}</span>
-                      <span className={`text-[9px] ${tm}`}>End</span>
-                    </div>
-                  </div>
-                  {([
-                    { label: 'Days to Finals', value: daysToFinals,  color: 'text-orange-400', dot: 'bg-orange-400' },
-                    { label: 'Days to End',     value: daysToEnd,     color: 'text-pink-400',   dot: 'bg-pink-400'   },
-                    { label: 'Weeks Left',      value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, color: 'text-sky-400', dot: 'bg-sky-400' },
-                  ] as const).map(m => (
-                    <div key={m.label} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
-                        <span className={`text-xs ${ts}`}>{m.label}</span>
+                <div className={`flex-1 flex flex-col px-6 pt-6 pb-7 border-t ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
+                  <div className="space-y-5">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-medium ${ts}`}>Term Progress</span>
+                        <span className="text-sm font-bold text-emerald-500">{Math.round(termProgress)}%</span>
                       </div>
-                      <span className={`text-sm font-bold ${m.color}`}>{m.value}</span>
+                      <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
+                        <div className="h-full bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] rounded-full transition-all duration-700" style={{ width: `${termProgress}%` }} />
+                      </div>
+                      <div className="flex justify-between mt-1.5">
+                        <span className={`text-xs ${tm}`}>Start</span>
+                        <span className={`text-xs ${tm}`}>Finals W{term.finalsWeek}</span>
+                        <span className={`text-xs ${tm}`}>End</span>
+                      </div>
                     </div>
-                  ))}
-                  <button
-                    onClick={() => handleTabChange('book')}
-                    className="w-full mt-1 py-2 rounded-xl text-xs font-semibold bg-[#0EA5E9] text-white hover:bg-[#0284C7] shadow-sm hover:shadow-md hover:shadow-sky-500/30 transition-all duration-200"
-                  >
-                    Book a Consultation
-                  </button>
-                </div>
-              </div>
-
-              {/* My consultations breakdown */}
-              <div className={`lg:col-span-5 rounded-2xl border p-4 ${card}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className={`text-sm font-semibold ${tp}`}>My Consultations</h3>
-                  <button onClick={() => handleTabChange('my')} className="text-xs text-[#0EA5E9] hover:text-sky-600 font-medium transition-colors">
-                    View all →
-                  </button>
-                </div>
-                <p className={`text-xs ${tm} mb-4`}>{allConsultsTotal} total · {allConsultsCompleted} completed · {allConsultsPending} pending</p>
-
-                {/* Completion progress */}
-                <div className="mb-5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-xs font-medium ${ts}`}>Completion Rate</span>
-                    <span className={`text-xs font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{completionPct}%</span>
-                  </div>
-                  <div className={`h-3 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-700" style={{ width: `${completionPct}%` }} />
-                  </div>
-                </div>
-
-                {/* 2x2 stat grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {([
-                    { label: 'Total',     value: allConsultsTotal,     bg: isDark ? 'bg-sky-500/10'    : 'bg-sky-50',    color: isDark ? 'text-sky-400'    : 'text-sky-600'    },
-                    { label: 'Completed', value: allConsultsCompleted, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', color: isDark ? 'text-emerald-400' : 'text-emerald-600' },
-                    { label: 'Pending',   value: allConsultsPending,   bg: isDark ? 'bg-amber-500/10'   : 'bg-amber-50',   color: isDark ? 'text-amber-400'   : 'text-amber-600'   },
-                    { label: 'Cancelled', value: allConsultsCancelled, bg: isDark ? 'bg-red-500/10'     : 'bg-red-50',     color: isDark ? 'text-red-400'     : 'text-red-600'     },
-                  ] as const).map(s => (
-                    <div key={s.label} className={`rounded-xl p-3 ${s.bg}`}>
-                      <p className={`text-2xl font-black leading-none ${s.color}`}>{s.value}</p>
-                      <p className={`text-[11px] font-medium mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Recent consultations */}
-                {recentConsultations.length > 0 && (
-                  <div className={`mt-4 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2.5 ${tm}`}>Recent</p>
-                    <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/[0.05] border border-white/[0.05]' : 'divide-gray-100 border border-gray-100'}`}>
-                      {recentConsultations.map(c => (
-                        <div key={c.id} className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}>
-                          <Avatar name={c.professor_name} avatarUrl={c.professor_avatar} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-xs font-semibold truncate ${tp}`}>{c.professor_name}</p>
-                            <p className={`text-[10px] ${tm}`}>
-                              {c.date ? new Date(c.date.slice(0,10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '—'}
-                              {' · '}{formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')}
-                            </p>
+                    <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/10 border border-white/10' : 'divide-gray-200 border border-gray-200'}`}>
+                      {([
+                        { label: 'Days to Finals', value: daysToFinals, dot: isDark ? 'bg-slate-500' : 'bg-slate-400' },
+                        { label: 'Days to End',    value: daysToEnd,    dot: isDark ? 'bg-slate-500' : 'bg-slate-400' },
+                        { label: 'Weeks Left',     value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, dot: isDark ? 'bg-slate-500' : 'bg-slate-400' },
+                      ] as const).map(m => (
+                        <div key={m.label} className={`flex items-center justify-between px-4 py-3 ${isDark ? 'bg-white/[0.03]' : 'bg-white'}`}>
+                          <div className="flex items-center gap-2.5">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot}`} />
+                            <span className={`text-sm font-medium ${ts}`}>{m.label}</span>
                           </div>
-                          <StatusBadge status={c.status} isDark={isDark} />
+                          <span className={`text-xl font-bold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>{m.value}</span>
                         </div>
                       ))}
                     </div>
+                    <button
+                      onClick={() => handleTabChange('book')}
+                      className="w-full mt-2 py-2.5 rounded-xl text-sm font-semibold transition-all bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 hover:-translate-y-0.5"
+                    >
+                      Book a Consultation
+                    </button>
                   </div>
-                )}
-
+                </div>
               </div>
 
-              {/* Right: Combined Rankings + Quick Stats */}
-              <div className={`lg:col-span-4 rounded-2xl border p-4 flex flex-col ${card}`}>
+              {/* ── Col 2: Center column wrapper — flex-col so Today's Schedule can flex-1 ── */}
+              <div className="flex flex-col gap-5">
 
-                {/* ── Rankings / Most Consulted tabs ── */}
-                <div className={`flex-shrink-0 flex gap-1.5 mb-3`}>
+                {/* Weekly Overview */}
+                <div
+                  className={`p-5 rounded-2xl flex-shrink-0 ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                  style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className={`text-xl font-bold ${tp}`}>Weekly Overview</h3>
+                      <p className={`text-sm ${tm} mt-0.5`}>Your consultations this week</p>
+                    </div>
+                    <button onClick={() => handleTabChange('my')} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
+                      View all →
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {([
+                      { label: 'Upcoming',  value: weekUpcoming,         bg: isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'         : 'bg-blue-50 text-blue-600 border-blue-100'         },
+                      { label: 'Completed', value: allConsultsCompleted, bg: isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                      { label: 'Pending',   value: allConsultsPending,   bg: isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'       : 'bg-amber-50 text-amber-700 border-amber-100'       },
+                    ] as const).map(s => (
+                      <span key={s.label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border ${s.bg}`}>
+                        <span className="text-base font-black leading-none">{s.value}</span>
+                        {s.label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5 mt-2">
+                    {chartBars.map(b => (
+                      <div
+                        key={b.label}
+                        className={`flex-1 flex flex-col items-center justify-between py-3 sm:py-5 px-1 sm:px-2 rounded-xl transition-colors ${
+                          b.isToday
+                            ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
+                            : b.total > 0
+                              ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
+                              : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
+                        }`}
+                      >
+                        <span className={`text-[9px] sm:text-xs font-semibold uppercase tracking-wider leading-none ${
+                          b.isToday ? 'text-sky-100' : isDark ? (b.total > 0 ? 'text-gray-300' : 'text-gray-400') : (b.total > 0 ? 'text-gray-500' : 'text-gray-400')
+                        }`}>{b.label}</span>
+                        <span className={`text-2xl sm:text-4xl font-bold leading-none my-2 sm:my-3 ${
+                          b.isToday ? 'text-white' : b.total > 0 ? (isDark ? 'text-white' : 'text-gray-800') : (isDark ? 'text-gray-500' : 'text-gray-300')
+                        }`}>{b.total > 0 ? b.total : '–'}</span>
+                        <div className="hidden sm:flex items-center justify-center h-8">
+                          {b.professors.length > 0 ? (
+                            <div className="flex -space-x-1.5">
+                              {b.professors.map((p, pi) => (
+                                <div key={pi} className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold ring-2 ${b.isToday ? 'ring-[#0EA5E9]' : isDark ? 'ring-[#252525]' : 'ring-white'} overflow-hidden`}
+                                  style={{ background: 'linear-gradient(135deg, #0369A1, #0EA5E9)' }}
+                                  title={p.name}>
+                                  {p.avatar && !p.avatar.startsWith('/uploads/')
+                                    ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
+                                    : <span className="text-white">{p.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}</span>}
+                                </div>
+                              ))}
+                              {b.overflow > 0 && (
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center ring-2 ${b.isToday ? 'ring-[#0EA5E9] bg-sky-300/30 text-white' : isDark ? 'ring-[#252525] bg-white/10 text-gray-300' : 'ring-white bg-gray-100 text-gray-500'} text-[9px] font-bold flex-shrink-0`}>
+                                  +{b.overflow}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex gap-1 items-center">
+                              {b.pending > 0 && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${b.isToday ? 'bg-amber-300 ring-1 ring-white/80' : 'bg-amber-400'}`} />}
+                              {b.confirmed > 0 && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${b.isToday ? 'bg-emerald-300 ring-1 ring-white/80' : 'bg-emerald-400'}`} />}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`mt-4 pt-3 border-t flex items-center gap-4 ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className={`text-xs font-medium ${tm}`}>Pending</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /><span className={`text-xs font-medium ${tm}`}>Confirmed</span></div>
+                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0EA5E9]" /><span className={`text-xs font-medium ${tm}`}>Today</span></div>
+                  </div>
+                </div>
+
+                {/* Today's Schedule — grows to fill remaining column height */}
+                <div
+                  className={`p-6 rounded-2xl flex-1 flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                  style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                >
+                  <p className={`text-base font-semibold mb-3 flex-shrink-0 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Today's Schedule</p>
+                  {todayConsultations.length > 0 ? (
+                    <div className="flex flex-col gap-2 overflow-y-auto max-h-60">
+                      {todayConsultations.map(c => (
+                        <div key={c.id} className={`flex items-center gap-3 px-3 py-3 rounded-lg ${isDark ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'bg-gray-50 hover:bg-gray-100'} transition-colors`}>
+                          <span className={`text-sm font-mono font-bold tabular-nums w-16 flex-shrink-0 ${tp}`}>
+                            {formatTime12((c.time || c.time_start)?.slice(0, 5) ?? '')}
+                          </span>
+                          <div className={`w-px h-3.5 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+                          <span className={`text-base font-semibold flex-1 truncate ${tp}`}>{c.professor_name}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                            c.status === 'pending'    ? (isDark ? 'bg-amber-500/15 text-amber-300'    : 'bg-amber-50 text-amber-700')
+                          : c.status === 'confirmed'  ? (isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700')
+                          :                             (isDark ? 'bg-white/5 text-gray-400'           : 'bg-gray-100 text-gray-500')
+                          }`}>
+                            {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                      <svg className="w-10 h-10 opacity-40 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                      </svg>
+                      <span className="text-base">No consultations scheduled for today</span>
+                    </div>
+                  )}
+                </div>
+
+              </div>{/* /center column wrapper */}
+
+              {/* ── Col 3: Rankings card ── */}
+              <div
+                className={`p-4 rounded-2xl flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
+                style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+              >
+                <div className="flex-shrink-0 flex gap-1.5 mb-3">
                   {(['rankings', 'consulted'] as const).map(v => (
                     <button key={v} onClick={() => setLbView(v)}
-                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                      className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-all border ${
                         lbView === v
-                          ? isDark
-                            ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
-                            : 'bg-sky-50 text-sky-700 border-sky-300'
-                          : isDark
-                            ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25'
-                            : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
+                          ? isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-300'
+                          : isDark ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25' : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
                       }`}>
-                      {v === 'rankings' ? 'Rankings' : 'Most Consulted'}
+                      {v === 'rankings' ? 'Rankings' : 'Top Topics'}
                     </button>
                   ))}
                 </div>
-
-                {/* ── Tab content — fixed height so card doesn't resize on tab switch ── */}
-                <div className="flex-shrink-0 relative" style={{ minHeight: '148px' }}>
-
-                  {/* Rankings */}
+                <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400/30">
                   {lbView === 'rankings' && (
-                    <div className="absolute inset-0 grid grid-cols-2 gap-3 content-start">
+                    <div className="space-y-4">
                       <div>
-                        <p className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${tm}`}>Top Students</p>
-                        <div className="space-y-0.5">
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-amber-100 border border-amber-300'}`}>
+                          <span className="text-base leading-none">🏆</span>
+                          <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>Top Professors</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          {lbProfs.slice(0, 3).map((item, i) => (
+                            <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
+                              <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
+                              <span className={`flex-1 text-base truncate font-semibold min-w-0 ${ts}`}>{item.label}</span>
+                              <span className={`text-base font-bold tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
+                            </div>
+                          ))}
+                          {lbProfs.length === 0 && <p className={`text-sm ${tm} py-1 px-2`}>No data.</p>}
+                        </div>
+                      </div>
+                      <div className={`border-t ${isDark ? 'border-white/20' : 'border-gray-300'}`} />
+                      <div>
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-indigo-500/20 border border-indigo-500/30' : 'bg-indigo-100 border border-indigo-300'}`}>
+                          <span className="text-base leading-none">🎓</span>
+                          <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Top Students</p>
+                        </div>
+                        <div className="space-y-1.5">
                           {lbStudents.slice(0, 3).map((item, i) => {
                             const isMe = item.label === profile.full_name;
                             return (
-                              <div key={item.rank} className={`flex items-center gap-1.5 py-1 px-1 rounded-lg ${isMe ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50') : ''}`}>
-                                <span className="w-4 text-center text-sm leading-none flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                                <span className={`flex-1 text-[11px] truncate font-bold ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>
-                                  {item.label}{isMe && <span className="ml-1 text-[10px] font-semibold opacity-70">(you)</span>}
-                                </span>
-                                <span className={`text-[11px] font-black tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : tp}`}>{item.count}</span>
+                              <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isMe ? (isDark ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'bg-amber-50 ring-1 ring-amber-300/60') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
+                                <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
+                                <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>{item.label}</span>
+                                {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-white'}`}>you</span>}
+                                <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-600') : tp}`}>{item.count}</span>
                               </div>
                             );
                           })}
-                        </div>
-                      </div>
-                      <div>
-                        <p className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${tm}`}>Top Professors</p>
-                        <div className="space-y-0.5">
-                          {lbProfs.slice(0, 3).map((item, i) => (
-                            <div key={item.rank} className="flex items-center gap-1.5 py-1 px-1 rounded-lg">
-                              <span className="w-4 text-center text-sm leading-none flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                              <span className={`flex-1 text-[11px] truncate font-bold ${ts}`}>{item.label}</span>
-                              <span className={`text-[11px] font-black tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
-                            </div>
-                          ))}
+                          {lbStudents.length === 0 && <p className={`text-sm ${tm} py-1 px-2`}>No data.</p>}
                         </div>
                       </div>
                     </div>
                   )}
-
-                  {/* Most Consulted */}
                   {lbView === 'consulted' && (() => {
                     const RANK_CFG = [
-                      {
-                        medal: '🥇',
-                        border:  'border-amber-400',
-                        rowBg:   isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50',
-                        fill:    'from-amber-400 to-yellow-300',
-                        track:   isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60',
-                      },
-                      {
-                        medal: '🥈',
-                        border:  'border-slate-400',
-                        rowBg:   isDark ? 'bg-slate-400/[0.10]' : 'bg-slate-50',
-                        fill:    'from-slate-400 to-slate-300',
-                        track:   isDark ? 'bg-white/[0.07]' : 'bg-slate-200/60',
-                      },
-                      {
-                        medal: '🥉',
-                        border:  'border-orange-400',
-                        rowBg:   isDark ? 'bg-orange-400/[0.10]' : 'bg-orange-50',
-                        fill:    'from-orange-500 to-amber-400',
-                        track:   isDark ? 'bg-white/[0.07]' : 'bg-orange-200/60',
-                      },
+                      { medal: '🥇', border: 'border-amber-400', rowBg: isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50', fill: 'from-amber-400 to-yellow-300', track: isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60' },
+                      { medal: '🥈', border: 'border-slate-400',  rowBg: isDark ? 'bg-slate-400/[0.10]'  : 'bg-slate-50',  fill: 'from-slate-400 to-slate-300',  track: isDark ? 'bg-white/[0.07]' : 'bg-slate-200/60'  },
+                      { medal: '🥉', border: 'border-orange-400', rowBg: isDark ? 'bg-orange-400/[0.10]' : 'bg-orange-50', fill: 'from-orange-500 to-amber-400', track: isDark ? 'bg-white/[0.07]' : 'bg-orange-200/60' },
                     ];
                     const top3 = mostConsultedTopics.slice(0, 3);
-                    const top = top3[0]?.count || 1;
+                    const topCount = top3[0]?.count || 1;
                     return (
-                      <div className="absolute inset-0">
-                        {/* Header */}
-                        <div className="flex items-center gap-1.5 mb-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-3">
                           <span className="text-xs leading-none">🔥</span>
                           <p className={`text-[10px] font-bold uppercase tracking-wider ${tm}`}>Trending across all students</p>
                         </div>
@@ -1453,21 +1524,17 @@ export default function StudentDashboard() {
                           <div className="space-y-1.5">
                             {top3.map((t, i) => {
                               const cfg = RANK_CFG[i];
-                              const pct = Math.max(8, Math.round((t.count / top) * 100));
+                              const pct = Math.max(8, Math.round((t.count / topCount) * 100));
                               return (
-                                <div key={t.label}
-                                  className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
+                                <div key={t.label} className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
                                   <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
-                                    {/* Top row: medal + topic + count */}
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
                                       <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
                                       <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
                                     </div>
-                                    {/* Progress bar */}
                                     <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
-                                      <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`}
-                                        style={{ width: `${pct}%` }} />
+                                      <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`} style={{ width: `${pct}%` }} />
                                     </div>
                                   </div>
                                 </div>
@@ -1478,156 +1545,38 @@ export default function StudentDashboard() {
                       </div>
                     );
                   })()}
-
                 </div>
-
-                {/* ── Divider ── */}
-                <div className={`my-3 border-t ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`} />
-
-                {/* ── Quick Stats ── */}
-                <h3 className={`text-sm font-semibold mb-3 ${tp}`}>Quick Stats</h3>
-
-                {(() => {
-                  const allSegs = [
-                    { label: 'Completed', status: 'completed', value: allConsultsCompleted, color: '#10B981', darkColor: '#34D399' },
-                    { label: 'Confirmed', status: 'confirmed', value: confirmedCount,       color: '#0EA5E9', darkColor: '#38BDF8' },
-                    { label: 'Pending',   status: 'pending',   value: allConsultsPending,   color: '#F59E0B', darkColor: '#FCD34D' },
-                    { label: 'Cancelled', status: 'cancelled', value: allConsultsCancelled, color: '#EF4444', darkColor: '#F87171' },
-                  ];
-                  const total = allConsultsTotal;
-                  const r = 34, cx = 50, cy = 50;
-                  const circ = 2 * Math.PI * r;
-                  const activeSegs = allSegs.filter(s => s.value > 0);
-                  const segGap = activeSegs.length > 1 ? 3 : 0;
-                  let acc = 0;
-                  const arcs = activeSegs.map(seg => {
-                    const full = (seg.value / total) * circ;
-                    const dash = Math.max(0, full - segGap);
-                    const offset = -acc;
-                    acc += full;
-                    const pct = total > 0 ? Math.round((seg.value / total) * 100) : 0;
-                    return { ...seg, dash, offset, pct };
-                  });
-
-                  const showTooltipFor = (arc: typeof arcs[number], e: React.MouseEvent) => {
-                    const rect = donutRef.current?.getBoundingClientRect();
-                    if (!rect) return;
-                    setSegTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, label: arc.label, value: arc.value, pct: arc.pct });
-                  };
-
-                  return (
-                    <>
-                      <div className="flex items-center justify-center mb-3">
-                        <div ref={donutRef} className="relative w-28 h-28">
-                          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                            <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth="13"
-                              stroke={isDark ? 'rgba(255,255,255,0.06)' : '#EFF6FF'} />
-                            {arcs.map((arc, i) => (
-                              <circle key={arc.label} cx={cx} cy={cy} r={r} fill="none" strokeWidth="13"
-                                stroke={isDark ? arc.darkColor : arc.color}
-                                strokeDasharray={`${statsAnimated ? arc.dash : 0} ${circ}`}
-                                strokeDashoffset={arc.offset}
-                                strokeLinecap="butt"
-                                onMouseEnter={(e) => { setHoveredSeg(i); showTooltipFor(arc, e); }}
-                                onMouseMove={(e) => showTooltipFor(arc, e)}
-                                onMouseLeave={() => { setHoveredSeg(null); setSegTooltip(null); }}
-                                onClick={() => goToStatus(arc.status)}
-                                style={{
-                                  cursor: 'pointer',
-                                  pointerEvents: 'stroke',
-                                  transformOrigin: '50% 50%',
-                                  transformBox: 'fill-box',
-                                  transform: hoveredSeg === i ? 'scale(1.07)' : 'scale(1)',
-                                  opacity: hoveredSeg === null || hoveredSeg === i ? 1 : 0.6,
-                                  transition: 'stroke-dasharray 1s ease-out, transform 0.2s ease-out, opacity 0.2s ease-out',
-                                }}
-                              />
-                            ))}
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className={`text-2xl font-black leading-none ${tp}`}>{total}</span>
-                            <span className={`text-[10px] font-medium mt-0.5 ${tm}`}>sessions</span>
-                          </div>
-                          {segTooltip && (
-                            <div
-                              className={`absolute z-50 px-2.5 py-1.5 rounded-lg shadow-lg pointer-events-none whitespace-nowrap text-center ${isDark ? 'bg-[#2a2a2a] border border-white/10' : 'bg-white border border-gray-200'}`}
-                              style={{ left: segTooltip.x, top: segTooltip.y, transform: 'translate(-50%, -120%)' }}
-                            >
-                              <p className={`text-[11px] font-semibold ${tp}`}>{segTooltip.label}</p>
-                              <p className={`text-[10px] ${tm}`}>{segTooltip.value} session{segTooltip.value !== 1 ? 's' : ''} · {segTooltip.pct}%</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        {allSegs.map(seg => {
-                          const arcIdx = arcs.findIndex(a => a.label === seg.label);
-                          const disabled = seg.value === 0;
-                          return (
-                            <button key={seg.label} type="button" disabled={disabled}
-                              onClick={() => goToStatus(seg.status)}
-                              onMouseEnter={() => arcIdx >= 0 && setHoveredSeg(arcIdx)}
-                              onMouseLeave={() => setHoveredSeg(null)}
-                              className={`flex items-center gap-2.5 w-full text-left rounded-md px-1 py-0.5 -mx-1 transition-all duration-200 ${disabled ? 'cursor-default' : 'cursor-pointer'} ${
-                                !disabled && hoveredSeg === arcIdx ? (isDark ? 'bg-white/5' : 'bg-gray-50') : ''
-                              }`}
-                              style={{ opacity: hoveredSeg !== null && arcIdx >= 0 && hoveredSeg !== arcIdx ? 0.6 : 1 }}
-                            >
-                              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                style={{ backgroundColor: isDark ? seg.darkColor : seg.color }} />
-                              <span className={`flex-1 text-xs ${ts}`}>{seg.label}</span>
-                              <span className={`text-xs font-bold tabular-nums ${tp}`}>{seg.value}</span>
-                              <span className={`text-[10px] tabular-nums w-7 text-right ${tm}`}>
-                                {total > 0 ? Math.round((seg.value / total) * 100) : 0}%
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  );
-                })()}
-
-                {todayConsultations.length > 0 && (
-                  <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${tm}`}>Today</p>
-                    <div className="space-y-2">
-                      {todayConsultations.slice(0, 3).map(c => (
-                        <div key={c.id} className="flex items-center gap-2">
-                          <span className={`text-[10px] font-mono flex-shrink-0 ${tm}`}>{(c.time || c.time_start)?.slice(0, 5)}</span>
-                          <div className={`flex-1 min-w-0 pl-2 border-l-2 ${c.status === 'confirmed' ? 'border-sky-400' : 'border-amber-400'}`}>
-                            <p className={`text-xs font-medium truncate ${tp}`}>{c.professor_name.split(' ').slice(-1)[0]}</p>
-                            <p className={`text-[10px] ${tm}`}>{(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode; return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}</p>
-                          </div>
-                        </div>
+                {/* Top Topics preview — pinned to bottom of rankings card */}
+                {lbView === 'rankings' && mostConsultedTopics.length > 0 && (
+                  <div className={`flex-shrink-0 mt-4 pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                    <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>🔥 Top Topics</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mostConsultedTopics.slice(0, 3).map(t => (
+                        <button key={t.label} onClick={() => setLbView('consulted')}
+                          className={`text-sm font-semibold px-2.5 py-1 rounded-full transition-colors ${isDark ? 'bg-white/[0.06] text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                          {t.label}
+                        </button>
                       ))}
                     </div>
                   </div>
                 )}
-
+                {lbView === 'rankings' && mostConsultedTopics.length === 0 && allConsultsCompleted > 0 && (
+                  <div className={`flex-shrink-0 mt-4 pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                    <p className={`text-xs font-semibold ${tm}`}>
+                      🎯 {completionPct}% completion rate all time
+                    </p>
+                  </div>
+                )}
               </div>
 
-            </div>{/* /widget grid */}
-
-            {/* ── Section 4: Full Calendar ── */}
-            <FullCalendar
-              consultations={consultations}
-              schedules={schedules}
-              dateLabelMap={dateLabelMap}
-              dateColorMap={dateColorMap}
-              isDark={isDark}
-              calOverrides={calOverrides}
-              onBook={() => handleTabChange('book')}
-              studentKey={profile.student_number || 'student'}
-            />
+            </div>{/* /bento grid */}
 
           </div>
           );
         })()
 
         : tab === 'book' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="relative z-[1] px-3 sm:px-8 py-5 sm:py-8">
             {(() => {
               const profMap = new Map<number, {
                 professor_id: number; professor_name: string; department: string;
@@ -1913,7 +1862,7 @@ export default function StudentDashboard() {
           </div>
 
         ) : tab === 'history' ? (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="relative z-[1] px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-7 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
@@ -1940,53 +1889,104 @@ export default function StudentDashboard() {
               }
               return (
                 <div className="space-y-8">
-                  {groupByQuarter(historyItems).map(([quarter, items]) => (
+                  {groupByQuarter(historyItems).map(([quarter, items]) => {
+                    const completedCount = items.filter(i => i.status === 'completed').length;
+                    const completionRate = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+                    return (
                     <div key={quarter}>
-                      <div className="flex items-center gap-3 mb-3">
-                        <p className={`text-[10px] font-semibold uppercase tracking-widest ${ts}`}>{quarter}</p>
-                        <span className={`text-xs ${tm}`}>{items.length} consultation{items.length !== 1 ? 's' : ''}</span>
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
+                        <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{quarter}</p>
+                        <span className={`text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{items.length} consultation{items.length !== 1 ? 's' : ''}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {completionRate}% completed
+                        </span>
                       </div>
-                      <div className={`rounded-2xl overflow-hidden ${card}`}>
+                      <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm'}`}>
                         <div className="overflow-x-auto">
-                          <table className="w-full min-w-[600px] table-fixed">
+                          <table className="w-full" style={{ minWidth: '650px' }}>
+                            <colgroup>
+                              <col className="w-[120px]" />
+                              <col className="w-[18%]" />
+                              <col />
+                              <col className="w-[150px]" />
+                              <col className="w-[100px]" />
+                              <col className="w-[18%]" />
+                            </colgroup>
                             <thead>
-                              <tr className={`border-b ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                                {['Date','Purpose','Adviser','Action Taken','Status','Receipt'].map((h, hi) => (
-                                  <th key={h} className={`text-left text-[10px] font-semibold uppercase tracking-wide px-4 py-3 ${tm} ${
-                                    hi === 0 ? 'w-[110px]' : hi === 2 ? 'w-[150px]' : hi === 3 ? 'w-[155px]' : hi === 4 ? 'w-[100px]' : hi === 5 ? 'w-[80px]' : ''
-                                  }`}>{h}</th>
+                              <tr className={`border-b ${isDark ? 'border-white/5 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'}`}>
+                                {['Date', 'Adviser', 'Purpose', 'Action Taken', 'Status', 'Remarks'].map(h => (
+                                  <th key={h} className={`text-left text-xs font-semibold uppercase tracking-widest px-5 py-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{h}</th>
                                 ))}
                               </tr>
                             </thead>
-                            <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
-                              {items.map(c => (
-                                <tr key={c.id} className={`transition-colors ${hoverBg}`}>
-                                  <td className={`px-4 py-3 text-xs whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            <tbody className={`divide-y ${isDark ? 'divide-white/[0.04]' : 'divide-gray-100'}`}>
+                              {items.map(c => {
+                                const initials = (c.professor_name || '?').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+                                return (
+                                <tr key={c.id} className={`transition-colors align-middle ${isDark ? 'hover:bg-white/[0.025]' : 'hover:bg-gray-50/70'}`}>
+                                  <td className={`px-5 py-4 text-sm whitespace-nowrap align-middle ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                                     {new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </td>
-                                  <td className={`px-4 py-3 text-xs ${ts}`}><span className="line-clamp-2">{natureLabel(c)}</span></td>
-                                  <td className={`px-4 py-3 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{c.professor_name}</td>
-                                  <td className={`px-4 py-3 text-xs ${ts}`}><span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span></td>
-                                  <td className="px-4 py-3"><StatusBadge status={c.status} isDark={isDark} /></td>
-                                  <td className="px-4 py-3">
-                                    {c.status === 'completed' && (
-                                      <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
-                                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                                        {downloadingReceipt === c.id
-                                          ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                          : <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
-                                        PDF
-                                      </button>
-                                    )}
+                                  <td className="px-5 py-4 align-middle">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>{initials}</div>
+                                      <p className={`truncate text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{c.professor_name}</p>
+                                    </div>
+                                  </td>
+                                  <td className={`px-5 py-4 text-sm align-middle ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    <span className="line-clamp-2 break-words leading-relaxed">{natureLabel(c)}</span>
+                                  </td>
+                                  <td className={`px-5 py-4 text-sm align-middle ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {c.action_taken
+                                      ? <div className="flex items-center gap-1.5">
+                                          <svg className="w-4 h-4 flex-shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                          </svg>
+                                          <span className="line-clamp-2">{actionLabel(c.action_taken, c.referral, c.referral_specify)}</span>
+                                        </div>
+                                      : <span className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>—</span>
+                                    }
+                                  </td>
+                                  <td className="px-5 py-4 align-middle"><StatusBadge status={c.status} isDark={isDark} /></td>
+                                  <td className={`px-5 py-4 text-sm align-top ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {c.remarks
+                                      ? (() => {
+                                          const isLong = c.remarks.length > 80;
+                                          const isOpen = expandedRemarks.has(c.id);
+                                          return (
+                                            <div>
+                                              <span className={`break-words leading-relaxed italic ${!isOpen && isLong ? 'line-clamp-2' : ''}`}>{c.remarks}</span>
+                                              {isLong && (
+                                                <button
+                                                  onClick={() => setExpandedRemarks(prev => {
+                                                    const next = new Set(prev);
+                                                    isOpen ? next.delete(c.id) : next.add(c.id);
+                                                    return next;
+                                                  })}
+                                                  className={`mt-1 flex items-center gap-0.5 text-xs font-medium transition-colors ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-800'}`}
+                                                >
+                                                  {isOpen ? 'Show less' : 'Show more'}
+                                                  <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                  </svg>
+                                                </button>
+                                              )}
+                                            </div>
+                                          );
+                                        })()
+                                      : <span className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>—</span>
+                                    }
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -1994,7 +1994,7 @@ export default function StudentDashboard() {
 
         ) : (
           /* My Consultations */
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="relative z-[1] px-3 sm:px-8 py-5 sm:py-8">
             <div className="mb-5 sm:mb-6 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
@@ -2059,7 +2059,7 @@ export default function StudentDashboard() {
             ) : (
               <div className="space-y-3">
                 {shownConsultations.map(c => (
-                  <div key={c.id} className={`rounded-2xl p-5 ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-gray-300'}`}>
+                  <div key={c.id} className={`rounded-2xl p-5 ${card}`}>
                     <div className="flex items-start gap-4">
                       <button type="button" onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
                         className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
@@ -2067,23 +2067,31 @@ export default function StudentDashboard() {
                       </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <button type="button" onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
-                            className={`font-semibold text-sm hover:opacity-75 transition-opacity text-left ${tp}`}>
-                            {c.professor_name}
-                          </button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button type="button" onClick={() => setProfileCard({ id: c.professor_id, role: 'professor' })}
+                              className={`font-semibold text-base hover:opacity-75 transition-opacity text-left ${tp}`}>
+                              {c.professor_name}
+                            </button>
+                            {c.in_session && (
+                              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.6)]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                In Session
+                              </span>
+                            )}
+                          </div>
                           <StatusBadge status={c.status} isDark={isDark} />
                         </div>
-                        <p className={`text-xs mt-0.5 line-clamp-1 ${ts}`}>{natureLabel(c)}</p>
+                        <p className={`text-sm mt-0.5 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{natureLabel(c)}</p>
                       </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
-                        <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Date & Time</p>
-                        <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                        <p className={`text-xs uppercase tracking-wide mb-1 font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Date & Time</p>
+                        <p className={`text-base font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                           {new Date((c.date || '').slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
-                        <p className={`text-xs mt-0.5 ${ts}`}>{c.day} · {(() => {
+                        <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{c.day} · {(() => {
                           if (c.time) {
                             const [h, m] = c.time.slice(0, 5).split(':').map(Number);
                             const endMins = h * 60 + m + 30;
@@ -2094,14 +2102,14 @@ export default function StudentDashboard() {
                         })()}</p>
                       </div>
                       <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
-                        <p className={`text-[10px] uppercase tracking-wide mb-1 ${tm}`}>Meeting</p>
+                        <p className={`text-xs uppercase tracking-wide mb-1 font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Meeting</p>
                         {(() => {
                           const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
                           return (
                             <>
                               <div className="flex items-center gap-1.5">
                                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
-                                <span className={`text-sm font-medium ${effMode === 'F2F' ? (isDark ? 'text-purple-300' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-300' : 'text-teal-600') : (isDark ? 'text-cyan-300' : 'text-cyan-600')}`}>
+                                <span className={`text-base font-semibold ${effMode === 'F2F' ? (isDark ? 'text-purple-300' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-300' : 'text-teal-600') : (isDark ? 'text-cyan-300' : 'text-cyan-600')}`}>
                                   {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
                                 </span>
                               </div>
