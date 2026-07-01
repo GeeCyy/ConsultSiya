@@ -209,7 +209,7 @@ router.post(
         path: '/',
       });
 
-      res.json({ token, role: user.role, message: 'Login successful' });
+      res.json({ token, role: user.role, email: user.email, message: 'Login successful' });
     } catch (err) {
       console.error('[Login]', err.message);
       res.status(500).json({ error: 'Login failed. Please try again.' });

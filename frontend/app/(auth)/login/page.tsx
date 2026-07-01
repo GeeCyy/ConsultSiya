@@ -118,6 +118,7 @@ function LoginContent() {
       setLocked(false);
       localStorage.setItem('token', data.token);
       localStorage.setItem('role', data.role);
+      if (data.role === 'admin') localStorage.setItem('consulta-name', data.email ?? 'Administrator');
       const dest = data.role === 'admin' ? '/dashboard/admin' : data.role === 'professor' ? '/dashboard/professor' : '/dashboard/student';
       router.push(dest);
     } else {

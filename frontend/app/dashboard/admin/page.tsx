@@ -1118,7 +1118,10 @@ export default function AdminDashboard() {
               onClick={() => { setTopNavProfileOpen(o => !o); setTopNavNotifOpen(false); }}
               className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-200 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-100'}`}
             >
-              <span className="text-sm font-medium truncate max-w-[120px]">{adminName}</span>
+              <div className="flex flex-col items-start leading-none">
+                <span className="text-sm font-medium truncate max-w-[120px]">{adminName}</span>
+                <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Administrator</span>
+              </div>
               <svg className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${topNavProfileOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
