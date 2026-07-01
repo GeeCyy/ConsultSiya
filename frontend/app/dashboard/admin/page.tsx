@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import {
@@ -19,7 +19,7 @@ import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar, { type NavItem } from '@/components/LeftSidebar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { Ban, Trash2 } from 'lucide-react';
+import { Ban, Trash2, UserCheck, Users, BarChart3, ClipboardList } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -278,6 +278,8 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedSchedules, setExpandedSchedules] = useState<Set<string>>(new Set());
+  const [scheduleView, setScheduleView] = useState<'active' | 'past'>('active');
 
   // History filters
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('all');
@@ -334,6 +336,8 @@ export default function AdminDashboard() {
   const [lbProfs, setLbProfs]       = useState<LeaderboardItem[]>([]);
   const [lbStudents, setLbStudents] = useState<LeaderboardItem[]>([]);
   const [lbTopics, setLbTopics]     = useState<LeaderboardItem[]>([]);
+  // Home rankings panel toggle (Rankings ⇆ Top Topics) — matches student/professor
+  const [lbView, setLbView] = useState<'rankings' | 'consulted'>('rankings');
 
   // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -371,6 +375,16 @@ export default function AdminDashboard() {
   const [_isDark, setIsDark] = useState(false);
   const isDark = mounted ? _isDark : false;
 
+  // Top navbar state
+  const [navScrolled, setNavScrolled] = useState(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const topNavNotifRef = useRef<HTMLDivElement>(null);
+  const topNavProfileRef = useRef<HTMLDivElement>(null);
+  const topNavNotifPanelRef = useRef<HTMLDivElement>(null);
+  const topNavProfilePanelRef = useRef<HTMLDivElement>(null);
+  const [topNavNotifOpen, setTopNavNotifOpen] = useState(false);
+  const [topNavProfileOpen, setTopNavProfileOpen] = useState(false);
+
   useEffect(() => {
     setMounted(true);
     const dark = localStorage.getItem('consulta-theme') !== 'light';
@@ -386,6 +400,28 @@ export default function AdminDashboard() {
     window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
     setIsDark(next);
   };
+
+  useEffect(() => {
+    if (!topNavNotifOpen) return;
+    const h = (e: MouseEvent) => {
+      const inBtn = topNavNotifRef.current?.contains(e.target as Node);
+      const inPanel = topNavNotifPanelRef.current?.contains(e.target as Node);
+      if (!inBtn && !inPanel) setTopNavNotifOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [topNavNotifOpen]);
+
+  useEffect(() => {
+    if (!topNavProfileOpen) return;
+    const h = (e: MouseEvent) => {
+      const inBtn = topNavProfileRef.current?.contains(e.target as Node);
+      const inPanel = topNavProfilePanelRef.current?.contains(e.target as Node);
+      if (!inBtn && !inPanel) setTopNavProfileOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [topNavProfileOpen]);
 
   const stats = {
     total: consultations.length,
@@ -918,13 +954,10 @@ export default function AdminDashboard() {
   // ── Term stats (used by Home tab) ────────────────────────────────────────────
   const now = new Date();
   const currentWeek = getAcademicWeek(term, now);
-  const currentMode = currentWeek ? getWeekMode(term, currentWeek) : null;
   const { finalsDate, endDate } = getTermDates(term);
   const daysToFinals = daysUntil(finalsDate, now);
   const daysToEnd = daysUntil(endDate, now);
   const termProgress = getTermProgress(term, now);
-  const nextWeek = currentWeek ? currentWeek + 1 : null;
-  const nextWeekMode = nextWeek && nextWeek <= term.totalWeeks ? getWeekMode(term, nextWeek) : null;
 
   const adminNavItems: NavItem[] = [
     { key: 'home',          label: 'Home' },
@@ -946,36 +979,245 @@ export default function AdminDashboard() {
   const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
 
   return (
-    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
+    <div className={`h-screen flex overflow-hidden relative ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
 
-      <LeftSidebar
-        role="admin"
-        navItems={adminNavItems}
-        activeTab={tab}
-        onTabChange={(t) => setTab(t as Tab)}
-        profileName={adminName}
-        profileAvatar={null}
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
+      {/* Mapua logo full-page watermark */}
+      <img
+        src="/mapua-logo.png"
+        alt=""
+        aria-hidden
+        className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.18]' : 'opacity-[0.12]'}`}
+        style={isDark ? { filter: 'drop-shadow(0 0 80px rgba(14,165,233,0.6)) drop-shadow(0 0 40px rgba(99,102,241,0.4)) drop-shadow(0 0 120px rgba(14,165,233,0.3))' } : { filter: 'drop-shadow(0 0 30px rgba(99,102,241,0.15))' }}
       />
 
+      {/* Consulta logo watermark */}
+      <img
+        src="/consulta-logo.png"
+        alt=""
+        aria-hidden
+        className={`pointer-events-none select-none fixed z-0 ${isDark ? 'opacity-[0.06]' : 'opacity-[0.08]'}`}
+        style={{ width: '340px', height: '340px', objectFit: 'contain', bottom: '5%', right: '4%', filter: isDark ? 'drop-shadow(0 0 40px rgba(99,102,241,0.3))' : 'drop-shadow(0 0 20px rgba(99,102,241,0.12))' }}
+      />
+
+      {/* Mobile sidebar */}
+      <div className="lg:hidden">
+        <LeftSidebar
+          role="admin"
+          navItems={adminNavItems}
+          activeTab={tab}
+          onTabChange={(t) => setTab(t as Tab)}
+          profileName={adminName}
+          profileAvatar={null}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          hideDesktopSidebar={true}
+        />
+      </div>
+
+      {/* ── Desktop Top Navbar — full-width, transparent at top / solid when scrolled (matches student/professor) ── */}
+      <div
+        className="hidden lg:flex items-center h-16 px-6 gap-0 border-b"
+        style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+          background: navScrolled
+            ? (isDark ? 'rgba(20,21,26,0.97)' : 'rgba(255,255,255,0.97)')
+            : 'transparent',
+          backdropFilter: navScrolled ? 'blur(12px)' : 'none',
+          WebkitBackdropFilter: navScrolled ? 'blur(12px)' : 'none',
+          borderBottomColor: navScrolled
+            ? (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.14)')
+            : 'transparent',
+          boxShadow: navScrolled
+            ? (isDark ? '0 2px 20px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.10)')
+            : 'none',
+        }}
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-3 pr-6 flex-shrink-0">
+          <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
+            <img src="/consulta-logo.png" alt="Consulta" className="w-full h-full object-contain scale-[1.6]" />
+          </div>
+          <div>
+            <p className="font-bold text-base leading-none transition-colors duration-250" style={{ color: isDark ? '#ffffff' : (navScrolled ? '#111827' : '#1e3a5f') }}>Consulta</p>
+            <p className="text-[9px] leading-none mt-1 tracking-wide transition-colors duration-250" style={{ color: isDark ? '#6b7280' : (navScrolled ? '#9ca3af' : '#4b6d8f') }}>MAPUA SOIT</p>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-8 flex-shrink-0 mr-2 transition-colors duration-250" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : (navScrolled ? '#e5e7eb' : 'rgba(30,58,95,0.2)') }} />
+
+        {/* Nav links */}
+        <div className="flex items-center gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          {adminNavItems.map(item => {
+            const isActive = tab === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key as Tab)}
+                className={`relative flex items-center gap-1.5 rounded-lg text-[14px] font-semibold whitespace-nowrap transition-colors px-2.5 pt-2 pb-3 flex-shrink-0 ${
+                  isActive
+                    ? isDark ? 'text-white' : (navScrolled ? 'text-[#0369A1]' : 'text-[#1e3a5f]')
+                    : isDark
+                      ? 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.06]'
+                      : (navScrolled ? 'text-gray-500 hover:text-gray-800 hover:bg-gray-100' : 'text-[#2d5075]/80 hover:text-[#1e3a5f] hover:bg-white/30')
+                }`}
+              >
+                {item.label}
+                {isActive && (
+                  <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-[3px] w-5 rounded-full ${isDark ? 'bg-white' : 'bg-[#0369A1]'}`} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Divider right */}
+        <div className="w-px h-8 flex-shrink-0 ml-2 transition-colors duration-250" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : (navScrolled ? '#e5e7eb' : 'rgba(30,58,95,0.2)') }} />
+
+        {/* Right icons */}
+        <div className="flex items-center gap-1 pl-4 flex-shrink-0">
+
+          {/* Notification bell */}
+          <div className="relative" ref={topNavNotifRef}>
+            <button
+              onClick={() => setTopNavNotifOpen(o => !o)}
+              className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+              </svg>
+              {pendingUsers.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-[#CC0000] text-white text-[9px] font-bold flex items-center justify-center">
+                  {pendingUsers.length > 9 ? '9+' : pendingUsers.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Dark mode toggle */}
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Light Mode' : 'Dark Mode'}
+            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            {isDark ? (
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" /></svg>
+            ) : (
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" /></svg>
+            )}
+          </button>
+
+          {/* User dropdown trigger */}
+          <div className="relative" ref={topNavProfileRef}>
+            <button
+              onClick={() => { setTopNavProfileOpen(o => !o); setTopNavNotifOpen(false); }}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-200 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <span className="text-sm font-medium truncate max-w-[120px]">{adminName}</span>
+              <svg className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${topNavProfileOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Desktop notification dropdown — outside navbar div, fixed */}
+      {topNavNotifOpen && (
+        <div ref={topNavNotifPanelRef} className={`hidden lg:block fixed top-[68px] right-4 z-[9999] w-80 rounded-xl shadow-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200 shadow-[0_8px_30px_rgba(0,0,0,0.12)]'}`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+            <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Pending Accounts
+              {pendingUsers.length > 0 && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">{pendingUsers.length}</span>}
+            </p>
+            <button onClick={() => setTopNavNotifOpen(false)} className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="overflow-y-auto max-h-80">
+            {pendingUsers.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No pending accounts</p>
+              </div>
+            ) : pendingUsers.slice(0, 6).map(u => (
+              <div key={u.id} className={`border-b ${isDark ? 'border-white/5 bg-white/[0.03]' : 'border-gray-100 bg-blue-50/60'}`}>
+                <button
+                  onClick={() => { setTab('accounts'); setTopNavNotifOpen(false); }}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-blue-50'}`}
+                >
+                  <span className="text-base flex-shrink-0 mt-0.5">👤</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-medium leading-snug ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                      <span className="font-semibold">{u.full_name}</span> wants to join as {u.role}
+                    </p>
+                    <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{u.email}</p>
+                  </div>
+                </button>
+              </div>
+            ))}
+          </div>
+          {pendingUsers.length > 0 && (
+            <div className={`px-4 py-2.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+              <button onClick={() => { setTab('accounts'); setTopNavNotifOpen(false); }} className="text-[11px] text-[#CC0000] hover:underline">
+                View all accounts →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Desktop profile dropdown — outside navbar div, fixed */}
+      {topNavProfileOpen && (
+        <div ref={topNavProfilePanelRef} className="hidden lg:block fixed top-[68px] right-4 z-[9999] min-w-[180px] rounded-xl bg-white shadow-md border border-gray-100 overflow-hidden">
+          <button
+            onClick={() => { router.push('/settings'); setTopNavProfileOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors text-left"
+          >
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Settings
+          </button>
+          <div className="h-px bg-gray-100" />
+          <button
+            onClick={() => { handleLogout(); setTopNavProfileOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+            </svg>
+            Sign Out
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <div className="lg:hidden h-14 flex-shrink-0" />
-        <main className={`flex-1 overflow-y-auto ${isDark ? 'bg-[#1e2235]' : 'bg-[#EEF2FF]'}`}>
+        <main
+          ref={mainScrollRef}
+          onScroll={e => setNavScrolled((e.currentTarget as HTMLElement).scrollTop > 8)}
+          className={`flex-1 overflow-y-auto pt-14 lg:pt-16 ${isDark ? 'bg-[#1e2235]' : ''}`}
+          style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}
+        >
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
             <p className="text-gray-600 text-sm">Loading...</p>
           </div>
         ) : (
-          <div className="px-3 sm:px-8 py-5 sm:py-8">
+          <div className="px-3 sm:px-8 py-5 sm:py-8 relative z-[1]">
 
             {/* ── Consultations ── */}
             {tab === 'consultations' && (
               <>
                 <div className="mb-6">
                   <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Consultations</h1>
-                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>All consultation records across the system</p>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>All consultation records across the system</p>
                 </div>
 
                 {/* Tabs */}
@@ -1182,8 +1424,8 @@ export default function AdminDashboard() {
               <>
                 <div className="mb-7 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div>
-                    <h1 className="text-white text-2xl font-bold">Account Management</h1>
-                    <p className="text-gray-500 text-sm mt-1">Approve registrations, add or remove accounts</p>
+                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Account Management</h1>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>Approve registrations, add or remove accounts</p>
                   </div>
                   <button onClick={() => setShowAddUser(true)}
                     className={`flex items-center justify-center gap-2 px-4 py-2 text-sm sm:flex-shrink-0 min-h-[44px] sm:min-h-0 ${btnPrimary}`}>
@@ -1193,9 +1435,9 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Admin section */}
-                <div className="rounded-2xl border border-white/5 bg-[#161616] p-4 mb-6">
+                <div className={`rounded-2xl border p-4 mb-6 ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white shadow-sm'}`}>
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest">Admin Accounts ({admins.length}/2)</p>
+                    <p className={`text-xs font-semibold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Admin Accounts ({admins.length}/2)</p>
                     {admins.length < 2 && (
                       <button onClick={() => setShowTransfer(true)}
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
@@ -1209,8 +1451,8 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-3">
                           <Avatar name={a.email} />
                           <div>
-                            <p className="text-white text-sm font-medium">{a.email}</p>
-                            <p className="text-gray-600 text-xs">Admin · joined {fmtDateTime(a.created_at)}</p>
+                            <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{a.email}</p>
+                            <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>Admin · joined {fmtDateTime(a.created_at)}</p>
                           </div>
                         </div>
                         <span className="text-[10px] text-sky-400 font-semibold uppercase tracking-wide">Admin</span>
@@ -1222,12 +1464,12 @@ export default function AdminDashboard() {
                 {/* Pending approvals */}
                 {pendingUsers.length > 0 && (
                   <div className="mb-6">
-                    <p className="text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-3">
+                    <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
                       Pending Approval ({pendingUsers.length})
                     </p>
                     <div className="space-y-2">
                       {pendingUsers.map(u => (
-                        <div key={u.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div key={u.id} className={`rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${isDark ? 'border-amber-500/20 bg-amber-500/10' : 'border-amber-200 bg-amber-50 shadow-sm'}`}>
                           <div className="flex items-center gap-3">
                             <button type="button" onClick={() => setProfileCard({ id: u.profile_id, role: u.role })} className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
                               <Avatar name={u.full_name || u.email} avatarUrl={u.avatar} />
@@ -1238,12 +1480,12 @@ export default function AdminDashboard() {
                               </p>
                               <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>{u.email} · {u.role}</p>
                               {u.role === 'student' && u.student_number && (
-                                <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>{u.student_number} {u.program ? `· ${u.program}` : ''}</p>
+                                <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-600'}`}>{u.student_number} {u.program ? `· ${u.program}` : ''}</p>
                               )}
                               {u.role === 'professor' && u.department && (
-                                <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>{u.department}</p>
+                                <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-600'}`}>{u.department}</p>
                               )}
-                              <p className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-700' : 'text-gray-400'}`}>Registered {fmtDateTime(u.created_at)}</p>
+                              <p className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-700' : 'text-gray-500'}`}>Registered {fmtDateTime(u.created_at)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
@@ -1267,28 +1509,30 @@ export default function AdminDashboard() {
                   {['all', 'student', 'professor'].map(r => (
                     <button key={r} onClick={() => setAccountRoleFilter(r)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        accountRoleFilter === r ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                        accountRoleFilter === r
+                          ? isDark ? 'bg-sky-500/20 text-sky-300' : 'bg-[#0EA5E9] text-white shadow-sm'
+                          : isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                       }`}>
                       {r === 'all' ? 'All' : r.charAt(0).toUpperCase() + r.slice(1) + 's'}
                     </button>
                   ))}
                 </div>
 
-                <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">
+                <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-600' : 'text-gray-700'}`}>
                   All Accounts ({filteredUsers.length})
                 </p>
 
                 {filteredUsers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-white/5 bg-[#161616]">
-                    <p className="text-gray-400 text-sm">No accounts found</p>
+                  <div className={`flex flex-col items-center justify-center py-16 rounded-2xl border ${isDark ? 'border-white/5 bg-[#161616]' : 'border-gray-200 bg-white'}`}>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No accounts found</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {filteredUsers.map(u => (
                       <div key={u.id} className={`rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-colors ${
                         !u.is_active
-                          ? 'border-white/5 bg-[#111] opacity-60'
-                          : 'border-white/5 bg-[#161616] hover:border-white/10'
+                          ? isDark ? 'border-white/5 bg-[#111] opacity-60' : 'border-gray-200 bg-gray-50 opacity-60'
+                          : isDark ? 'border-white/5 bg-[#161616] hover:border-white/10' : 'border-gray-200 bg-white shadow-sm hover:border-gray-300'
                       }`}>
                         <div className="flex items-center gap-3">
                           <button type="button" onClick={() => setProfileCard({ id: u.profile_id, role: u.role })} className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none" title="View profile">
@@ -1296,7 +1540,7 @@ export default function AdminDashboard() {
                           </button>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-white text-sm font-medium">
+                              <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                 {u.full_name || <span className="italic text-gray-500">(No name)</span>}
                               </p>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${
@@ -1315,14 +1559,14 @@ export default function AdminDashboard() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-500 text-xs">{u.email}</p>
+                            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>{u.email}</p>
                             {u.role === 'student' && u.student_number && (
-                              <p className="text-gray-600 text-xs">{u.student_number}{u.program ? ` · ${u.program}` : ''}</p>
+                              <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-600'}`}>{u.student_number}{u.program ? ` · ${u.program}` : ''}</p>
                             )}
                             {u.role === 'professor' && u.department && (
-                              <p className="text-gray-600 text-xs">{u.department}</p>
+                              <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-600'}`}>{u.department}</p>
                             )}
-                            <p className="text-gray-700 text-[10px] mt-0.5">Joined {fmtDateTime(u.created_at)}</p>
+                            <p className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-700' : 'text-gray-500'}`}>Joined {fmtDateTime(u.created_at)}</p>
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1461,49 +1705,82 @@ export default function AdminDashboard() {
             {/* ── Schedules ── */}
             {tab === 'schedules' && (
               <>
-                <div className="mb-5 sm:mb-7">
-                  <h1 className="text-white text-2xl font-bold">Schedules</h1>
-                  <p className="text-gray-500 text-sm mt-1">All professor availability slots</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-7">
+                  <div>
+                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Schedules</h1>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>All professor availability slots</p>
+                  </div>
+                  <div className={`flex gap-1 p-1 rounded-xl ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                    {(['active', 'past'] as const).map(v => (
+                      <button key={v} onClick={() => setScheduleView(v)}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
+                          scheduleView === v
+                            ? 'bg-[#0EA5E9] text-white shadow-sm'
+                            : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                        }`}>
+                        {v === 'active' ? 'Active Slots' : 'Past Slots'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {Object.keys(schedulesByProf).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-white/5 bg-[#161616]">
                     <p className="text-gray-400 font-medium text-sm">No schedules found</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {Object.values(schedulesByProf).map((prof) => (
-                      <div key={prof.name} className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                        <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Avatar name={prof.name} />
-                            <div>
-                              <p className="text-white font-semibold text-sm">{prof.name}</p>
-                              <p className="text-gray-600 text-xs">{prof.dept}</p>
-                            </div>
-                          </div>
-                          <span className="text-gray-600 text-xs">{prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="divide-y divide-white/5">
-                          {[...prof.slots]
-                            .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.time_start.localeCompare(b.time_start))
-                            .map(slot => (
-                              <div key={slot.id} className="px-5 py-3 flex items-center justify-between gap-2 flex-wrap">
-                                <div className="flex items-center gap-3 sm:gap-4 text-sm text-gray-400 flex-wrap">
-                                  <span className="text-gray-300 font-medium w-20 sm:w-24">{slot.day}</span>
-                                  <span className="font-mono text-xs sm:text-sm">{formatTime(slot.time_start)} – {formatTime(slot.time_end)}</span>
-                                  {slot.location && (
-                                    <span className="text-gray-600 text-xs">{slot.location}</span>
-                                  )}
-                                </div>
-                                <span className={`inline-flex items-center gap-1.5 text-xs ${slot.is_available ? 'text-emerald-400' : 'text-gray-600'}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${slot.is_available ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                                  {slot.is_available ? 'Available' : 'Booked'}
-                                </span>
+                  <div className="space-y-3">
+                    {Object.values(schedulesByProf).map((prof) => {
+                      const filteredSlots = prof.slots.filter(s => scheduleView === 'active' ? s.is_available : !s.is_available);
+                      if (filteredSlots.length === 0) return null;
+                      const isOpen = expandedSchedules.has(prof.name);
+                      return (
+                        <div key={prof.name} className={`rounded-2xl border overflow-hidden ${isDark ? 'border-white/5 bg-[#161616]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                          <button
+                            onClick={() => setExpandedSchedules(prev => {
+                              const next = new Set(prev);
+                              isOpen ? next.delete(prof.name) : next.add(prof.name);
+                              return next;
+                            })}
+                            className={`w-full px-5 py-3.5 flex items-center justify-between gap-4 transition-colors ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Avatar name={prof.name} />
+                              <div className="text-left">
+                                <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>{prof.name}</p>
+                                <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>{prof.dept}</p>
                               </div>
-                            ))}
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{filteredSlots.length} slot{filteredSlots.length !== 1 ? 's' : ''}</span>
+                              <svg className={`w-4 h-4 transition-transform ${isDark ? 'text-gray-500' : 'text-gray-400'} ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </button>
+                          {isOpen && (
+                            <div className={`divide-y ${isDark ? 'divide-white/5 border-t border-white/5' : 'divide-gray-100 border-t border-gray-100'}`}>
+                              {[...filteredSlots]
+                                .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day) || a.time_start.localeCompare(b.time_start))
+                                .map(slot => (
+                                  <div key={slot.id} className="px-5 py-3 flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-3 sm:gap-4 text-sm flex-wrap">
+                                      <span className={`font-medium w-20 sm:w-24 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{slot.day}</span>
+                                      <span className={`font-mono text-xs sm:text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{formatTime(slot.time_start)} – {formatTime(slot.time_end)}</span>
+                                      {slot.location && (
+                                        <span className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{slot.location}</span>
+                                      )}
+                                    </div>
+                                    <span className={`inline-flex items-center gap-1.5 text-xs ${slot.is_available ? 'text-emerald-500' : isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${slot.is_available ? 'bg-emerald-500' : isDark ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                                      {slot.is_available ? 'Available' : 'Booked'}
+                                    </span>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -1513,17 +1790,17 @@ export default function AdminDashboard() {
             {tab === 'reports' && (
               <>
                 <div className="mb-5 sm:mb-7">
-                  <h1 className="text-white text-2xl font-bold">Reports</h1>
-                  <p className="text-gray-500 text-sm mt-1">Download advising reports per professor or combined</p>
+                  <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Reports</h1>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>Download advising reports per professor or combined</p>
                 </div>
 
                 {/* Time period filter */}
                 <div className="flex flex-wrap items-center gap-2 mb-6">
-                  <p className="text-gray-600 text-xs mr-1">Period:</p>
+                  <p className={`text-xs mr-1 font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>Period:</p>
                   {([['', 'All Time'], ['week', 'This Week'], ['semester', 'This Semester'], ['year', 'This Year']] as [ReportPeriod, string][]).map(([val, label]) => (
                     <button key={val} onClick={() => setReportPeriod(val)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        reportPeriod === val ? 'bg-[#0EA5E9] text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                        reportPeriod === val ? 'bg-[#0EA5E9] text-white' : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900'
                       }`}>
                       {label}
                     </button>
@@ -1555,7 +1832,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <p className="text-gray-600 text-[10px] font-semibold uppercase tracking-widest mb-3">By Professor</p>
+                <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>By Professor</p>
                 {professors.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-white/5 bg-[#161616]">
                     <p className="text-gray-400 text-sm">No professors found</p>
@@ -1599,8 +1876,8 @@ export default function AdminDashboard() {
               <>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-7">
                   <div>
-                    <h1 className="text-white text-2xl font-bold">History</h1>
-                    <p className="text-gray-500 text-sm mt-1">All consultation records grouped by term</p>
+                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>History</h1>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>All consultation records grouped by term</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <input
@@ -1645,8 +1922,8 @@ export default function AdminDashboard() {
                       {groupByQuarter(historyItems, term).map(([quarter, items]) => (
                         <div key={quarter}>
                           <div className="flex items-center gap-3 mb-3">
-                            <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">{quarter}</p>
-                            <span className="text-gray-700 text-xs">{items.length} record{items.length !== 1 ? 's' : ''}</span>
+                            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>{quarter}</p>
+                            <span className={`text-xs font-semibold ${isDark ? 'text-gray-400' : 'text-gray-800'}`}>{items.length} record{items.length !== 1 ? 's' : ''}</span>
                           </div>
                           <div className="rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
                             <div className="overflow-x-auto">
@@ -1908,191 +2185,122 @@ export default function AdminDashboard() {
             )}
 
             {/* ── Home ── */}
-            {tab === 'home' && (
-              <>
-                <div className="mb-5 sm:mb-7">
-                  <h1 className="text-white text-2xl font-bold">Dashboard</h1>
-                  <p className="text-gray-500 text-sm mt-1">{term.label} · Admin Overview</p>
+            {tab === 'home' && (() => {
+              const bh = isDark ? 'text-white' : 'text-gray-900';
+              const bs = isDark ? 'text-gray-500' : 'text-gray-500';
+              const inp2 = `w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-indigo-400/50 ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 placeholder-gray-600' : 'text-gray-900 bg-gray-50 border-gray-200 placeholder-gray-400'}`;
+              // Same translucent "glass" card style used on the student/professor home pages —
+              // sits over the full-page Mapúa watermark so the logo subtly shows through.
+              const glassCard: React.CSSProperties = isDark
+                ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 10px 40px rgba(0,0,0,0.60),0 4px 12px rgba(0,0,0,0.40)' }
+                : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' };
+              const RANK_CFG = [
+                { medal: '🥇', border: 'border-amber-400', rowBg: isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50', fill: 'from-amber-400 to-yellow-300', track: isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60' },
+                { medal: '🥈', border: 'border-slate-400',  rowBg: isDark ? 'bg-slate-400/[0.10]'  : 'bg-slate-50',  fill: 'from-slate-400 to-slate-300',  track: isDark ? 'bg-white/[0.07]' : 'bg-slate-200/60'  },
+                { medal: '🥉', border: 'border-orange-400', rowBg: isDark ? 'bg-orange-400/[0.10]' : 'bg-orange-50', fill: 'from-orange-500 to-amber-400', track: isDark ? 'bg-white/[0.07]' : 'bg-orange-200/60' },
+              ];
+              return (
+                <>
+                {/* Stats pill — mirrors student/professor top-right strip */}
+                <div className="flex justify-end mb-4">
+                  <div
+                    className={`grid grid-cols-2 sm:flex sm:items-center gap-x-5 gap-y-3 sm:gap-5 px-5 sm:px-7 py-4 sm:py-3.5 flex-shrink-0 rounded-2xl sm:rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
+                    style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '9999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+                  >
+                    {([
+                      { value: consultations.length,                                   label: 'Consultations', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
+                      { value: professors.length,                                      label: 'Professors',    numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
+                      { value: users.filter(u => u.role === 'student' && u.is_active).length, label: 'Students', numColor: '#059669', darkNumColor: '#6EE7B7' },
+                      { value: pendingUsers.length,                                    label: 'Pending',       numColor: '#EA580C', darkNumColor: '#FDBA74' },
+                    ] as const).map((s, i, arr) => (
+                      <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `sm:pr-5 sm:border-r ${isDark ? 'sm:border-white/20' : 'sm:border-gray-300'}` : ''}`}>
+                        <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
+                        <span className={`text-[11px] font-medium mt-1 ${bs}`}>{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+                <div className="grid grid-cols-12 gap-4">
 
-                {/* Term stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className={`md:col-span-2 rounded-2xl p-6 border border-white/5 bg-[#161616] flex items-center gap-6 hover:-translate-y-0.5 transition-all duration-200 ${isDark ? 'shadow-[0_10px_40px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.55)]' : 'shadow-[0_4px_16px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.18)]'}`}>
-                    <div className="flex-shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] shadow-lg shadow-sky-900/30">
-                      <span className="text-white text-2xl font-black leading-none">{currentWeek ?? '–'}</span>
-                      <span className="text-sky-100 text-[10px] font-semibold uppercase tracking-wider mt-0.5">Week</span>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Current Academic Week</p>
-                      <h2 className="text-2xl font-bold text-white">
-                        {currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Term Not Active'}
-                      </h2>
-                      {currentMode && (
-                        <span className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
-                          currentMode === 'Online'
-                            ? `bg-blue-500/20 ring-1 ring-blue-500/30 ${isDark ? 'text-blue-300' : 'text-blue-700'}`
-                            : `bg-emerald-500/20 ring-1 ring-emerald-500/30 ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${currentMode === 'Online' ? (isDark ? 'bg-blue-400' : 'bg-blue-600') : (isDark ? 'bg-emerald-400' : 'bg-emerald-600')}`} />
-                          {currentMode}
-                        </span>
-                      )}
+                {/* ── Combined term overview card — student profile-card style ── */}
+                <div className="col-span-12 lg:col-span-3 rounded-2xl overflow-hidden flex flex-col" style={glassCard}>
+                  {/* Header: sky-tinted, week badge */}
+                  <div className={`px-6 pt-6 pb-5 ${isDark ? 'bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent' : 'bg-gradient-to-br from-sky-50 to-white'}`}>
+                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-3 ${bs}`}>Admin Overview</p>
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-sky-900/30">
+                        <span className="text-white text-3xl font-black leading-none">{currentWeek ?? '–'}</span>
+                        <span className="text-sky-100 text-[9px] font-bold uppercase tracking-wide">WK</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${bh}`}>{currentWeek ? `Week ${currentWeek} of ${term.totalWeeks}` : 'Not active'}</p>
+                        <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{term.label}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="rounded-2xl p-5 border border-white/5 bg-[#161616] flex flex-col justify-between">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Week</p>
-                    {nextWeek && nextWeekMode ? (
-                      <>
-                        <div className="mt-3">
-                          <p className="text-xl font-bold text-white">Week {nextWeek}</p>
-                          <span className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            nextWeekMode === 'Online' ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'
-                          }`}>{nextWeekMode}</span>
+                  {/* Body: term progress + stat list */}
+                  <div className={`flex-1 px-6 pt-5 pb-6 border-t space-y-5 ${isDark ? 'border-white/15' : 'border-gray-300'}`}>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Term Progress</span>
+                        <span className="text-sm font-bold text-emerald-500">{Math.round(termProgress)}%</span>
+                      </div>
+                      <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
+                        <div className="h-full bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] rounded-full transition-all duration-700" style={{ width: `${termProgress}%` }} />
+                      </div>
+                      <div className="flex justify-between mt-1.5">
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Start</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Finals W{term.finalsWeek}</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>End</span>
+                      </div>
+                    </div>
+                    <div className={`rounded-xl overflow-hidden divide-y ${isDark ? 'divide-white/10 border border-white/10' : 'divide-gray-200 border border-gray-200'}`}>
+                      {([
+                        { label: 'Days to Finals', value: daysToFinals, color: isDark ? '#FBBF24' : '#B45309' },
+                        { label: 'Days to End',    value: daysToEnd,    color: isDark ? '#818CF8' : '#4338CA' },
+                        { label: 'Weeks Left',     value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : term.totalWeeks, color: isDark ? '#34D399' : '#047857' },
+                      ]).map(m => (
+                        <div key={m.label} className={`flex items-center justify-between px-4 py-3 ${isDark ? 'bg-white/[0.03]' : 'bg-white'}`}>
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: m.color }} />
+                            <span className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{m.label}</span>
+                          </div>
+                          <span className="text-xl font-bold" style={{ color: m.color }}>{m.value}</span>
                         </div>
-                        <p className="text-[11px] text-gray-600 mt-3">Plan ahead for upcoming consultations</p>
-                      </>
-                    ) : (
-                      <p className="text-gray-500 text-sm mt-3">End of term</p>
-                    )}
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* Countdown cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  {([
-                    {
-                      label: 'Days to Finals', value: daysToFinals,
-                      numColor: '#EA580C', darkNumColor: '#FDBA74',
-                      lightBg: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)', lightBorder: '#FED7AA',
-                      darkBg: 'linear-gradient(135deg, rgba(234,88,12,0.25), rgba(234,88,12,0.12))', darkBorder: 'rgba(251,146,60,0.2)',
-                      shadow: '0 10px 40px rgba(234,88,12,0.20), 0 4px 12px rgba(234,88,12,0.12)',
-                      hoverShadow: '0 20px 60px rgba(234,88,12,0.30), 0 8px 20px rgba(234,88,12,0.18)',
-                    },
-                    {
-                      label: 'Days to End', value: daysToEnd,
-                      numColor: '#DB2777', darkNumColor: '#F9A8D4',
-                      lightBg: 'linear-gradient(135deg, #FDF2F8, #FCE7F3)', lightBorder: '#FBCFE8',
-                      darkBg: 'linear-gradient(135deg, rgba(219,39,119,0.25), rgba(219,39,119,0.12))', darkBorder: 'rgba(249,168,212,0.2)',
-                      shadow: '0 10px 40px rgba(219,39,119,0.20), 0 4px 12px rgba(219,39,119,0.12)',
-                      hoverShadow: '0 20px 60px rgba(219,39,119,0.30), 0 8px 20px rgba(219,39,119,0.18)',
-                    },
-                    {
-                      label: 'Weeks Left', value: currentWeek ? Math.max(0, term.totalWeeks - currentWeek) : '–',
-                      numColor: '#0EA5E9', darkNumColor: '#7DD3FC',
-                      lightBg: 'linear-gradient(135deg, #EEF2FF, #DBEAFE)', lightBorder: '#BFDBFE',
-                      darkBg: 'linear-gradient(135deg, rgba(14,165,233,0.25), rgba(14,165,233,0.12))', darkBorder: 'rgba(56,189,248,0.2)',
-                      shadow: '0 10px 40px rgba(14,165,233,0.20), 0 4px 12px rgba(14,165,233,0.12)',
-                      hoverShadow: '0 20px 60px rgba(14,165,233,0.30), 0 8px 20px rgba(14,165,233,0.18)',
-                    },
-                    {
-                      label: 'Progress', value: `${Math.round(termProgress)}%`,
-                      numColor: '#059669', darkNumColor: '#6EE7B7',
-                      lightBg: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)', lightBorder: '#A7F3D0',
-                      darkBg: 'linear-gradient(135deg, rgba(5,150,105,0.25), rgba(5,150,105,0.12))', darkBorder: 'rgba(52,211,153,0.2)',
-                      shadow: '0 10px 40px rgba(5,150,105,0.20), 0 4px 12px rgba(5,150,105,0.12)',
-                      hoverShadow: '0 20px 60px rgba(5,150,105,0.30), 0 8px 20px rgba(5,150,105,0.18)',
-                    },
-                  ] as const).map(s => (
-                    <div
-                      key={s.label}
-                      className="rounded-2xl p-3 border transition-all duration-200 hover:-translate-y-0.5 flex flex-col items-center justify-center text-center"
-                      style={{
-                        background: isDark ? s.darkBg : s.lightBg,
-                        borderColor: isDark ? s.darkBorder : s.lightBorder,
-                        boxShadow: s.shadow,
-                      }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = s.hoverShadow; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = s.shadow; }}
-                    >
-                      <p className="text-2xl sm:text-3xl font-black leading-none tracking-tight" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</p>
-                      <p className={`text-xs font-semibold mt-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Progress bar */}
-                <div className="rounded-2xl p-6 border border-white/5 bg-[#161616] mb-6">
+                {/* ── Term Configuration + system stats — one card ── */}
+                <div id="admin-term-config" className="col-span-12 lg:col-span-9 rounded-2xl overflow-hidden flex flex-col" style={glassCard}>
+                  {/* Term Configuration */}
+                  <div className="p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-white">Term Progress</p>
-                    <p className="text-xs text-gray-500">{term.label}</p>
+                    <p className={`font-semibold text-sm ${bh}`}>Term Configuration</p>
+                    {termSuccess && <span className="text-emerald-500 text-xs font-medium">Saved successfully</span>}
                   </div>
-                  <div className="flex justify-between text-[10px] text-gray-600 mb-1">
-                    <span>Start</span>
-                    <span>Midterm (W{term.midtermWeek})</span>
-                    <span>Finals (W{term.finalsWeek})</span>
-                    <span>End</span>
-                  </div>
-                  <div className="relative h-3 rounded-full overflow-hidden bg-white/5">
-                    <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700 bg-gradient-to-r from-[#0369A1] to-[#0EA5E9]" style={{ width: `${termProgress}%` }} />
-                    <div className="absolute top-0 h-full w-0.5 bg-amber-400/60" style={{ left: `${((term.midtermWeek - 1) / term.totalWeeks) * 100}%` }} />
-                    <div className="absolute top-0 h-full w-0.5 bg-orange-400/60" style={{ left: `${((term.finalsWeek - 1) / term.totalWeeks) * 100}%` }} />
-                  </div>
-                  {currentWeek && (
-                    <p className="text-xs text-gray-500 mt-2 text-center">
-                      Currently at <span className="text-white font-semibold">Week {currentWeek}</span> of {term.totalWeeks} weeks
-                    </p>
-                  )}
-                </div>
-
-                {/* ── Term Configuration ── */}
-                <div className="rounded-2xl border border-white/5 bg-[#161616] p-6 mb-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <p className="text-white font-semibold text-sm">Term Configuration</p>
-                      <p className="text-gray-500 text-xs mt-0.5">Edit the current academic term settings</p>
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <div className="flex-1 min-w-[180px]">
+                      <label className={`text-xs mb-1.5 block ${bs}`}>Term Label</label>
+                      <input type="text" value={termForm.term_label} onChange={e => setTermForm(f => ({ ...f, term_label: e.target.value }))} placeholder="e.g. 3rd Trimester, A.Y. 2025–2026" className={inp2} />
                     </div>
-                    {termSuccess && <span className="text-emerald-400 text-xs font-medium">Saved successfully</span>}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="text-gray-500 text-xs mb-1.5 block">Term Label</label>
-                      <input
-                        type="text"
-                        value={termForm.term_label}
-                        onChange={e => setTermForm(f => ({ ...f, term_label: e.target.value }))}
-                        placeholder="e.g. 3rd Trimester, A.Y. 2025–2026"
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600"
-                      />
+                    <div className="w-36">
+                      <label className={`text-xs mb-1.5 block ${bs}`}>Start Date</label>
+                      <input type="date" value={termForm.term_start} onChange={e => setTermForm(f => ({ ...f, term_start: e.target.value }))} className={`${inp2} ${isDark ? '[color-scheme:dark]' : '[color-scheme:light]'}`} />
                     </div>
-                    <div>
-                      <label className="text-gray-500 text-xs mb-1.5 block">Term Start Date</label>
-                      <input
-                        type="date"
-                        value={termForm.term_start}
-                        onChange={e => setTermForm(f => ({ ...f, term_start: e.target.value }))}
-                        className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:border-[#0EA5E9]/50 ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 [color-scheme:dark]' : 'text-gray-900 bg-white border-gray-300 [color-scheme:light]'}`}
-                      />
+                    <div className="w-28">
+                      <label className={`text-xs mb-1.5 block ${bs}`}>Total Weeks</label>
+                      <input type="number" min={1} max={52} value={termForm.term_total_weeks} onChange={e => setTermForm(f => ({ ...f, term_total_weeks: e.target.value }))} className={inp2} />
                     </div>
-                    <div>
-                      <label className="text-gray-500 text-xs mb-1.5 block">Total Weeks</label>
-                      <input
-                        type="number" min={1} max={52}
-                        value={termForm.term_total_weeks}
-                        onChange={e => setTermForm(f => ({ ...f, term_total_weeks: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50"
-                      />
+                    <div className="w-28">
+                      <label className={`text-xs mb-1.5 block ${bs}`}>Midterm Week</label>
+                      <input type="number" min={1} max={parseInt(termForm.term_total_weeks) || 52} value={termForm.term_midterm_week} onChange={e => setTermForm(f => ({ ...f, term_midterm_week: e.target.value }))} className={inp2} />
                     </div>
-                    <div>
-                      <label className="text-gray-500 text-xs mb-1.5 block">Midterm Week</label>
-                      <input
-                        type="number" min={1} max={parseInt(termForm.term_total_weeks) || 52}
-                        value={termForm.term_midterm_week}
-                        onChange={e => setTermForm(f => ({ ...f, term_midterm_week: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50"
-                      />
+                    <div className="w-28">
+                      <label className={`text-xs mb-1.5 block ${bs}`}>Finals Week</label>
+                      <input type="number" min={1} max={parseInt(termForm.term_total_weeks) || 52} value={termForm.term_finals_week} onChange={e => setTermForm(f => ({ ...f, term_finals_week: e.target.value }))} className={inp2} />
                     </div>
-                    <div>
-                      <label className="text-gray-500 text-xs mb-1.5 block">Finals Week</label>
-                      <input
-                        type="number" min={1} max={parseInt(termForm.term_total_weeks) || 52}
-                        value={termForm.term_finals_week}
-                        onChange={e => setTermForm(f => ({ ...f, term_finals_week: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50"
-                      />
-                    </div>
-                  </div>
-                  {termError && <p className="text-red-400 text-xs mt-3">{termError}</p>}
-                  <div className="flex justify-end mt-4">
                     <button
                       onClick={async () => {
                         setTermSaving(true); setTermError(null); setTermSuccess(false);
@@ -2112,101 +2320,136 @@ export default function AdminDashboard() {
                         setTimeout(() => setTermSuccess(false), 3000);
                       }}
                       disabled={termSaving}
-                      className={`px-4 py-2 text-sm disabled:opacity-50 ${btnPrimary}`}
+                      className={`px-4 py-2 text-sm disabled:opacity-50 self-end ${btnPrimary}`}
                     >
-                      {termSaving ? 'Saving…' : 'Save Term Settings'}
+                      {termSaving ? 'Saving…' : 'Save'}
                     </button>
                   </div>
-                </div>
+                  {termError && <p className="text-red-500 text-xs mt-2">{termError}</p>}
+                  </div>
 
-                {/* Calendar + Announcements */}
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                  {/* Compact read-only calendar */}
-                  <div className="lg:col-span-3 rounded-2xl border border-white/5 bg-[#161616] overflow-hidden">
-                    <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-                      <p className="text-white font-semibold text-sm">Academic Calendar</p>
-                      <div className="flex items-center gap-1">
-                        <button onClick={prevCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                        <span className="text-gray-300 text-sm font-medium min-w-[120px] text-center">{CAL_MONTHS[calViewMonth]} {calViewYear}</span>
-                        <button onClick={nextCalMonth} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <div className="grid grid-cols-7 mb-2">
-                        {CAL_DAYS_SHORT.map(d => (
-                          <div key={d} className="text-center text-[10px] font-semibold text-gray-600 uppercase tracking-wider py-1">{d}</div>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-7 gap-y-1">
-                        {(() => {
-                          const fd = new Date(calViewYear, calViewMonth, 1).getDay();
-                          const dim = new Date(calViewYear, calViewMonth + 1, 0).getDate();
-                          const cells: (Date | null)[] = [
-                            ...Array(fd).fill(null),
-                            ...Array.from({ length: dim }, (_, i) => new Date(calViewYear, calViewMonth, i + 1)),
-                          ];
-                          return cells.map((date, i) => {
-                            if (!date) return <div key={`he-${i}`} />;
-                            const dStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-                            const dWeek = getAcademicWeek(CURRENT_TERM, date);
-                            const isToday = dStr === todayStr;
-                            const isBlocked = blockedSet.has(dStr);
-                            const adminMode = dWeek ? (modeMap.get(dWeek) ?? null) : null;
-                            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                            const eventTitle = dateLabelMap.get(dStr);
-                            const eventColorId = dateColorMap.get(dStr) ?? 'red';
-                            const ec = EVENT_COLORS.find(x => x.id === eventColorId) ?? EVENT_COLORS[0];
-                            let cellBg = '';
-                            let numCls = 'text-gray-200';
-                            if (!dWeek) { numCls = 'text-gray-600'; }
-                            else if (isBlocked) { cellBg = 'bg-red-500/25'; numCls = 'text-red-300'; }
-                            else if (adminMode === 'Online' && !isWeekend) { cellBg = 'bg-blue-500/15'; numCls = 'text-blue-200'; }
-                            else if (adminMode === 'In-Person' && !isWeekend) { cellBg = 'bg-emerald-500/10'; numCls = 'text-emerald-300'; }
-                            return (
-                              <div
-                                key={date.toISOString()}
-                                className={`relative flex flex-col items-center justify-center min-h-[38px] pb-0.5 rounded-lg text-xs ${cellBg}`}
-                              >
-                                {isToday ? (
-                                  <span className="w-6 h-6 rounded-full bg-[#0EA5E9] flex items-center justify-center text-[11px] font-bold text-white shadow shadow-sky-900/50">
-                                    {date.getDate()}
-                                  </span>
-                                ) : (
-                                  <span className={numCls}>{date.getDate()}</span>
-                                )}
-                                {eventTitle && (
-                                  <span className={`text-[6px] font-bold px-1 py-px rounded-full ${ec.pill} ${ec.pillText} truncate max-w-[90%] leading-tight`}>
-                                    {eventTitle}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 pt-3 border-t border-white/5">
-                        {([
-                          { cls: 'bg-emerald-500/25', label: 'In-Person' },
-                          { cls: 'bg-blue-500/25', label: 'Online' },
-                          { cls: 'bg-amber-500/25', label: 'Exam' },
-                          { cls: 'bg-red-500/30', label: 'Blocked' },
-                        ] as { cls: string; label: string }[]).map(({ cls, label }) => (
-                          <span key={label} className="flex items-center gap-1 text-[10px] text-gray-500">
-                            <span className={`w-2.5 h-2.5 rounded-sm ${cls}`} />{label}
+                  {/* Quick Actions — fills the remaining space to match the left card height */}
+                  <div className={`flex-1 p-5 flex flex-col`}>
+                    <p className={`text-[11px] font-semibold uppercase tracking-wider mb-3 ${bs}`}>Quick Actions</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 auto-rows-fr">
+                      {([
+                        { label: 'Approve Pending', Icon: UserCheck,     tab: 'accounts' as Tab,      color: isDark ? '#FBBF24' : '#B45309', badge: pendingUsers.length },
+                        { label: 'Manage Accounts', Icon: Users,         tab: 'accounts' as Tab,      color: isDark ? '#818CF8' : '#4338CA' },
+                        { label: 'View Reports',    Icon: BarChart3,     tab: 'reports' as Tab,       color: isDark ? '#34D399' : '#047857' },
+                        { label: 'Consultations',   Icon: ClipboardList, tab: 'consultations' as Tab, color: isDark ? '#7DD3FC' : '#0284C7' },
+                      ]).map(a => (
+                        <button
+                          key={a.label}
+                          onClick={() => setTab(a.tab)}
+                          className={`relative flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 ${isDark ? 'bg-white/[0.03] border-white/10 hover:bg-white/[0.07] hover:border-white/20' : 'bg-white border-gray-200 hover:border-sky-300 hover:shadow-md'}`}
+                        >
+                          <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${a.color}1A`, color: a.color }}>
+                            <a.Icon className="w-5 h-5" />
                           </span>
-                        ))}
-                      </div>
+                          <span className={`text-sm font-semibold ${bh}`}>{a.label}</span>
+                          {a.badge != null && a.badge > 0 && (
+                            <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-[#CC0000] text-white text-[11px] font-bold flex items-center justify-center leading-none">{a.badge}</span>
+                          )}
+                        </button>
+                      ))}
                     </div>
+                  </div>
+                </div>{/* end Term Config + stats card */}
+
+                {/* Row 4: Announcements (col-span-8) + Rankings (col-span-4) */}
+                  {/* Rankings — combined Top Professors / Top Students / Top Topics (matches student/professor) */}
+                  <div className="col-span-12 lg:col-span-4 lg:order-last p-4 rounded-2xl flex flex-col" style={glassCard}>
+                    <div className="flex-shrink-0 flex gap-1.5 mb-3">
+                      {(['rankings', 'consulted'] as const).map(v => (
+                        <button key={v} onClick={() => setLbView(v)}
+                          className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-all border ${
+                            lbView === v
+                              ? isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-300'
+                              : isDark ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25' : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
+                          }`}>
+                          {v === 'rankings' ? 'Rankings' : 'Top Topics'}
+                        </button>
+                      ))}
+                    </div>
+                    {lbView === 'rankings' && (
+                      <div className="space-y-4">
+                        <div>
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-amber-100 border border-amber-300'}`}>
+                            <span className="text-base leading-none">🏆</span>
+                            <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>Top Professors</p>
+                          </div>
+                          <div className="space-y-1.5">
+                            {lbProfs.slice(0, 3).map((item, i) => (
+                              <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
+                                <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
+                                <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{item.label}</span>
+                                <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.count}</span>
+                              </div>
+                            ))}
+                            {lbProfs.length === 0 && <p className={`text-sm ${bs} py-1 px-2`}>No data.</p>}
+                          </div>
+                        </div>
+                        <div className={`border-t ${isDark ? 'border-white/20' : 'border-gray-300'}`} />
+                        <div>
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-indigo-500/20 border border-indigo-500/30' : 'bg-indigo-100 border border-indigo-300'}`}>
+                            <span className="text-base leading-none">🎓</span>
+                            <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Top Students</p>
+                          </div>
+                          <div className="space-y-1.5">
+                            {lbStudents.slice(0, 3).map((item, i) => (
+                              <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
+                                <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
+                                <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{item.label}</span>
+                                <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.count}</span>
+                              </div>
+                            ))}
+                            {lbStudents.length === 0 && <p className={`text-sm ${bs} py-1 px-2`}>No data.</p>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {lbView === 'consulted' && (() => {
+                      const top3 = lbTopics.slice(0, 3);
+                      const topCount = top3[0]?.count || 1;
+                      return (
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-3">
+                            <span className="text-xs leading-none">🔥</span>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider ${bs}`}>Trending across all consultations</p>
+                          </div>
+                          {top3.length === 0 ? (
+                            <p className={`text-xs ${bs} py-1`}>No consultation data yet.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {top3.map((t, i) => {
+                                const cfg = RANK_CFG[i];
+                                const pct = Math.max(8, Math.round((t.count / topCount) * 100));
+                                return (
+                                  <div key={t.label} className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
+                                    <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
+                                        <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
+                                        <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
+                                      </div>
+                                      <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
+                                        <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Announcements CRUD */}
-                  <div className="lg:col-span-2 rounded-2xl border border-white/5 bg-[#161616] flex flex-col overflow-hidden">
-                    <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-                      <p className="text-white font-semibold text-sm">Announcements</p>
+                  <div className={`col-span-12 lg:col-span-8 rounded-2xl border flex flex-col overflow-hidden ${isDark ? 'border-white/5 bg-[#161616]' : 'bg-white border-slate-100 shadow-sm'}`}>
+                    <div className={`px-5 py-4 border-b flex items-center justify-between ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                      <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>Announcements</p>
                       <button
                         onClick={() => {
                           setAnnEditId(null);
@@ -2214,16 +2457,16 @@ export default function AdminDashboard() {
                           setAnnError(null);
                           setAnnFormOpen(f => !f);
                         }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium ${
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200 ${
                           annFormOpen
-                            ? 'rounded-[10px] bg-white/10 text-gray-300 hover:bg-white/15 transition-all duration-200'
-                            : btnPrimary
+                            ? isDark ? 'bg-white/10 text-gray-300 hover:bg-white/15' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-md shadow-fuchsia-500/30 hover:from-violet-600 hover:to-fuchsia-600 hover:shadow-lg hover:shadow-fuchsia-500/40 hover:scale-[1.03]'
                         }`}
                       >
                         {annFormOpen ? (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         ) : (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                         )}
                         {annFormOpen ? 'Cancel' : 'Add'}
                       </button>
@@ -2231,15 +2474,17 @@ export default function AdminDashboard() {
 
                     {/* Add/edit form */}
                     {annFormOpen && (
-                      <div className="px-5 py-4 border-b border-white/5 space-y-3 bg-white/[0.02]">
+                      <div className={`px-5 py-4 border-b space-y-3 ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50'}`}>
                         {/* Type selector */}
                         <div className="flex gap-2">
                           {(['info', 'warning'] as const).map(t => (
                             <button key={t} onClick={() => setAnnForm(f => ({ ...f, type: t }))}
                               className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                 annForm.type === t
-                                  ? t === 'info' ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30' : 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
-                                  : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                                  ? t === 'info'
+                                    ? isDark ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30' : 'bg-blue-100 text-blue-600 ring-1 ring-blue-300'
+                                    : isDark ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30' : 'bg-amber-100 text-amber-600 ring-1 ring-amber-300'
+                                  : isDark ? 'bg-white/5 text-gray-500 hover:bg-white/10' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
                               }`}>
                               {t === 'info' ? 'Info' : 'Warning'}
                             </button>
@@ -2251,8 +2496,8 @@ export default function AdminDashboard() {
                           onClick={() => setAnnForm(f => ({ ...f, pinned: !f.pinned }))}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
                             annForm.pinned
-                              ? 'bg-yellow-500/15 text-yellow-300 ring-1 ring-yellow-500/30'
-                              : 'bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-300'
+                              ? 'bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/30'
+                              : isDark ? 'bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-300' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
                           }`}
                         >
                           <span className="flex items-center gap-1.5">
@@ -2261,24 +2506,24 @@ export default function AdminDashboard() {
                             </svg>
                             Pin to top
                           </span>
-                          <span className={`w-8 h-4 rounded-full transition-colors flex items-center px-0.5 ${annForm.pinned ? 'bg-yellow-500' : 'bg-white/10'}`}>
+                          <span className={`w-8 h-4 rounded-full transition-colors flex items-center px-0.5 ${annForm.pinned ? 'bg-yellow-500' : isDark ? 'bg-white/10' : 'bg-gray-300'}`}>
                             <span className={`w-3 h-3 rounded-full bg-white shadow transition-transform ${annForm.pinned ? 'translate-x-4' : 'translate-x-0'}`} />
                           </span>
                         </button>
                         <input
-                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-700"
+                          className={`w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-[#0EA5E9]/50 ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 placeholder-gray-700' : 'text-gray-900 bg-white border-gray-300 placeholder-gray-400'}`}
                           placeholder="Title *"
                           value={annForm.title}
                           onChange={e => setAnnForm(f => ({ ...f, title: e.target.value }))}
                         />
                         <textarea
                           rows={3}
-                          className="w-full px-3 py-2 rounded-lg text-white text-xs bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-700 resize-none"
+                          className={`w-full px-3 py-2 rounded-lg text-xs border focus:outline-none focus:border-[#0EA5E9]/50 resize-none ${isDark ? 'text-white bg-[#0f0f0f] border-white/10 placeholder-gray-700' : 'text-gray-900 bg-white border-gray-300 placeholder-gray-400'}`}
                           placeholder="Body / message *"
                           value={annForm.body}
                           onChange={e => setAnnForm(f => ({ ...f, body: e.target.value }))}
                         />
-                        {annError && <p className="text-red-400 text-xs">{annError}</p>}
+                        {annError && <p className="text-red-500 text-xs">{annError}</p>}
                         <button
                           onClick={handleSaveAnn}
                           disabled={annSaving || !annForm.title.trim() || !annForm.body.trim()}
@@ -2289,36 +2534,32 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    <div className="overflow-y-auto max-h-[320px] divide-y divide-white/5">
+                    <div className={`overflow-y-auto max-h-[320px] divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
                       {announcements.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12">
-                          <p className="text-gray-600 text-sm">No announcements yet</p>
-                          <p className="text-gray-700 text-xs mt-1">Click "+ Add" to create one</p>
+                          <p className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>No announcements yet</p>
+                          <p className={`text-xs mt-1 ${isDark ? 'text-gray-700' : 'text-gray-300'}`}>Click "+ Add" to create one</p>
                         </div>
                       ) : announcements.map(a => (
-                        <div key={a.id} className={`px-5 py-4 hover:bg-white/[0.02] transition-colors ${a.pinned ? 'border-l-2 border-l-yellow-500/50' : ''}`}>
-                          <div className="flex items-start gap-2.5">
-                            {a.type === 'warning' ? (
-                              <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-                            ) : (
-                              <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg>
-                            )}
+                        <div key={a.id} className={`flex border-l-4 transition-colors ${a.type === 'warning' ? 'border-l-yellow-400' : 'border-l-blue-500'} ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50'}`}>
+                          <div className="flex-1 px-4 py-3 min-w-0 flex items-start gap-2.5">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="text-sm font-semibold text-white leading-tight">{a.title}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                <p className={`text-lg font-bold leading-tight ${bh}`}>{a.title}</p>
                                 {a.pinned && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/25">
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-yellow-500/15 text-yellow-500 ring-1 ring-yellow-500/25">
                                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
                                     Pinned
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed line-clamp-2">{a.body}</p>
-                              <p className="text-[10px] text-gray-600 mt-1">
+                              <p className={`text-base leading-relaxed line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{a.body}</p>
+                              <p className={`text-sm mt-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                                 {new Date(a.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </p>
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
+                          </div>
+                          <div className="flex flex-col items-center gap-1 pr-3 pt-3 flex-shrink-0">
                               <button
                                 onClick={() => {
                                   setAnnEditId(a.id);
@@ -2327,36 +2568,35 @@ export default function AdminDashboard() {
                                   setAnnFormOpen(true);
                                 }}
                                 title="Edit"
-                                className="p-1.5 rounded-lg text-gray-600 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                className={`p-2 rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-blue-400 hover:bg-blue-500/10' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'}`}
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               </button>
                               <button
                                 onClick={() => setAnnDeleteId(a.id)}
                                 title="Delete"
-                                className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                className="p-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-500/10 transition-colors"
                               >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                               </button>
-                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                </div>
+                </div>{/* end bento grid */}
 
                 {/* Delete confirmation modal */}
                 {annDeleteId !== null && (
                   <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-[#161616] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+                    <div className={`rounded-2xl p-6 w-full max-w-sm shadow-2xl border ${isDark ? 'bg-[#161616] border-white/10' : 'bg-white border-gray-200'}`}>
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                          <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </div>
                         <div>
-                          <p className="text-white font-semibold text-sm">Delete Announcement</p>
-                          <p className="text-gray-500 text-xs mt-0.5">
+                          <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>Delete Announcement</p>
+                          <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
                             {(() => {
                               const a = announcements.find(x => x.id === annDeleteId);
                               return a ? `"${a.title}"` : 'This announcement';
@@ -2364,7 +2604,7 @@ export default function AdminDashboard() {
                           </p>
                         </div>
                       </div>
-                      {annError && <p className="text-red-400 text-xs mb-3">{annError}</p>}
+                      {annError && <p className="text-red-500 text-xs mb-3">{annError}</p>}
                       <div className="flex gap-2">
                         <button
                           onClick={() => { setAnnDeleteId(null); setAnnError(null); }}
@@ -2383,18 +2623,8 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </>
-            )}
-
-            {/* ── Leaderboards ── */}
-            {tab === 'home' && (
-              <div className="px-4 sm:px-6 pt-6 pb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <LeaderboardCard title="Top Professors" items={lbProfs} isDark={isDark} />
-                  <LeaderboardCard title="Top Students"   items={lbStudents} isDark={isDark} />
-                  <LeaderboardCard title="Top Topics"     items={lbTopics} isDark={isDark} />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── Calendar ── */}
             {tab === 'calendar' && (() => {
@@ -2489,10 +2719,10 @@ export default function AdminDashboard() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                     <div>
                       <h1 className={`${c.heading} text-2xl font-bold`}>Academic Calendar</h1>
-                      <p className={`${c.sub} text-sm mt-0.5`}>
+                      <p className={`text-sm mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
                         {CURRENT_TERM.label} · {CURRENT_TERM.totalWeeks} weeks
                         {calSelectedArr.length > 0 && (
-                          <span className="ml-2 text-sky-400 font-medium">· {calSelectedArr.length} date{calSelectedArr.length !== 1 ? 's' : ''} selected</span>
+                          <span className={`ml-2 font-medium ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>· {calSelectedArr.length} date{calSelectedArr.length !== 1 ? 's' : ''} selected</span>
                         )}
                       </p>
                     </div>
@@ -2554,7 +2784,7 @@ export default function AdminDashboard() {
                           <span className="w-5 h-5 rounded-full bg-[#0EA5E9] flex items-center justify-center text-[9px] text-white font-bold leading-none">T</span>
                           Today
                         </span>
-                        <span className={`ml-auto text-[10px] ${c.sub} hidden lg:block`}>Ctrl+click multi · Shift+click range · W# selects week</span>
+                        <span className={`ml-auto text-[10px] font-bold ${c.sub} hidden lg:block`}>Ctrl+click multi · Shift+click range · W# selects week</span>
                       </div>
 
                       {/* Calendar grid */}
@@ -2668,7 +2898,7 @@ export default function AdminDashboard() {
                               <p className={`${c.heading} font-semibold text-sm`}>Blocked / Special Dates</p>
                               <p className={`${c.muted} text-xs mt-0.5`}>Click to jump to date</p>
                             </div>
-                            <span className={`text-xs ${c.countBadge} px-2 py-0.5 rounded`}>{blockedDates.length}</span>
+                            <span className={`text-xs font-bold ${c.countBadge} px-2 py-0.5 rounded`}>{blockedDates.length}</span>
                           </div>
                           <div className={`divide-y ${c.divider}`}>
                             {blockedDates.map((o: CalendarOverride) => (
@@ -2693,7 +2923,7 @@ export default function AdminDashboard() {
                                 </div>
                                 <button
                                   onClick={async (e) => { e.stopPropagation(); await handleDeleteOverride(o.id, o.type); }}
-                                  className={`${c.removeBtn} transition-colors text-xs px-2 py-1 rounded`}
+                                  className={`${c.removeBtn} transition-colors text-xs font-bold px-2 py-1 rounded`}
                                 >Remove</button>
                               </div>
                             ))}
@@ -2703,7 +2933,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Right: Control panel */}
-                    <div className="w-full lg:w-72 lg:flex-shrink-0 space-y-3">
+                    <div className="w-full lg:w-64 lg:flex-shrink-0 space-y-3">
 
                       {/* Empty state */}
                       {calSelectedArr.length === 0 && (

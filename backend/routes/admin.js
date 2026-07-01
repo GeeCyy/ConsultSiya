@@ -393,50 +393,68 @@ router.delete('/calendar-overrides/:id', authenticate, authorize('admin'), async
 
 // ── Term Archive ──────────────────────────────────────────────────────────────
 
-// SQL fragment (aliased to c) — computes term label, using stored columns when present
-// or falling back to date-based heuristic (Mapúa trimester calendar).
-const TERM_LABEL_SQL = `COALESCE(
-    CASE WHEN c.academic_term IS NOT NULL AND c.academic_year IS NOT NULL
-      THEN c.academic_term || ' A.Y. ' || c.academic_year
-      ELSE NULL END,
-    CASE
-      WHEN EXTRACT(MONTH FROM c.date) BETWEEN 8 AND 11
-        THEN '1st Trimester A.Y. ' || EXTRACT(YEAR FROM c.date)::int || '-' || (EXTRACT(YEAR FROM c.date)::int + 1)
-      WHEN EXTRACT(MONTH FROM c.date) = 12
-        THEN '2nd Trimester A.Y. ' || EXTRACT(YEAR FROM c.date)::int || '-' || (EXTRACT(YEAR FROM c.date)::int + 1)
-      WHEN EXTRACT(MONTH FROM c.date) BETWEEN 1 AND 2
-        THEN '2nd Trimester A.Y. ' || (EXTRACT(YEAR FROM c.date)::int - 1) || '-' || EXTRACT(YEAR FROM c.date)::int
-      ELSE '3rd Trimester A.Y. ' || (EXTRACT(YEAR FROM c.date)::int - 1) || '-' || EXTRACT(YEAR FROM c.date)::int
-    END)`;
+// Term defaults — mirror GET /api/settings/term so behaviour stays consistent when
+// the settings table is missing or a key hasn't been configured yet.
+const TERM_CONFIG_DEFAULTS = {
+  term_label: '3rd Trimester, A.Y. 2025–2026',
+  term_start: '2026-04-02',
+  term_total_weeks: '14',
+};
 
-// Same fragment without table alias — used in DELETE (no JOIN context)
-const TERM_LABEL_RAW = `COALESCE(
-    CASE WHEN academic_term IS NOT NULL AND academic_year IS NOT NULL
-      THEN academic_term || ' A.Y. ' || academic_year
-      ELSE NULL END,
-    CASE
-      WHEN EXTRACT(MONTH FROM date) BETWEEN 8 AND 11
-        THEN '1st Trimester A.Y. ' || EXTRACT(YEAR FROM date)::int || '-' || (EXTRACT(YEAR FROM date)::int + 1)
-      WHEN EXTRACT(MONTH FROM date) = 12
-        THEN '2nd Trimester A.Y. ' || EXTRACT(YEAR FROM date)::int || '-' || (EXTRACT(YEAR FROM date)::int + 1)
-      WHEN EXTRACT(MONTH FROM date) BETWEEN 1 AND 2
-        THEN '2nd Trimester A.Y. ' || (EXTRACT(YEAR FROM date)::int - 1) || '-' || EXTRACT(YEAR FROM date)::int
-      ELSE '3rd Trimester A.Y. ' || (EXTRACT(YEAR FROM date)::int - 1) || '-' || EXTRACT(YEAR FROM date)::int
-    END)`;
+// Read the current term configuration from system_settings (same keys the admin
+// term-config form writes via PUT /api/settings/term). Falls back to defaults when
+// the table or individual keys are absent.
+async function getTermConfig() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, value FROM system_settings WHERE key = ANY($1)`,
+      [Object.keys(TERM_CONFIG_DEFAULTS)]
+    );
+    const cfg = { ...TERM_CONFIG_DEFAULTS };
+    rows.forEach(r => { if (r.value != null && r.value !== '') cfg[r.key] = r.value; });
+    return cfg;
+  } catch (err) {
+    if (err.code === '42P01') return { ...TERM_CONFIG_DEFAULTS }; // settings table not migrated yet
+    throw err;
+  }
+}
+
+// Build the term-label SQL expression. A consultation whose date falls within the
+// configured current term — [term_start, term_start + total_weeks*7) — gets the
+// configured term_label; anything older falls back to the Mapúa trimester date
+// heuristic. `alias` is the consultations table alias (or null when there's no JOIN
+// context). pStart/pWeeks/pLabel are the $-parameter positions for term_start,
+// term_total_weeks, and term_label respectively.
+function termLabelExpr(alias, pStart, pWeeks, pLabel) {
+  const d = alias ? `${alias}.date` : 'date';
+  return `CASE
+      WHEN ${d} >= $${pStart}::date
+       AND ${d} <  ($${pStart}::date + ($${pWeeks}::int * 7))
+        THEN $${pLabel}::text
+      WHEN EXTRACT(MONTH FROM ${d}) BETWEEN 8 AND 11
+        THEN '1st Trimester A.Y. ' || EXTRACT(YEAR FROM ${d})::int || '-' || (EXTRACT(YEAR FROM ${d})::int + 1)
+      WHEN EXTRACT(MONTH FROM ${d}) = 12
+        THEN '2nd Trimester A.Y. ' || EXTRACT(YEAR FROM ${d})::int || '-' || (EXTRACT(YEAR FROM ${d})::int + 1)
+      WHEN EXTRACT(MONTH FROM ${d}) BETWEEN 1 AND 2
+        THEN '2nd Trimester A.Y. ' || (EXTRACT(YEAR FROM ${d})::int - 1) || '-' || EXTRACT(YEAR FROM ${d})::int
+      ELSE '3rd Trimester A.Y. ' || (EXTRACT(YEAR FROM ${d})::int - 1) || '-' || EXTRACT(YEAR FROM ${d})::int
+    END`;
+}
 
 // GET /api/admin/archive — list of distinct terms with consultation counts
 router.get('/archive', authenticate, authorize('admin'), async (req, res) => {
   try {
+    const cfg = await getTermConfig();
     const result = await pool.query(`
       SELECT
-        ${TERM_LABEL_SQL} AS term_label,
+        ${termLabelExpr('c', 1, 2, 3)} AS term_label,
         COUNT(*)::int AS total,
         MIN(c.date)::text AS earliest_date,
         MAX(c.date)::text AS latest_date
       FROM consultations c
       GROUP BY term_label
       ORDER BY MIN(c.date) DESC
-    `);
+    `, [cfg.term_start, cfg.term_total_weeks, cfg.term_label]);
     res.json(result.rows);
   } catch (err) {
     console.error('[archive list]', err);
@@ -448,6 +466,8 @@ router.get('/archive', authenticate, authorize('admin'), async (req, res) => {
 router.get('/archive/:term', authenticate, authorize('admin'), async (req, res) => {
   const termLabel = decodeURIComponent(req.params.term);
   try {
+    const cfg = await getTermConfig();
+    const labelExpr = termLabelExpr('c', 1, 2, 3);
     const result = await pool.query(`
       SELECT
         c.id, c.date::text AS date, c.status, c.mode,
@@ -457,15 +477,15 @@ router.get('/archive/:term', authenticate, authorize('admin'), async (req, res) 
         p.full_name AS professor_name, p.department,
         sch.day, sch.time_start, sch.time_end,
         cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
-        ${TERM_LABEL_SQL} AS term_label
+        ${labelExpr} AS term_label
       FROM consultations c
       JOIN students s ON c.student_id = s.id
       JOIN professors p ON c.professor_id = p.id
       JOIN schedules sch ON c.schedule_id = sch.id
       LEFT JOIN consultation_details cd ON cd.consultation_id = c.id
-      WHERE ${TERM_LABEL_SQL} = $1
+      WHERE ${labelExpr} = $4
       ORDER BY c.date ASC, sch.time_start ASC
-    `, [termLabel]);
+    `, [cfg.term_start, cfg.term_total_weeks, cfg.term_label, termLabel]);
     res.json(result.rows);
   } catch (err) {
     console.error('[archive term]', err);
@@ -482,9 +502,10 @@ router.delete('/archive/:term', authenticate, authorize('admin'), async (req, re
     return res.status(400).json({ error: 'Must include confirmed: true in the request body to delete an archive.' });
   }
   try {
+    const cfg = await getTermConfig();
     const result = await pool.query(
-      `DELETE FROM consultations WHERE ${TERM_LABEL_RAW} = $1`,
-      [termLabel]
+      `DELETE FROM consultations WHERE ${termLabelExpr(null, 1, 2, 3)} = $4`,
+      [cfg.term_start, cfg.term_total_weeks, cfg.term_label, termLabel]
     );
     res.json({ message: `Deleted ${result.rowCount} consultation record${result.rowCount !== 1 ? 's' : ''} for "${termLabel}".`, deleted: result.rowCount });
   } catch (err) {

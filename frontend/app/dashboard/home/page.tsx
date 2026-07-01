@@ -519,16 +519,17 @@ export default function HomePage() {
   const greetingLines: GreetLine[] = (() => {
     if (consultations === null) return [];
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const toLocalISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const todayStr = toLocalISO(new Date());
     const today = new Date();
     const dow = today.getDay();
     const mondayOffset = dow === 0 ? -6 : 1 - dow;
     const monday = new Date(today);
     monday.setDate(today.getDate() + mondayOffset);
-    const mondayStr = monday.toISOString().slice(0, 10);
+    const mondayStr = toLocalISO(monday);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    const sundayStr = sunday.toISOString().slice(0, 10);
+    const sundayStr = toLocalISO(sunday);
 
     const active = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed');
     const upcoming = active

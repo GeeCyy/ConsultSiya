@@ -667,6 +667,7 @@ export default function StudentDashboard() {
   const [downloadingSlip, setDownloadingSlip]       = useState<number | null>(null);
   const [downloadingReceipt, setDownloadingReceipt] = useState<number | null>(null);
   const [expandedRemarks, setExpandedRemarks]       = useState<Set<number>>(new Set());
+  const [dayModal, setDayModal]                     = useState<{ date: string; label: string; dateObj: Date } | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const uploadForId   = useRef<number | null>(null);
@@ -789,7 +790,8 @@ export default function StudentDashboard() {
       fetch(`${API_URL}/api/settings/notifications`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
       api.get('/api/consultations/my-topics', token!),
     ]);
-    const today = new Date().toISOString().slice(0, 10);
+    const todayN = new Date();
+    const today = `${todayN.getFullYear()}-${String(todayN.getMonth()+1).padStart(2,'0')}-${String(todayN.getDate()).padStart(2,'0')}`;
     setSchedules((Array.isArray(sched) ? sched : []).filter(s => !s.date || s.date >= today));
     const freshConsults: Consultation[] = Array.isArray(consult) ? consult : [];
     setConsultations(freshConsults);
@@ -1019,7 +1021,7 @@ export default function StudentDashboard() {
   // ── Computed values ──
 
   const now      = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
   const currentWeek = getAcademicWeek(term, now);
   const { finalsDate, endDate } = getTermDates(term);
@@ -1174,6 +1176,115 @@ export default function StudentDashboard() {
         scrollRef={mainScrollRef}
       />
 
+      {/* Day-detail modal */}
+      {dayModal && (() => {
+        const dayConsults = consultations
+          .filter(c => c.date.slice(0, 10) === dayModal.date && c.status !== 'cancelled')
+          .sort((a, b) => (a.time || a.time_start).localeCompare(b.time || b.time_start));
+        const daySlots = schedules.filter(s => s.date === dayModal.date && s.is_available);
+        const dateLabel = dayModal.dateObj.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' });
+        return (
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setDayModal(null)}>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div
+              className={`relative z-10 w-full sm:max-w-lg flex flex-col shadow-2xl rounded-t-2xl sm:rounded-2xl border-t sm:border max-h-[88vh] sm:max-h-[80vh] ${isDark ? 'border-white/10 bg-[#1e1f22]' : 'border-gray-200 bg-white'}`}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Drag handle */}
+              <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-white/20' : 'bg-gray-300'}`} />
+              </div>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                <div>
+                  <h2 className={`text-base sm:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{dayModal.label}, {dateLabel.split(', ').slice(1).join(', ')}</h2>
+                  <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {dayConsults.length > 0 ? `${dayConsults.length} consultation${dayConsults.length !== 1 ? 's' : ''}` : 'No bookings'}
+                    {daySlots.length > 0 && <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isDark ? 'bg-violet-500/15 text-violet-400' : 'bg-violet-50 text-violet-600'}`}>{daySlots.length} open slot{daySlots.length !== 1 ? 's' : ''}</span>}
+                  </p>
+                </div>
+                <button onClick={() => setDayModal(null)} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              {/* Body */}
+              <div className="overflow-y-auto flex-1 px-3 sm:px-5 py-3 sm:py-4 space-y-4">
+                {/* Booked consultations */}
+                {dayConsults.length > 0 && (
+                  <div>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Your Consultations</p>
+                    <div className={`rounded-xl overflow-hidden border divide-y ${isDark ? 'border-white/[0.08] divide-white/[0.05]' : 'border-gray-100 divide-gray-100'}`}>
+                      {dayConsults.map(c => {
+                        const statusColors: Record<string, string> = {
+                          pending:     isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700',
+                          confirmed:   isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700',
+                          rescheduled: isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-700',
+                          completed:   isDark ? 'bg-gray-500/15 text-gray-400' : 'bg-gray-100 text-gray-600',
+                          missed:      isDark ? 'bg-red-500/15 text-red-400' : 'bg-red-50 text-red-600',
+                        };
+                        return (
+                          <div key={c.id} className={`flex items-center gap-3 px-3 sm:px-4 py-3 ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'} transition-colors`}>
+                            <span className={`text-xs font-mono tabular-nums w-14 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                              {formatTime12((c.time || c.time_start)?.slice(0, 5) ?? '')}
+                            </span>
+                            <div className={`w-px h-4 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.professor_name}</p>
+                              <p className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{c.nature_of_advising || '—'}</p>
+                            </div>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${statusColors[c.status] ?? (isDark ? 'bg-gray-500/15 text-gray-400' : 'bg-gray-100 text-gray-500')}`}>
+                              {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Available professor slots */}
+                {daySlots.length > 0 && (
+                  <div>
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Open Slots</p>
+                    <div className={`rounded-xl overflow-hidden border divide-y ${isDark ? 'border-white/[0.08] divide-white/[0.05]' : 'border-gray-100 divide-gray-100'}`}>
+                      {daySlots.map(s => (
+                        <div key={s.id} className={`flex items-center gap-3 px-3 sm:px-4 py-3 ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'} transition-colors`}>
+                          <span className={`text-xs font-mono tabular-nums w-14 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {formatTime12(s.time_start.slice(0, 5))}
+                          </span>
+                          <div className={`w-px h-4 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{s.professor_name}</p>
+                            <p className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{s.department}</p>
+                          </div>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${isDark ? 'bg-violet-500/15 text-violet-300' : 'bg-violet-50 text-violet-700'}`}>Open</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {dayConsults.length === 0 && daySlots.length === 0 && (
+                  <div className={`flex flex-col items-center justify-center py-10 gap-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                    <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+                    <p className="text-sm font-medium">Nothing scheduled</p>
+                  </div>
+                )}
+              </div>
+              {/* Footer — book button if slots available */}
+              {daySlots.length > 0 && (
+                <div className={`px-4 sm:px-6 py-3 sm:py-4 border-t flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                  <button
+                    onClick={() => { setDayModal(null); handleTabChange('book'); }}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold bg-sky-500 hover:bg-sky-600 text-white transition-colors"
+                  >
+                    Book a Slot →
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
         <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
@@ -1237,22 +1348,22 @@ export default function StudentDashboard() {
                 </p>
               </div>
 
-              {/* Stats pill */}
+              {/* Stats strip — single segmented card (matches the admin dashboard) */}
               <div
                 className={`grid grid-cols-2 sm:flex sm:items-center gap-x-5 gap-y-3 sm:gap-5 px-5 sm:px-7 py-4 sm:py-3.5 flex-shrink-0 rounded-2xl sm:rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
-                style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+                style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '9999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
               >
-                {([
-                  { value: allConsultsTotal,    label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
-                  { value: confirmedCount,      label: 'Confirmed',      numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
-                  { value: allConsultsCompleted, label: 'Completed',     numColor: '#059669', darkNumColor: '#6EE7B7' },
-                  { value: allConsultsPending,   label: 'Pending',       numColor: '#EA580C', darkNumColor: '#FDBA74' },
-                ] as const).map((s, i, arr) => (
-                  <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `sm:pr-5 sm:border-r ${isDark ? 'sm:border-white/20' : 'sm:border-gray-400'}` : ''}`}>
-                    <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
-                    <span className={`text-[11px] font-medium mt-1 ${ts}`}>{s.label}</span>
-                  </div>
-                ))}
+                  {([
+                    { value: allConsultsTotal,     label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
+                    { value: confirmedCount,       label: 'Confirmed',      numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
+                    { value: allConsultsCompleted, label: 'Completed',      numColor: '#059669', darkNumColor: '#6EE7B7' },
+                    { value: allConsultsPending,   label: 'Pending',        numColor: '#EA580C', darkNumColor: '#FDBA74' },
+                  ] as const).map((s, i, arr) => (
+                    <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `sm:pr-5 sm:border-r ${isDark ? 'sm:border-white/20' : 'sm:border-gray-300'}` : ''}`}>
+                      <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
+                      <span className={`text-[11px] font-medium mt-1 ${ts}`}>{s.label}</span>
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -1360,14 +1471,16 @@ export default function StudentDashboard() {
                     {chartBars.map(b => (
                       <div
                         key={b.label}
-                        className={`flex-1 flex flex-col items-center justify-between py-3 sm:py-5 px-1 sm:px-2 rounded-xl transition-colors ${
+                        onClick={() => setDayModal({ date: b.date, label: b.label, dateObj: (() => { const d = new Date(weekMonday); d.setDate(weekMonday.getDate() + CHART_DAYS.indexOf(b.label)); return d; })() })}
+                        title={b.total > 0 ? `${b.total} consultation${b.total !== 1 ? 's' : ''} – click for details` : b.availableSlots > 0 ? `${b.availableSlots} slot${b.availableSlots !== 1 ? 's' : ''} available – click to see` : `No activity on ${b.label}`}
+                        className={`flex-1 flex flex-col items-center justify-between py-3 sm:py-5 px-1 sm:px-2 rounded-xl transition-colors cursor-pointer select-none ${
                           b.isToday
-                            ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
+                            ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25 hover:brightness-110'
                             : b.total > 0
-                              ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
+                              ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22] hover:bg-white/[0.16]' : 'bg-white ring-1 ring-gray-300 shadow-sm hover:bg-sky-50 hover:ring-sky-300'
                               : b.availableSlots > 0
-                                ? isDark ? 'bg-violet-500/[0.08] ring-1 ring-violet-400/30' : 'bg-violet-50 ring-1 ring-violet-200'
-                                : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
+                                ? isDark ? 'bg-violet-500/[0.08] ring-1 ring-violet-400/30 hover:bg-violet-500/[0.14]' : 'bg-violet-50 ring-1 ring-violet-200 hover:bg-violet-100'
+                                : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14] hover:bg-white/[0.09]' : 'bg-gray-50 ring-1 ring-gray-300 hover:bg-gray-100'
                         }`}
                       >
                         <span className={`text-[9px] sm:text-xs font-semibold uppercase tracking-wider leading-none ${
@@ -1395,7 +1508,7 @@ export default function StudentDashboard() {
                               )}
                             </div>
                           ) : b.availableSlots > 0 ? (
-                            <span className={`text-[9px] sm:text-[10px] font-semibold text-center leading-tight ${isDark ? 'text-violet-400' : 'text-violet-500'}`}>
+                            <span className={`text-[9px] sm:text-[10px] font-semibold text-center leading-tight ${b.isToday ? 'text-white' : isDark ? 'text-violet-400' : 'text-violet-500'}`}>
                               {b.availableSlots} open
                             </span>
                           ) : (
@@ -1586,11 +1699,36 @@ export default function StudentDashboard() {
         : tab === 'book' ? (
           <div className="relative z-[1] px-3 sm:px-8 py-5 sm:py-8">
             {(() => {
+              // PHT "now" — single source of truth for hiding past slots across
+              // counts, sort, card visibility, and chips.
+              const phtNowParts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', hour12: false,
+              }).formatToParts(new Date());
+              const phtNow = (t: string) => phtNowParts.find(p => p.type === t)?.value ?? '00';
+              const phtToday = `${phtNow('year')}-${phtNow('month')}-${phtNow('day')}`;
+              const phtMins  = parseInt(phtNow('hour'), 10) * 60 + parseInt(phtNow('minute'), 10);
+              // A slot is still bookable if: it's recurring (no date), a future date,
+              // or today with at least one time range that hasn't ended yet (in-progress OK).
+              const isSlotFuture = (s: Schedule): boolean => {
+                if (!s.date) return true;
+                if (s.date < phtToday) return false;
+                if (s.date > phtToday) return true;
+                const ranges = s.time_ranges?.length
+                  ? s.time_ranges
+                  : [{ time_start: s.time_start, time_end: s.time_end }];
+                return ranges.some(r => {
+                  const [h, m] = r.time_end.slice(0, 5).split(':').map(Number);
+                  return h * 60 + m > phtMins;
+                });
+              };
+
               const profMap = new Map<number, {
                 professor_id: number; professor_name: string; department: string;
                 professor_avatar?: string | null; slots: Schedule[];
               }>();
               for (const s of schedules) {
+                if (!isSlotFuture(s)) continue;
                 if (!profMap.has(s.professor_id)) {
                   profMap.set(s.professor_id, {
                     professor_id: s.professor_id,
@@ -1645,7 +1783,7 @@ export default function StudentDashboard() {
                   {/* Header */}
                   <div className="mb-5 sm:mb-6">
                     <h1 className={`text-2xl sm:text-3xl font-bold ${tp}`}>Book a Consultation</h1>
-                    <p className={`text-sm mt-1 ${ts}`}>{allProfessors.length} professor{allProfessors.length !== 1 ? 's' : ''} available</p>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{allProfessors.length} professor{allProfessors.length !== 1 ? 's' : ''} available</p>
                   </div>
 
                   {/* Search + Sort */}
@@ -1717,27 +1855,9 @@ export default function StudentDashboard() {
                           if (a.date) return -1; if (b.date) return 1;
                           return DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
                         });
-                        const slotsForChips = (() => {
-                          const phtParts = new Intl.DateTimeFormat('en-CA', {
-                            timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
-                            hour: '2-digit', minute: '2-digit', hour12: false,
-                          }).formatToParts(new Date());
-                          const pg = (t: string) => phtParts.find(p => p.type === t)?.value ?? '00';
-                          const phtToday = `${pg('year')}-${pg('month')}-${pg('day')}`;
-                          const phtMins  = parseInt(pg('hour'), 10) * 60 + parseInt(pg('minute'), 10);
-                          return slotsSorted.filter(s => {
-                            if (!s.date) return true;
-                            if (s.date < phtToday) return false;
-                            if (s.date > phtToday) return true;
-                            const ranges = s.time_ranges?.length
-                              ? s.time_ranges
-                              : [{ time_start: s.time_start, time_end: s.time_end }];
-                            return ranges.some(r => {
-                              const [h, m] = r.time_end.slice(0, 5).split(':').map(Number);
-                              return h * 60 + m > phtMins;
-                            });
-                          });
-                        })();
+                        // Past slots are already excluded at the grouping stage
+                        // (isSlotFuture), so the sorted list is safe to render directly.
+                        const slotsForChips = slotsSorted;
                         const isExpanded    = bookExpandedId === prof.professor_id;
                         const alreadyBooked = bookedProfIds.has(prof.professor_id);
 
@@ -1874,7 +1994,7 @@ export default function StudentDashboard() {
             <div className="mb-5 sm:mb-7 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h1 className={`text-2xl font-bold ${tp}`}>History</h1>
-                <p className={`text-sm mt-1 ${ts}`}>Past consultations grouped by term</p>
+                <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>Past consultations grouped by term</p>
               </div>
               {statusFilter && ['completed', 'cancelled', 'rescheduled', 'missed'].includes(statusFilter) && (
                 <button onClick={clearStatusFilter}
@@ -1898,16 +2018,11 @@ export default function StudentDashboard() {
               return (
                 <div className="space-y-8">
                   {groupByQuarter(historyItems).map(([quarter, items]) => {
-                    const completedCount = items.filter(i => i.status === 'completed').length;
-                    const completionRate = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
                     return (
                     <div key={quarter}>
                       <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{quarter}</p>
-                        <span className={`text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{items.length} consultation{items.length !== 1 ? 's' : ''}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
-                          {completionRate}% completed
-                        </span>
+                        <span className={`text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{items.length} consultation{items.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm'}`}>
                         <div className="overflow-x-auto">
@@ -2006,7 +2121,7 @@ export default function StudentDashboard() {
             <div className="mb-5 sm:mb-6 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h1 className={`text-2xl font-bold ${tp}`}>My Consultations</h1>
-                <p className={`text-sm mt-1 ${ts}`}>{upcomingConsultations.length} upcoming · {activeConsults} active</p>
+                <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{upcomingConsultations.length} upcoming · {activeConsults} active</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {statusFilter && ['pending', 'confirmed', 'rescheduled', 'completed', 'cancelled', 'missed'].includes(statusFilter) && (
@@ -2027,17 +2142,17 @@ export default function StudentDashboard() {
             </div>
 
             {/* Tab switcher */}
-            <div className={`flex gap-1 p-1 rounded-xl mb-4 sm:mb-6 w-full sm:w-fit overflow-x-auto ${isDark ? 'bg-[#1e1e1e] border border-white/5' : 'bg-gray-100 border border-gray-200'}`}>
+            <div className={`flex gap-1 p-1 rounded-full mb-4 sm:mb-6 w-full sm:w-fit overflow-x-auto ${isDark ? 'bg-[#1e1e1e] border border-white/5' : 'bg-gray-100 border border-gray-200'}`}>
               {([
                 { key: 'active', label: 'Active & Upcoming', count: activeTabConsultations.length },
                 { key: 'past',   label: 'Past',              count: pastTabConsultations.length  },
               ] as const).map(t => (
                 <button key={t.key} onClick={() => setConsultTab(t.key)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-colors ${
                     consultTab === t.key ? 'bg-[#0EA5E9] text-white shadow-sm' : `${ts} ${isDark ? 'hover:text-gray-200 hover:bg-white/5' : 'hover:text-gray-800 hover:bg-white'}`
                   }`}>
                   {t.label}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${consultTab === t.key ? 'bg-white/20 text-white' : isDark ? 'bg-white/8 text-gray-500' : 'bg-gray-200 text-gray-500'}`}>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${consultTab === t.key ? 'bg-white/20 text-white' : isDark ? 'bg-white/10 text-gray-300' : 'bg-gray-300 text-gray-600'}`}>
                     {t.count}
                   </span>
                 </button>
