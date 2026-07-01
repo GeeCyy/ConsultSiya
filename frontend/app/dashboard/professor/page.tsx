@@ -56,6 +56,12 @@ const REFERRAL_OPTIONS = [
   'Other Office (Please Specify)',
 ];
 
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function parseNature(natureStr: string | null): string[] {
   if (!natureStr) return [];
   try {
@@ -536,7 +542,7 @@ function ProfCalendar({
   };
 
   const calGlassStyle = isDark ? {
-    background: 'rgba(22,23,26,0.96)',
+    background: 'rgba(22,23,26,1)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
     borderRadius: '16px',
@@ -913,6 +919,9 @@ export default function ProfessorDashboard() {
   const [downloadingForm, setDownloadingForm]   = useState<number | null>(null);
   const [viewingProof, setViewingProof]         = useState<number | null>(null);
   const [togglingSession, setTogglingSession]   = useState<number | null>(null);
+  const [sessionStartAt, setSessionStartAt]     = useState<number | null>(null);
+  const [sessionElapsed, setSessionElapsed]     = useState(0);
+  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Meeting link modal (for confirming OL consultations)
   const [meetingLinkConsult, setMeetingLinkConsult] = useState<Consultation | null>(null);
@@ -1004,6 +1013,19 @@ export default function ProfessorDashboard() {
     window.dispatchEvent(new CustomEvent('consulta-theme-change', { detail: { dark: next } }));
     setIsDark(next);
   };
+
+  // Session timer — counts up while professor has an active in-session consultation
+  useEffect(() => {
+    if (sessionStartAt !== null) {
+      setSessionElapsed(Math.floor((Date.now() - sessionStartAt) / 1000));
+      sessionTimerRef.current = setInterval(() => {
+        setSessionElapsed(Math.floor((Date.now() - sessionStartAt) / 1000));
+      }, 1000);
+    } else {
+      setSessionElapsed(0);
+    }
+    return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
+  }, [sessionStartAt]);
 
   // navScrolled is driven by onScroll on the <main> element — no useEffect needed
 
@@ -1295,7 +1317,14 @@ export default function ProfessorDashboard() {
       const next = !c.in_session;
       const data = await api.patch(`/api/consultations/${c.id}/in-session`, { in_session: next }, token!);
       if (data.error) { toast.error(data.error); return; }
-      setConsultations(prev => prev.map(x => x.id === c.id ? { ...x, in_session: next } : x));
+      setConsultations(prev => prev.map(x =>
+        x.id === c.id ? { ...x, in_session: next } : (next ? x : { ...x, in_session: false })
+      ));
+      if (next) {
+        setSessionStartAt(Date.now());
+      } else {
+        setSessionStartAt(null);
+      }
     } finally {
       setTogglingSession(null);
     }
@@ -1623,6 +1652,9 @@ export default function ProfessorDashboard() {
   const sundayStr = toLocalDateStr(sunday);
 
   const thisWeek  = consultations.filter(c => c.date >= mondayStr && c.date <= sundayStr);
+  const activeSessionConsult = consultations.find(c => c.in_session) ?? null;
+  const profInSession = activeSessionConsult !== null;
+
   const scheduledCount = thisWeek.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
   const completedCount = thisWeek.filter(c => c.status === 'completed').length;
   const pendingCount   = thisWeek.filter(c => c.status === 'pending').length;
@@ -1647,7 +1679,7 @@ export default function ProfessorDashboard() {
   );
 
   // Shared style helpers for the home tab
-  const card      = isDark ? 'bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'hover:-translate-y-0.5 transition-all duration-200';
+  const card      = isDark ? 'relative z-[1] rounded-2xl bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'hover:-translate-y-0.5 transition-all duration-200';
   const glassStyle = {
     background: 'rgba(255, 255, 255, 0.82)',
     backdropFilter: 'blur(12px)',
@@ -1664,7 +1696,7 @@ export default function ProfessorDashboard() {
     ? isDark ? 'bg-blue-500/20 text-blue-300'      : 'bg-blue-50 text-blue-600'
     : isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700';
   const modeDot   = (m: string) => m === 'Online' ? 'bg-blue-400' : 'bg-emerald-400';
-  const cardRaw    = isDark ? 'bg-[#252525]' : '';
+  const cardRaw    = isDark ? 'relative z-[1] rounded-2xl bg-[#252525]' : '';
   const innerCard  = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-gray-50 border-gray-100';
   const dividerCls = isDark ? 'divide-white/5' : 'divide-gray-100';
   const borderSoft = isDark ? 'border-white/5' : 'border-gray-200';
@@ -2341,7 +2373,7 @@ export default function ProfessorDashboard() {
                           <div key={m.label} className={`flex items-center justify-between px-4 py-3 ${isDark ? 'bg-white/[0.03]' : 'bg-white'}`}>
                             <div className="flex items-center gap-2.5">
                               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot}`} />
-                              <span className={`text-sm font-medium ${ts}`}>{m.label}</span>
+                              <span className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-900'}`}>{m.label}</span>
                             </div>
                             <span className={`text-xl font-bold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>{m.value}</span>
                           </div>
@@ -2654,7 +2686,7 @@ export default function ProfessorDashboard() {
                 />
               </div>
               {/* Status filter — Notion-style: dot + label + count */}
-              <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+              <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
                 {([
                   { key: 'all',         label: 'All',         dot: isDark ? 'bg-gray-400' : 'bg-gray-500',   count: visibleConsultations.length },
                   { key: 'pending',     label: 'Pending',     dot: 'bg-amber-400',                           count: visibleConsultations.filter(c => c.status === 'pending').length },
@@ -2671,7 +2703,7 @@ export default function ProfessorDashboard() {
                     <button
                       key={s.key}
                       onClick={() => setConsultStatusFilter(s.key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
                         isActive
                           ? activeCls
                           : isDark
@@ -2681,7 +2713,7 @@ export default function ProfessorDashboard() {
                     >
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
                       {s.label}
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ml-0.5 ${
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ml-0.5 ${
                         isActive
                           ? isDark ? 'bg-white/15 text-white' : 'bg-black/8 text-current'
                           : isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'
@@ -2982,22 +3014,29 @@ export default function ProfessorDashboard() {
                                 </button>
                               )}
                               {c.status === 'confirmed' && (
-                                <button
-                                  onClick={() => handleToggleInSession(c)}
-                                  disabled={togglingSession === c.id}
-                                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
-                                    c.in_session
-                                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
-                                      : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
-                                  }`}>
-                                  {togglingSession === c.id
-                                    ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    : c.in_session
-                                      ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                                      : <span className="w-2 h-2 rounded-full border-2 border-current" />
-                                  }
-                                  {c.in_session ? 'End Session' : 'Start Session'}
-                                </button>
+                                profInSession && !c.in_session ? (
+                                  <div className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed border ${isDark ? 'border-amber-400/30 text-amber-400/60' : 'border-amber-300 text-amber-500/60'}`}>
+                                    <span className="w-2 h-2 rounded-full border-2 border-current" />
+                                    Start Session
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleToggleInSession(c)}
+                                    disabled={togglingSession === c.id}
+                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                                      c.in_session
+                                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                                        : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
+                                    }`}>
+                                    {togglingSession === c.id
+                                      ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                      : c.in_session
+                                        ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                        : <span className="w-2 h-2 rounded-full border-2 border-current" />
+                                    }
+                                    {c.in_session ? `End Session · ${formatElapsed(sessionElapsed)}` : 'Start Session'}
+                                  </button>
+                                )
                               )}
                               <button onClick={() => openCancelModal(c)}
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-red-400/60 text-red-400 hover:bg-red-950/60' : 'border-red-400 text-red-600 hover:bg-red-50'}`}>
@@ -3018,22 +3057,29 @@ export default function ProfessorDashboard() {
                           )}
                           {c.status === 'rescheduled' && (
                             <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                onClick={() => handleToggleInSession(c)}
-                                disabled={togglingSession === c.id}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
-                                  c.in_session
-                                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
-                                    : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
-                                }`}>
-                                {togglingSession === c.id
-                                  ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                  : c.in_session
-                                    ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                                    : <span className="w-2 h-2 rounded-full border-2 border-current" />
-                                }
-                                {c.in_session ? 'End Session' : 'Start Session'}
-                              </button>
+                              {profInSession && !c.in_session ? (
+                                <div className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed border ${isDark ? 'border-amber-400/30 text-amber-400/60' : 'border-amber-300 text-amber-500/60'}`}>
+                                  <span className="w-2 h-2 rounded-full border-2 border-current" />
+                                  Start Session
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleInSession(c)}
+                                  disabled={togglingSession === c.id}
+                                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+                                    c.in_session
+                                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                                      : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
+                                  }`}>
+                                  {togglingSession === c.id
+                                    ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    : c.in_session
+                                      ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                      : <span className="w-2 h-2 rounded-full border-2 border-current" />
+                                  }
+                                  {c.in_session ? `End Session · ${formatElapsed(sessionElapsed)}` : 'Start Session'}
+                                </button>
+                              )}
                               <button onClick={() => openCancelModal(c)}
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-red-400/60 text-red-400 hover:bg-red-950/60' : 'border-red-400 text-red-600 hover:bg-red-50'}`}>
                                 <X className="w-3.5 h-3.5" />
@@ -3136,7 +3182,7 @@ export default function ProfessorDashboard() {
               Upcoming Bookings List
             </p>
             {visibleConsultations.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-12 ${card}`} style={isDark ? { background: 'rgba(22,23,26,0.96)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.07)' } : glassStyle}>
+              <div className={`flex flex-col items-center justify-center py-12 ${card}`} style={isDark ? { background: 'rgba(22,23,26,1)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.07)' } : glassStyle}>
                 <p className={`text-sm ${ts}`}>No upcoming bookings</p>
               </div>
             ) : (
@@ -3146,7 +3192,7 @@ export default function ProfessorDashboard() {
                   .map(([date, consultList]) => {
                     const isPast = new Date(date) < new Date(new Date().toDateString());
                     return (
-                      <div key={date} className={`rounded-2xl overflow-hidden ${cardRaw} ${isPast ? `border ${borderSoft} opacity-60` : `border ${borderMid}`}`} style={isDark ? { background: 'rgba(22,23,26,0.96)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '16px' } : glassStyle}>
+                      <div key={date} className={`rounded-2xl overflow-hidden ${cardRaw} ${isPast ? `border ${borderSoft} opacity-60` : `border ${borderMid}`}`} style={isDark ? { background: 'rgba(22,23,26,1)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderRadius: '16px' } : glassStyle}>
                         <div className={`px-5 py-3 border-b ${borderSoft} flex items-center justify-between`}>
                           <div>
                             <p className={`font-semibold text-sm ${tp}`}>

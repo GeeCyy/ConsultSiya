@@ -137,6 +137,14 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] professors.is_available column ready'))
     .catch(err => console.error('[startup] professors.is_available migration failed:', err.message));
 
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS in_session BOOLEAN NOT NULL DEFAULT false`)
+    .then(() => console.log('[startup] professors.in_session column ready'))
+    .catch(err => console.error('[startup] professors.in_session migration failed:', err.message));
+
+  pool.query(`ALTER TABLE professors ADD COLUMN IF NOT EXISTS active_consultation_id INTEGER`)
+    .then(() => console.log('[startup] professors.active_consultation_id column ready'))
+    .catch(err => console.error('[startup] professors.active_consultation_id migration failed:', err.message));
+
   pool.query(`
     CREATE TABLE IF NOT EXISTS announcements (
       id         SERIAL PRIMARY KEY,

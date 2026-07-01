@@ -283,6 +283,7 @@ export default function DashboardNavbar({
           {navItems.map(item => (
             <button
               key={item.key}
+              data-tour={`nav-${item.key}`}
               onClick={() => onTabChange(item.key)}
               className={`relative flex items-center rounded-lg text-[15px] font-semibold whitespace-nowrap transition-colors flex-shrink-0 px-3 pt-2 pb-3 ${
                 activeTab === item.key
@@ -307,6 +308,7 @@ export default function DashboardNavbar({
           {/* Notification bell */}
           <div ref={notifRef} className="relative">
             <button
+              data-tour="notifications"
               onClick={() => setNotifOpen(o => !o)}
               className={`${iconBtn} relative`}
               title="Notifications"

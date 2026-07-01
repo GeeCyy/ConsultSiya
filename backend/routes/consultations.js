@@ -402,6 +402,7 @@ router.get('/', authenticate, async (req, res) => {
       );
       result = await pool.query(
         `SELECT c.*, c.date::text AS date, p.full_name AS professor_name,
+                p.in_session AS prof_in_session,
                 sch.day, sch.time_start, sch.time_end, sch.location, sch.mode AS slot_mode,
                 cd.action_taken, cd.referral, cd.referral_specify, cd.remarks,
                 pu.avatar AS professor_avatar
@@ -585,9 +586,30 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1 WHERE id = $2`,
+      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1, in_session = false WHERE id = $2`,
       [cancel_reason?.trim() || null, id]
     );
+
+    // Clear professor-level session if this was the active consultation
+    try {
+      await pool.query(
+        `UPDATE professors SET in_session = false, active_consultation_id = NULL WHERE id = $1 AND active_consultation_id = $2`,
+        [c.professor_id, Number(id)]
+      );
+      const affectedStudents = await pool.query(
+        `SELECT DISTINCT s.user_id FROM consultations con
+         JOIN students s ON con.student_id = s.id
+         WHERE con.professor_id = $1 AND con.status IN ('confirmed', 'rescheduled')`,
+        [c.professor_id]
+      );
+      for (const row of affectedStudents.rows) {
+        notifModule.pushNotification(row.user_id, {
+          type: 'professor_session_update',
+          professor_id: c.professor_id,
+          in_session: false,
+        });
+      }
+    } catch { /* best-effort */ }
 
     // Notify the other party
     try {
@@ -674,7 +696,28 @@ router.patch('/:id/complete', authenticate, authorize('professor'), async (req, 
       return res.status(400).json({ error: 'Cannot complete a cancelled consultation.' });
     }
 
-    await pool.query(`UPDATE consultations SET status = 'completed' WHERE id = $1`, [id]);
+    await pool.query(`UPDATE consultations SET status = 'completed', in_session = false WHERE id = $1`, [id]);
+
+    // Clear professor-level session if this was the active consultation
+    try {
+      await pool.query(
+        `UPDATE professors SET in_session = false, active_consultation_id = NULL WHERE id = $1 AND active_consultation_id = $2`,
+        [prof.rows[0].id, Number(id)]
+      );
+      const affectedStudents = await pool.query(
+        `SELECT DISTINCT s.user_id FROM consultations c
+         JOIN students s ON c.student_id = s.id
+         WHERE c.professor_id = $1 AND c.status IN ('confirmed', 'rescheduled')`,
+        [prof.rows[0].id]
+      );
+      for (const row of affectedStudents.rows) {
+        notifModule.pushNotification(row.user_id, {
+          type: 'professor_session_update',
+          professor_id: prof.rows[0].id,
+          in_session: false,
+        });
+      }
+    } catch { /* best-effort */ }
 
     // Email student — best-effort
     try {
@@ -944,22 +987,65 @@ router.patch('/:id/in-session', authenticate, authorize('professor'), async (req
   const { id } = req.params;
   const { in_session } = req.body;
   try {
-    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+    const prof = await pool.query(
+      `SELECT id, in_session AS prof_in_session, active_consultation_id FROM professors WHERE user_id = $1`,
+      [req.user.id]
+    );
     if (!prof.rows[0]) return res.status(404).json({ error: 'Professor profile not found.' });
+    const profRow = prof.rows[0];
 
     const consultation = await pool.query(
       `SELECT professor_id, status FROM consultations WHERE id = $1`, [id]
     );
     if (!consultation.rows[0]) return res.status(404).json({ error: 'Consultation not found.' });
-    if (consultation.rows[0].professor_id !== prof.rows[0].id)
+    if (consultation.rows[0].professor_id !== profRow.id)
       return res.status(403).json({ error: 'Access denied.' });
     if (!['confirmed', 'rescheduled'].includes(consultation.rows[0].status))
       return res.status(400).json({ error: 'Can only set in-session on confirmed consultations.' });
 
+    // Block starting a second concurrent session
+    if (in_session && profRow.prof_in_session && Number(profRow.active_consultation_id) !== Number(id)) {
+      return res.status(409).json({ error: 'You are already in a session. End the current session first.' });
+    }
+
+    // Update per-consultation flag
     const result = await pool.query(
       `UPDATE consultations SET in_session = $1 WHERE id = $2 RETURNING id, in_session`,
       [!!in_session, id]
     );
+
+    // Update professor-level session state
+    await pool.query(
+      `UPDATE professors SET in_session = $1, active_consultation_id = $2 WHERE id = $3`,
+      [!!in_session, in_session ? Number(id) : null, profRow.id]
+    );
+
+    // If ending, clear any other stale in_session flags for this professor
+    if (!in_session) {
+      await pool.query(
+        `UPDATE consultations SET in_session = false WHERE professor_id = $1 AND in_session = true AND id != $2`,
+        [profRow.id, id]
+      );
+    }
+
+    // Push live SSE event to all students with confirmed/rescheduled consultations with this professor
+    try {
+      const affected = await pool.query(
+        `SELECT DISTINCT s.user_id FROM consultations c
+         JOIN students s ON c.student_id = s.id
+         WHERE c.professor_id = $1 AND c.status IN ('confirmed', 'rescheduled')`,
+        [profRow.id]
+      );
+      for (const row of affected.rows) {
+        notifModule.pushNotification(row.user_id, {
+          type: 'professor_session_update',
+          professor_id: profRow.id,
+          consultation_id: Number(id),
+          in_session: !!in_session,
+        });
+      }
+    } catch { /* best-effort */ }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);

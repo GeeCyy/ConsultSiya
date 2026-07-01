@@ -20,6 +20,7 @@ import LeftSidebar, { type NavItem } from '@/components/LeftSidebar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Ban, Trash2, UserCheck, Users, BarChart3, ClipboardList } from 'lucide-react';
+import ChatbotWidget from '@/components/ChatbotWidget';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -1230,13 +1231,13 @@ export default function AdminDashboard() {
                     { key: 'cancelled', label: 'Cancelled' },
                   ] as const).map(t => (
                     <button key={t.key} onClick={() => setStatusFilter(t.key)}
-                      className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
                         statusFilter === t.key
                           ? 'bg-[#0EA5E9] text-white shadow-sm shadow-sky-500/30'
                           : isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                       }`}>
                       {t.label}
-                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                         statusFilter === t.key ? 'bg-white/20 text-white' : isDark ? 'bg-white/5 text-gray-600' : 'bg-gray-100 text-gray-500'
                       }`}>
                         {consultTabCounts[t.key]}
@@ -3299,6 +3300,8 @@ export default function AdminDashboard() {
         onConfirm={handleConfirmModalExecute}
         onCancel={() => { setConfirmModalOpen(false); setConfirmModalError(''); }}
       />
+
+      <ChatbotWidget token={token} role="admin" />
     </div>
   );
 }

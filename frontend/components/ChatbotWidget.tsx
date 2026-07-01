@@ -253,6 +253,152 @@ const STUDENT_TREE: Record<string, TreeNode> = {
   },
 };
 
+// ── Admin tree ────────────────────────────────────────────────────────────────
+const ADMIN_TREE: Record<string, TreeNode> = {
+  root: {
+    message: "Hi! I'm the Consulta Admin Assistant. What do you need help with?",
+    options: [
+      { label: '👥 Managing Accounts',       next: 'accounts'     },
+      { label: '✅ Approving Consultations',  next: 'approvals'    },
+      { label: '📅 Academic Calendar',        next: 'calendar'     },
+      { label: '📊 Reports & History',        next: 'reports'      },
+      { label: '📣 Announcements',            next: 'announce'     },
+      { label: 'ℹ️ About Consulta',           next: 'about'        },
+    ],
+  },
+
+  // ── Accounts ──
+  accounts: {
+    message: 'What do you need help with regarding accounts?',
+    options: [
+      { label: 'How to add a professor',      next: 'acct_add_prof'  },
+      { label: 'How to add a student',        next: 'acct_add_stu'   },
+      { label: 'How to ban/unban a user',     next: 'acct_ban'       },
+      { label: 'How to delete an account',    next: 'acct_delete'    },
+      { label: 'Viewing a profile',           next: 'acct_view'      },
+      { label: '← Back',                     next: 'root'           },
+    ],
+  },
+  acct_add_prof: {
+    message: 'To add a professor account:\n1. Go to Accounts\n2. Click Add Professor\n3. Fill in their name, email, department, and set a password\n4. Click Save\n\nThe professor can log in immediately and update their profile.',
+    options: [{ label: 'More about accounts', next: 'accounts' }, { label: '← Main menu', next: 'root' }],
+  },
+  acct_add_stu: {
+    message: 'To add a student account:\n1. Go to Accounts\n2. Click Add Student\n3. Fill in their name, email, student ID, program, and set a password\n4. Click Save\n\nStudents can also self-register if registration is open.',
+    options: [{ label: 'More about accounts', next: 'accounts' }, { label: '← Main menu', next: 'root' }],
+  },
+  acct_ban: {
+    message: 'To ban or unban a user:\n1. Go to Accounts\n2. Find the user and click their name\n3. In the profile modal, click Ban User (or Unban if already banned)\n4. Confirm the action\n\nBanned users cannot log in. Their data is preserved.',
+    options: [{ label: 'More about accounts', next: 'accounts' }, { label: '← Main menu', next: 'root' }],
+  },
+  acct_delete: {
+    message: 'To delete an account:\n1. Go to Accounts\n2. Find the user\n3. Click Delete and confirm\n\nWarning: deleting an account is permanent and removes all associated data including consultations.',
+    options: [{ label: 'More about accounts', next: 'accounts' }, { label: '← Main menu', next: 'root' }],
+  },
+  acct_view: {
+    message: 'To view a user profile:\n1. Go to Accounts\n2. Click any user\'s name or avatar\n3. A modal opens with their full profile, contact info, and consultation history\n\nYou can also edit or take action (ban/delete) directly from this modal.',
+    options: [{ label: 'More about accounts', next: 'accounts' }, { label: '← Main menu', next: 'root' }],
+  },
+
+  // ── Approvals ──
+  approvals: {
+    message: 'What would you like to know about consultations?',
+    options: [
+      { label: 'Approving pending requests',  next: 'appr_approve'   },
+      { label: 'Viewing all consultations',   next: 'appr_view'      },
+      { label: 'Filtering by status',         next: 'appr_filter'    },
+      { label: '← Back',                     next: 'root'           },
+    ],
+  },
+  appr_approve: {
+    message: 'To approve pending consultations:\n1. Go to Consultations\n2. Filter by Pending status\n3. Review the booking details\n4. Click Approve\n\nOr use the Quick Action "Approve Pending" on the Home tab to see all pending requests at once.',
+    options: [{ label: 'More about consultations', next: 'approvals' }, { label: '← Main menu', next: 'root' }],
+  },
+  appr_view: {
+    message: 'To view all consultations:\n1. Go to Consultations tab\n2. All bookings across all professors are listed here\n3. Use the search bar to find by student or professor name\n\nConsultations are sorted by date (most recent first).',
+    options: [{ label: 'More about consultations', next: 'approvals' }, { label: '← Main menu', next: 'root' }],
+  },
+  appr_filter: {
+    message: 'To filter consultations:\n1. Go to Consultations tab\n2. Use the status filter pills: All · Pending · Confirmed · Completed · Cancelled · Missed\n3. Use the search box to narrow by name or date\n\nYou can combine filters for a more specific view.',
+    options: [{ label: 'More about consultations', next: 'approvals' }, { label: '← Main menu', next: 'root' }],
+  },
+
+  // ── Calendar ──
+  calendar: {
+    message: 'What do you need help with for the Academic Calendar?',
+    options: [
+      { label: 'Setting the term dates',     next: 'cal_term'     },
+      { label: 'Blocking dates (holidays)',  next: 'cal_block'    },
+      { label: 'Marking exam weeks',         next: 'cal_exam'     },
+      { label: 'Online / F2F mode weeks',    next: 'cal_mode'     },
+      { label: '← Back',                    next: 'root'         },
+    ],
+  },
+  cal_term: {
+    message: 'To configure the term:\n1. Go to Home tab\n2. In the Term Configuration card, set the Term Label, Start Date, Total Weeks, Midterm Week, and Finals Week\n3. Click Save\n\nChanges apply immediately to the academic calendar visible to all users.',
+    options: [{ label: 'More about calendar', next: 'calendar' }, { label: '← Main menu', next: 'root' }],
+  },
+  cal_block: {
+    message: 'To block a date (e.g. holiday):\n1. Go to Calendar tab\n2. Click on a date\n3. Select "Block Date"\n4. Optionally add a label (e.g. "Rizal Day")\n\nBlocked dates show in red on the calendar and students cannot book slots on those dates.',
+    options: [{ label: 'More about calendar', next: 'calendar' }, { label: '← Main menu', next: 'root' }],
+  },
+  cal_exam: {
+    message: 'To mark a week as exam week:\n1. Go to Calendar tab\n2. Click on any date in the target week\n3. Select "Mark as Exam Week"\n\nExam weeks are highlighted on the calendar for both professors and students.',
+    options: [{ label: 'More about calendar', next: 'calendar' }, { label: '← Main menu', next: 'root' }],
+  },
+  cal_mode: {
+    message: 'To set online/F2F mode for a week:\n1. Go to Calendar tab\n2. Click on any date in the target week\n3. Select the mode (Online, F2F, or Hybrid)\n\nMode overrides are visible to professors when they schedule slots for that week.',
+    options: [{ label: 'More about calendar', next: 'calendar' }, { label: '← Main menu', next: 'root' }],
+  },
+
+  // ── Reports ──
+  reports: {
+    message: 'What do you need help with for reports?',
+    options: [
+      { label: 'Viewing system reports',     next: 'rep_view'    },
+      { label: 'Term Archive',               next: 'rep_archive' },
+      { label: '← Back',                    next: 'root'        },
+    ],
+  },
+  rep_view: {
+    message: 'To view system reports:\n1. Go to Reports tab\n2. View consultation counts by professor, student, or status\n3. Filter by term or date range\n4. Export as Excel or PDF using the download buttons\n\nReports cover all consultations across all professors.',
+    options: [{ label: 'More about reports', next: 'reports' }, { label: '← Main menu', next: 'root' }],
+  },
+  rep_archive: {
+    message: 'The Term Archive stores closed academic terms:\n1. Go to Term Archive tab\n2. Browse past terms and their consultation records\n3. Click any term to view its full consultation history\n\nArchived data is read-only and preserved permanently.',
+    options: [{ label: 'More about reports', next: 'reports' }, { label: '← Main menu', next: 'root' }],
+  },
+
+  // ── Announcements ──
+  announce: {
+    message: 'What do you need help with for announcements?',
+    options: [
+      { label: 'How to post an announcement', next: 'ann_add'    },
+      { label: 'How to edit/delete one',       next: 'ann_edit'  },
+      { label: 'Pinning an announcement',      next: 'ann_pin'   },
+      { label: '← Back',                       next: 'root'      },
+    ],
+  },
+  ann_add: {
+    message: 'To post an announcement:\n1. Go to Home tab\n2. In the Announcements section, click Add\n3. Write a title and body\n4. Choose type: Info or Warning\n5. Optionally pin it\n6. Click Post\n\nAll users (professors and students) see announcements in their notification panel.',
+    options: [{ label: 'More about announcements', next: 'announce' }, { label: '← Main menu', next: 'root' }],
+  },
+  ann_edit: {
+    message: 'To edit or delete an announcement:\n1. Go to Home tab\n2. Find the announcement in the list\n3. Click the edit icon (pencil) to update it, or the trash icon to delete\n\nDeletion is permanent and the announcement is removed from all notification panels.',
+    options: [{ label: 'More about announcements', next: 'announce' }, { label: '← Main menu', next: 'root' }],
+  },
+  ann_pin: {
+    message: 'To pin an announcement:\n1. When creating or editing, toggle the "Pinned" option\n2. Pinned announcements appear at the top of the list for all users\n\nOnly one announcement should be pinned at a time for clarity.',
+    options: [{ label: 'More about announcements', next: 'announce' }, { label: '← Main menu', next: 'root' }],
+  },
+
+  // ── About ──
+  about: {
+    message: 'Consulta is the SOIT Academic Consultation System at Mapúa University.\n\nAs admin you can:\n• Manage all professor and student accounts\n• Configure the academic calendar and term\n• Monitor all consultations system-wide\n• Post announcements to all users\n• View reports and export data\n• Archive past terms',
+    options: [{ label: '← Main menu', next: 'root' }],
+  },
+};
+
 // ── Renderers ─────────────────────────────────────────────────────────────────
 function renderBold(text: string) {
   const parts = text.split(/\*\*(.+?)\*\*/g);
@@ -308,9 +454,9 @@ export default function ChatbotWidget({
   role = 'professor',
 }: {
   token: string | null;
-  role?: 'professor' | 'student';
+  role?: 'professor' | 'student' | 'admin';
 }) {
-  const tree = role === 'student' ? STUDENT_TREE : PROF_TREE;
+  const tree = role === 'student' ? STUDENT_TREE : role === 'admin' ? ADMIN_TREE : PROF_TREE;
 
   const [open,        setOpen]    = useState(false);
   const [nodeId,      setNodeId]  = useState('root');
