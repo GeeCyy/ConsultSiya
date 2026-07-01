@@ -147,74 +147,10 @@ router.get('/mine', authenticate, authorize('professor'), async (req, res) => {
   }
 });
 
-// ── Professor blocked times (class schedule) ────────────────────────────────
+// ── Booked times for a schedule slot on a given date ─────────────────────────
 
-// Get blocked times for the logged-in professor
-router.get('/blocked', authenticate, authorize('professor'), async (req, res) => {
-  try {
-    const profResult = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
-    if (profResult.rows.length === 0) return res.status(404).json({ error: 'Professor not found.' });
-    const professor_id = profResult.rows[0].id;
-    const result = await pool.query(
-      `SELECT id, day_of_week, specific_date::text AS specific_date,
-              start_time, end_time, label
-       FROM professor_blocked_times
-       WHERE professor_id = $1
-       ORDER BY day_of_week NULLS LAST, specific_date NULLS LAST, start_time`,
-      [professor_id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Add a blocked time
-router.post('/blocked', authenticate, authorize('professor'), async (req, res) => {
-  const { day_of_week, specific_date, start_time, end_time, label } = req.body;
-  if (!start_time || !end_time) return res.status(400).json({ error: 'start_time and end_time are required.' });
-  if (start_time >= end_time) return res.status(400).json({ error: 'end_time must be after start_time.' });
-  if (!day_of_week && !specific_date) return res.status(400).json({ error: 'day_of_week or specific_date is required.' });
-  try {
-    const profResult = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
-    if (profResult.rows.length === 0) return res.status(404).json({ error: 'Professor not found.' });
-    const professor_id = profResult.rows[0].id;
-    const result = await pool.query(
-      `INSERT INTO professor_blocked_times (professor_id, day_of_week, specific_date, start_time, end_time, label)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, day_of_week, specific_date::text AS specific_date, start_time, end_time, label`,
-      [professor_id, day_of_week || null, specific_date || null, start_time, end_time, label || 'Class']
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Remove a blocked time
-router.delete('/blocked/:id', authenticate, authorize('professor'), async (req, res) => {
-  const { id } = req.params;
-  try {
-    const profResult = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
-    if (profResult.rows.length === 0) return res.status(404).json({ error: 'Professor not found.' });
-    const professor_id = profResult.rows[0].id;
-    const check = await pool.query(`SELECT professor_id FROM professor_blocked_times WHERE id = $1`, [id]);
-    if (check.rows.length === 0) return res.status(404).json({ error: 'Blocked time not found.' });
-    if (check.rows[0].professor_id !== professor_id) return res.status(403).json({ error: 'Not your blocked time.' });
-    await pool.query(`DELETE FROM professor_blocked_times WHERE id = $1`, [id]);
-    res.json({ message: 'Removed.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Booked + blocked times for a schedule slot on a given date ───────────────
-
-// Return booked slot info and professor-blocked times for a schedule on a given date.
-// Response: { booked: { "HH:MM": { booked_count, first_topic } }, blocked: ["HH:MM", ...] }
+// Return booked slot info for a schedule on a given date.
+// Response: { booked: { "HH:MM": { booked_count, topics } }, blocked: [] }
 // Booked slots are joinable; blocked slots are hard-unavailable (professor class schedule).
 router.get('/:id/booked-times', authenticate, async (req, res) => {
   const { id } = req.params;
@@ -251,33 +187,7 @@ router.get('/:id/booked-times', authenticate, async (req, res) => {
       booked[t] = { booked_count: row.booked_count, topics };
     }
 
-    // Get professor for this schedule
-    const schedResult = await pool.query(`SELECT professor_id FROM schedules WHERE id = $1`, [id]);
-    if (schedResult.rows.length === 0) return res.json({ booked, blocked: [] });
-    const professor_id = schedResult.rows[0].professor_id;
-
-    // Determine day of week for the date
-    const d = new Date(date + 'T12:00:00');
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const dayOfWeek = days[d.getDay()];
-
-    // Get professor-blocked ranges for that day or specific date
-    const blockedResult = await pool.query(
-      `SELECT start_time, end_time FROM professor_blocked_times
-       WHERE professor_id = $1 AND (day_of_week = $2 OR specific_date::text = $3)`,
-      [professor_id, dayOfWeek, date]
-    );
-
-    // Expand blocked ranges into 30-min slots
-    const toMins = t => { const [h, m] = t.slice(0, 5).split(':').map(Number); return h * 60 + m; };
-    const blockedSet = new Set();
-    for (const b of blockedResult.rows) {
-      for (let t = toMins(b.start_time); t < toMins(b.end_time); t += 30) {
-        blockedSet.add(`${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`);
-      }
-    }
-
-    res.json({ booked, blocked: [...blockedSet] });
+    res.json({ booked, blocked: [] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
