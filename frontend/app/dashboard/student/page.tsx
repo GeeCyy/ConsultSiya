@@ -132,6 +132,7 @@ type Consultation = {
   proof_type: 'file' | 'link' | null;
   professor_avatar?: string | null;
   in_session?: boolean;
+  prof_in_session?: boolean;
 };
 
 type StudentProfile = {
@@ -658,6 +659,8 @@ export default function StudentDashboard() {
   const [schedules, setSchedules]         = useState<Schedule[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading]             = useState(true);
+  // professor_id → true if that professor is currently in session
+  const [professorInSession, setProfessorInSession] = useState<Record<number, boolean>>({});
   const [announcements, setAnnouncements] = useState<AnnItem[]>([]);
   const [calOverrides, setCalOverrides]   = useState<CalendarOverride[]>([]);
   const [term, setTerm]                   = useState<TermConfig>(CURRENT_TERM);
@@ -759,22 +762,27 @@ export default function StudentDashboard() {
     fetchData();
   }, [authReady]);
 
-  // Poll every 10 s for in_session changes — silently patches consultations state
+  // Subscribe to professor session status changes via SSE
   useEffect(() => {
     if (!authReady || !token) return;
-    const interval = setInterval(async () => {
+    const es = new EventSource(
+      `${API_URL}/api/notifications/stream?token=${encodeURIComponent(token)}`
+    );
+    es.onmessage = (e) => {
       try {
-        const fresh = await api.get('/api/consultations', token!);
-        if (!Array.isArray(fresh)) return;
-        setConsultations(prev =>
-          prev.map(c => {
-            const updated = (fresh as Consultation[]).find(f => f.id === c.id);
-            return updated ? { ...c, in_session: updated.in_session } : c;
-          })
-        );
-      } catch { /* silent — network hiccup shouldn't disrupt the UI */ }
-    }, 10_000);
-    return () => clearInterval(interval);
+        const data = JSON.parse(e.data);
+        if (data.type !== 'professor_session_update') return;
+        const { professor_id, in_session: inSession } = data as { professor_id: number; in_session: boolean };
+        setProfessorInSession(prev => ({ ...prev, [professor_id]: inSession }));
+        if (!inSession) {
+          setConsultations(prev => prev.map(c =>
+            c.professor_id === professor_id ? { ...c, in_session: false } : c
+          ));
+        }
+      } catch { /* ignore malformed */ }
+    };
+    es.onerror = () => { /* SSE auto-reconnects */ };
+    return () => es.close();
   }, [authReady, token]);
 
   const fetchData = async () => {
@@ -795,6 +803,16 @@ export default function StudentDashboard() {
     setSchedules((Array.isArray(sched) ? sched : []).filter(s => !s.date || s.date >= today));
     const freshConsults: Consultation[] = Array.isArray(consult) ? consult : [];
     setConsultations(freshConsults);
+
+    // Seed professor session state from fetched data — use professor-level flag so
+    // all students with confirmed bookings see the badge, not just the active one.
+    const sessionMap: Record<number, boolean> = {};
+    for (const c of freshConsults) {
+      if ((c.in_session || c.prof_in_session) && c.status === 'confirmed') {
+        sessionMap[c.professor_id] = true;
+      }
+    }
+    setProfessorInSession(sessionMap);
 
     // In-app notification toasts based on user preferences
     const prefs = {
@@ -1148,7 +1166,7 @@ export default function StudentDashboard() {
         alt=""
         aria-hidden
         className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.18]' : 'opacity-[0.12]'}`}
-        style={isDark ? { filter: 'drop-shadow(0 0 80px rgba(14,165,233,0.6)) drop-shadow(0 0 40px rgba(99,102,241,0.4)) drop-shadow(0 0 120px rgba(14,165,233,0.3))' } : { filter: 'drop-shadow(0 0 30px rgba(99,102,241,0.15))' }}
+        style={isDark ? { filter: 'drop-shadow(0 0 80px rgba(122,0,0,0.6)) drop-shadow(0 0 40px rgba(180,0,0,0.4)) drop-shadow(0 0 120px rgba(122,0,0,0.3))' } : { filter: 'drop-shadow(0 0 60px rgba(122,0,0,0.35)) drop-shadow(0 0 30px rgba(180,0,0,0.25))' }}
       />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -1430,7 +1448,7 @@ export default function StudentDashboard() {
                     </div>
                     <button
                       onClick={() => handleTabChange('book')}
-                      className="w-full mt-2 py-2.5 rounded-xl text-sm font-semibold transition-all bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 hover:-translate-y-0.5"
+                      className="w-full mt-2 py-2.5 rounded-full text-sm font-semibold transition-all bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 hover:-translate-y-0.5"
                     >
                       Book a Consultation
                     </button>
@@ -1876,12 +1894,6 @@ export default function StudentDashboard() {
                                       className={`font-bold text-sm sm:text-base hover:opacity-75 transition-opacity text-left leading-snug ${tp}`}>
                                       {prof.professor_name}
                                     </button>
-                                    {alreadyBooked && (
-                                      <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                                        Consulted
-                                      </span>
-                                    )}
                                   </div>
                                   <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department}</p>
                                   <span className="inline-flex items-center gap-1 text-xs text-emerald-500 mt-1">
@@ -2195,7 +2207,7 @@ export default function StudentDashboard() {
                               className={`font-semibold text-base hover:opacity-75 transition-opacity text-left ${tp}`}>
                               {c.professor_name}
                             </button>
-                            {c.in_session && (
+                            {c.status === 'confirmed' && (c.in_session || professorInSession[c.professor_id]) && (
                               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.6)]">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                                 In Session
