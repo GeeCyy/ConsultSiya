@@ -145,6 +145,10 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] professors.active_consultation_id column ready'))
     .catch(err => console.error('[startup] professors.active_consultation_id migration failed:', err.message));
 
+  pool.query(`DROP TABLE IF EXISTS professor_blocked_times CASCADE`)
+    .then(() => console.log('[startup] professor_blocked_times table removed'))
+    .catch(err => console.error('[startup] professor_blocked_times drop failed:', err.message));
+
   pool.query(`
     CREATE TABLE IF NOT EXISTS announcements (
       id         SERIAL PRIMARY KEY,

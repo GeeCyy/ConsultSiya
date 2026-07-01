@@ -96,17 +96,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_consultation_active
   ON consultations (student_id, professor_id, date, time)
   WHERE status IN ('pending', 'confirmed', 'rescheduled');
 
--- Professor class schedule blocker: times the professor is unavailable (e.g. class schedule)
-CREATE TABLE IF NOT EXISTS professor_blocked_times (
-  id           SERIAL PRIMARY KEY,
-  professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE,
-  day_of_week  VARCHAR(10),   -- 'Monday'..'Saturday' for recurring blocks
-  specific_date DATE,         -- for one-time blocks
-  start_time   TIME NOT NULL,
-  end_time     TIME NOT NULL,
-  label        TEXT DEFAULT 'Class',
-  created_at   TIMESTAMPTZ DEFAULT NOW()
-);
 
 -- Student notes on consultation bookings
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS notes TEXT;
