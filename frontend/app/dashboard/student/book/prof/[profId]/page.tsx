@@ -598,6 +598,8 @@ export default function BookProfPage() {
                           if (data && typeof data === 'object' && !Array.isArray(data)) {
                             const entry: BookedTimesData = { booked: data.booked ?? {}, blocked: data.blocked ?? [] };
                             setBookedTimes(prev => ({ ...prev, [key]: entry }));
+                            // Clear auto-selected or manually picked time if it's actually blocked
+                            setBookForm(f => entry.blocked.includes(f.time ?? '') ? { ...f, time: '' } : f);
                           }
                         })
                         .catch(() => {});
