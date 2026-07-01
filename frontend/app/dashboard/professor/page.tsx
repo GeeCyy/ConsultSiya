@@ -1815,6 +1815,7 @@ export default function ProfessorDashboard() {
               return (
                 <button
                   key={item.key}
+                  data-tour={`nav-${item.key}`}
                   onClick={() => handleTabChange(item.key as ProfessorTab)}
                   className={`relative flex items-center gap-1.5 rounded-lg text-[15px] font-semibold whitespace-nowrap transition-colors px-3 pt-2 pb-3 ${
                     isActive
@@ -1850,6 +1851,7 @@ export default function ProfessorDashboard() {
             {/* Notification bell */}
             <div className="relative" ref={topNavNotifRef}>
               <button
+                data-tour="notifications"
                 onClick={() => setTopNavNotifOpen(o => !o)}
                 className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
               >
