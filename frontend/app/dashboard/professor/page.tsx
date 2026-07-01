@@ -962,6 +962,7 @@ export default function ProfessorDashboard() {
 
   // Weekly overview modal
   const [weeklyModalOpen, setWeeklyModalOpen] = useState(false);
+  const [weeklySelectedDate, setWeeklySelectedDate] = useState<string | null>(null);
 
   // Navbar scroll-aware state
   const [navScrolled, setNavScrolled] = useState(false);
@@ -1976,7 +1977,7 @@ export default function ProfessorDashboard() {
         });
         const totalCount = weekDays.reduce((acc, d) => acc + d.items.length, 0);
         return (
-          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setWeeklyModalOpen(false)}>
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4" onClick={() => { setWeeklyModalOpen(false); setWeeklySelectedDate(null); }}>
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
               className={`relative z-10 w-full sm:max-w-2xl flex flex-col shadow-2xl
@@ -1999,19 +2000,29 @@ export default function ProfessorDashboard() {
                     {totalCount > 0 && <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>{totalCount} total</span>}
                   </p>
                 </div>
-                <button onClick={() => setWeeklyModalOpen(false)} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                <button onClick={() => { setWeeklyModalOpen(false); setWeeklySelectedDate(null); }} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
               </div>
               {/* Body */}
               <div className="overflow-y-auto flex-1 px-3 sm:px-5 py-3 sm:py-4 space-y-3">
                 {weekDays.map(day => (
-                  <div key={day.dateStr} className={`rounded-xl overflow-hidden border ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                  <div
+                    key={day.dateStr}
+                    id={`wday-${day.dateStr}`}
+                    ref={el => { if (el && weeklySelectedDate === day.dateStr) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); }}
+                    className={`rounded-xl overflow-hidden border transition-shadow ${
+                      weeklySelectedDate === day.dateStr
+                        ? isDark ? 'border-sky-400/50 shadow-[0_0_0_2px_rgba(56,189,248,0.25)]' : 'border-sky-400 shadow-[0_0_0_2px_rgba(14,165,233,0.15)]'
+                        : isDark ? 'border-white/[0.08]' : 'border-gray-100'
+                    }`}>
                     {/* Day header */}
                     <div className={`flex items-center justify-between px-3 sm:px-4 py-2.5 ${
                       day.isToday
                         ? 'bg-[#0EA5E9]'
-                        : isDark ? 'bg-white/[0.05]' : 'bg-gray-50'
+                        : weeklySelectedDate === day.dateStr
+                          ? isDark ? 'bg-sky-500/10' : 'bg-sky-50'
+                          : isDark ? 'bg-white/[0.05]' : 'bg-gray-50'
                     }`}>
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-bold uppercase tracking-widest ${day.isToday ? 'text-sky-100' : isDark ? 'text-gray-300' : 'text-gray-600'}`}>{day.label}</span>
@@ -2259,7 +2270,7 @@ export default function ProfessorDashboard() {
                 {/* Right: stats card */}
                 <div
                   className={`grid grid-cols-2 sm:flex sm:items-center gap-x-5 gap-y-3 sm:gap-5 px-5 sm:px-7 py-4 sm:py-3.5 flex-shrink-0 rounded-2xl sm:rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
-                  style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+                  style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '9999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
                 >
                   {([
                     { value: tTotal,        label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
@@ -2379,12 +2390,14 @@ export default function ProfessorDashboard() {
                       {chartBars.map(b => (
                         <div
                           key={b.label}
-                          className={`flex-1 flex flex-col items-center justify-between py-3 sm:py-5 px-1 sm:px-2 rounded-xl transition-colors ${
+                          onClick={() => { setWeeklySelectedDate(b.date); setWeeklyModalOpen(true); }}
+                          title={b.total > 0 ? `${b.total} consultation${b.total !== 1 ? 's' : ''} on ${b.label}` : `No consultations on ${b.label}`}
+                          className={`flex-1 flex flex-col items-center justify-between py-3 sm:py-5 px-1 sm:px-2 rounded-xl transition-colors cursor-pointer select-none ${
                             b.isToday
-                              ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25'
+                              ? 'bg-[#0EA5E9] shadow-md shadow-sky-500/25 hover:brightness-110'
                               : b.total > 0
-                                ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22]' : 'bg-white ring-1 ring-gray-300 shadow-sm'
-                                : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14]' : 'bg-gray-50 ring-1 ring-gray-300'
+                                ? isDark ? 'bg-white/[0.10] ring-1 ring-white/[0.22] hover:bg-white/[0.16]' : 'bg-white ring-1 ring-gray-300 shadow-sm hover:bg-sky-50 hover:ring-sky-300'
+                                : isDark ? 'bg-white/[0.05] ring-1 ring-white/[0.14] hover:bg-white/[0.09]' : 'bg-gray-50 ring-1 ring-gray-300 hover:bg-gray-100'
                           }`}
                         >
                           <span className={`text-[9px] sm:text-xs font-semibold uppercase tracking-wider leading-none ${
@@ -3552,17 +3565,12 @@ export default function ProfessorDashboard() {
               return (
                 <div className="space-y-8">
                   {groupByQuarter(historyItems).map(([quarter, items]) => {
-                    const completedCount   = items.filter(c => c.status === 'completed').length;
-                    const completionRate   = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
                     return (
                       <div key={quarter}>
                         {/* Term header + summary */}
                         <div className="flex items-center gap-3 mb-3 flex-wrap">
                           <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{quarter}</p>
-                          <span className={`text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
-                            {completionRate}% completed
-                          </span>
+                          <span className={`text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{items.length} session{items.length !== 1 ? 's' : ''}</span>
                         </div>
 
                         <div className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-[#252525] border-white/5' : 'bg-white border-gray-200 shadow-sm'}`}>
