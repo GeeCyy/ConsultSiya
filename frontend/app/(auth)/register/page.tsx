@@ -267,9 +267,9 @@ export default function RegisterPage() {
         </p>
 
         <div className="mt-10 flex items-center gap-3 relative z-10">
-          <div className="w-8 h-px bg-white/30 rounded" />
-          <p className="text-white/40 text-xs tracking-widest uppercase">Mapúa University SOIT</p>
-          <div className="w-8 h-px bg-white/30 rounded" />
+          <div className="w-8 h-px bg-white/50 rounded" />
+          <p className="text-white text-xs tracking-widest uppercase font-bold">© Mapúa University SOIT</p>
+          <div className="w-8 h-px bg-white/50 rounded" />
         </div>
       </div>
 
