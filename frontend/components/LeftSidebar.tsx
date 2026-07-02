@@ -324,7 +324,6 @@ export default function LeftSidebar({
       {/* ── Notification bell ── */}
       <div ref={notifRef} className="px-2 pt-2 pb-1">
         <button
-          data-tour="notifications"
           onClick={() => setNotifOpen(o => !o)}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${sbText} ${sbHover}`}
         >
@@ -349,7 +348,6 @@ export default function LeftSidebar({
           return (
             <button
               key={item.key}
-              data-tour={`nav-${item.key}`}
               onClick={() => handleTabChange(item.key)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left group ${
                 isActive
