@@ -942,6 +942,16 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
       return res.status(403).json({ error: 'Access denied.' });
     }
 
+    // Helper: push real-time proof notification to the professor (fire-and-forget)
+    const notifyProfessor = (consultationId) => {
+      pool.query(
+        `SELECT u.id AS user_id FROM consultations c JOIN professors p ON p.id = c.professor_id JOIN users u ON u.id = p.user_id WHERE c.id = $1`,
+        [consultationId]
+      ).then(r => {
+        if (r.rows[0]) notifModule.pushNotification(r.rows[0].user_id, { type: 'proof_submitted', consultation_id: consultationId });
+      }).catch(() => {});
+    };
+
     if (req.file) {
       // Remove old Cloudinary proof if it exists
       if (c.proof_type === 'file' && c.proof_of_evidence) {
@@ -974,6 +984,7 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
         `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'file' WHERE id = $2`,
         [secureUrl, id]
       );
+      notifyProfessor(Number(id));
       return res.json({ proof_of_evidence: secureUrl, proof_type: 'file' });
     }
 
@@ -987,6 +998,7 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
       `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'link' WHERE id = $2`,
       [link, id]
     );
+    notifyProfessor(Number(id));
     res.json({ proof_of_evidence: link, proof_type: 'link' });
   } catch (err) {
     console.error(err);

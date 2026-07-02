@@ -1093,7 +1093,7 @@ export default function ProfessorDashboard() {
       errorCount = 0;
       try {
         const data = JSON.parse(e.data);
-        if (data.type !== 'consultation_status_update') return;
+        if (data.type !== 'consultation_status_update' && data.type !== 'proof_submitted') return;
         api.get('/api/consultations', token!).then((c: unknown) => {
           setConsultations(Array.isArray(c) ? c : []);
         }).catch(() => {});
