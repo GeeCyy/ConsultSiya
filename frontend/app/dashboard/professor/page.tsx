@@ -1079,6 +1079,30 @@ export default function ProfessorDashboard() {
     if (tab === 'calendar' || tab === 'consultations') markMissed();
   }, [tab, authReady]);
 
+  // Subscribe to real-time consultation status changes via SSE
+  useEffect(() => {
+    if (!authReady || !token) return;
+    const es = new EventSource(
+      `${API_URL}/api/notifications/stream?token=${encodeURIComponent(token)}`
+    );
+    let errorCount = 0;
+    es.onmessage = (e) => {
+      errorCount = 0;
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type !== 'consultation_status_update') return;
+        api.get('/api/consultations', token!).then((c: unknown) => {
+          setConsultations(Array.isArray(c) ? c : []);
+        }).catch(() => {});
+      } catch { /* ignore malformed */ }
+    };
+    es.onerror = () => {
+      errorCount++;
+      if (errorCount >= 5) es.close();
+    };
+    return () => es.close();
+  }, [authReady, token]);
+
   // Weekly overview modal: intercept back button + Escape key
   useEffect(() => {
     if (!weeklyModalOpen) return;
