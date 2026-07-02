@@ -123,6 +123,9 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT f
 -- In-session flag: professor marks consultation as actively in progress
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS in_session BOOLEAN DEFAULT FALSE;
 
+-- Session start timestamp: survives page refreshes so the timer resumes from the correct elapsed time
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS session_started_at TIMESTAMPTZ;
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

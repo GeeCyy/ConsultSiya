@@ -586,7 +586,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1, in_session = false WHERE id = $2`,
+      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1, in_session = false, session_started_at = NULL WHERE id = $2`,
       [cancel_reason?.trim() || null, id]
     );
 
@@ -696,7 +696,7 @@ router.patch('/:id/complete', authenticate, authorize('professor'), async (req, 
       return res.status(400).json({ error: 'Cannot complete a cancelled consultation.' });
     }
 
-    await pool.query(`UPDATE consultations SET status = 'completed', in_session = false WHERE id = $1`, [id]);
+    await pool.query(`UPDATE consultations SET status = 'completed', in_session = false, session_started_at = NULL WHERE id = $1`, [id]);
 
     // Clear professor-level session if this was the active consultation
     try {
@@ -1008,9 +1008,13 @@ router.patch('/:id/in-session', authenticate, authorize('professor'), async (req
       return res.status(409).json({ error: 'You are already in a session. End the current session first.' });
     }
 
-    // Update per-consultation flag
+    // Update per-consultation flag + record/clear the wall-clock start time
     const result = await pool.query(
-      `UPDATE consultations SET in_session = $1 WHERE id = $2 RETURNING id, in_session`,
+      `UPDATE consultations
+       SET in_session = $1,
+           session_started_at = CASE WHEN $1 THEN NOW() ELSE NULL END
+       WHERE id = $2
+       RETURNING id, in_session, session_started_at`,
       [!!in_session, id]
     );
 
@@ -1023,7 +1027,7 @@ router.patch('/:id/in-session', authenticate, authorize('professor'), async (req
     // If ending, clear any other stale in_session flags for this professor
     if (!in_session) {
       await pool.query(
-        `UPDATE consultations SET in_session = false WHERE professor_id = $1 AND in_session = true AND id != $2`,
+        `UPDATE consultations SET in_session = false, session_started_at = NULL WHERE professor_id = $1 AND in_session = true AND id != $2`,
         [profRow.id, id]
       );
     }

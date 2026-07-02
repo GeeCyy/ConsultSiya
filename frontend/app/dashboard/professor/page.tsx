@@ -119,6 +119,7 @@ type Consultation = {
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
   in_session?: boolean;
+  session_started_at?: string | null;
 };
 
 type TimeRange = { time_start: string; time_end: string };
@@ -1027,6 +1028,17 @@ export default function ProfessorDashboard() {
     return () => { if (sessionTimerRef.current) clearInterval(sessionTimerRef.current); };
   }, [sessionStartAt]);
 
+  // Seed the timer from the DB timestamp so the elapsed time survives page refreshes.
+  // Runs whenever consultations load or are refreshed; derives sessionStartAt from
+  // the stored session_started_at rather than relying on a click timestamp.
+  useEffect(() => {
+    const active = consultations.find(c => c.in_session && c.session_started_at);
+    setSessionStartAt(active?.session_started_at
+      ? new Date(active.session_started_at).getTime()
+      : null
+    );
+  }, [consultations]);
+
   // navScrolled is driven by onScroll on the <main> element — no useEffect needed
 
   // Auth guard — confirm token + role before rendering anything
@@ -1317,11 +1329,17 @@ export default function ProfessorDashboard() {
       const next = !c.in_session;
       const data = await api.patch(`/api/consultations/${c.id}/in-session`, { in_session: next }, token!);
       if (data.error) { toast.error(data.error); return; }
+      // Persist session_started_at in local state so the consultations useEffect
+      // keeps sessionStartAt in sync without needing another fetch.
       setConsultations(prev => prev.map(x =>
-        x.id === c.id ? { ...x, in_session: next } : (next ? x : { ...x, in_session: false })
+        x.id === c.id
+          ? { ...x, in_session: next, session_started_at: data.session_started_at ?? null }
+          : (next ? x : { ...x, in_session: false, session_started_at: null })
       ));
+      // Also set sessionStartAt directly so the timer responds immediately
+      // (the consultations useEffect will arrive at the same value on its next run).
       if (next) {
-        setSessionStartAt(Date.now());
+        setSessionStartAt(data.session_started_at ? new Date(data.session_started_at).getTime() : Date.now());
       } else {
         setSessionStartAt(null);
       }

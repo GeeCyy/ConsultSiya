@@ -288,6 +288,10 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] consultations.notes column ready'))
     .catch(err => console.error('[startup] consultations.notes migration failed:', err.message));
 
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS session_started_at TIMESTAMPTZ`)
+    .then(() => console.log('[startup] consultations.session_started_at column ready'))
+    .catch(err => console.error('[startup] consultations.session_started_at migration failed:', err.message));
+
   pool.query(`
     CREATE TABLE IF NOT EXISTS notifications (
       id         SERIAL PRIMARY KEY,
