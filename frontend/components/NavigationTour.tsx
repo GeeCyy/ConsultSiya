@@ -11,6 +11,7 @@ const TOUR_DONE_KEYS = {
 const PAD = 8;
 const TOOLTIP_WIDTH = 288;
 const TOOLTIP_H_EST = 210; // generous estimate for clamping
+const TOP_MIN = 76; // never overlap the fixed 64px top navbar
 
 interface TourStep {
   title: string;
@@ -342,14 +343,14 @@ export default function NavigationTour({
     // Right of element
     const rightOfEl = sp.left + sp.width + 12;
     if (rightOfEl + TOOLTIP_WIDTH <= vw - 12) {
-      const top = Math.max(12, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
+      const top = Math.max(TOP_MIN, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
       return { style: { position: 'fixed', top, left: rightOfEl, width: TOOLTIP_WIDTH }, placement: 'right', arrowPx: spMidY - top };
     }
 
     // Left of element
     const leftOfEl = sp.left - TOOLTIP_WIDTH - 12;
     if (leftOfEl >= 12) {
-      const top = Math.max(12, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
+      const top = Math.max(TOP_MIN, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
       return { style: { position: 'fixed', top, left: leftOfEl, width: TOOLTIP_WIDTH }, placement: 'left', arrowPx: spMidY - top };
     }
 
