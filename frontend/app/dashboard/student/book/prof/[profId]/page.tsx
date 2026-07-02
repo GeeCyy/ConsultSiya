@@ -988,52 +988,26 @@ export default function BookProfPage() {
 
                     {proofPanelId === c.id && (
                       <div className={`mt-2 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                        <div className="flex gap-2 mb-3">
-                          {(['link', 'file'] as const).map(m => (
-                            <button key={m} onClick={() => { setProofMode(m); setProofSelectedFile(null); setProofLinkValue(''); setProofLinkError(''); }}
-                              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${proofMode === m ? 'bg-violet-500 text-white' : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
-                              {m === 'link' ? 'Share Link' : 'Upload File'}
-                            </button>
-                          ))}
-                        </div>
-                        {proofMode === 'link' ? (
-                          <>
-                            <div className="flex gap-2">
-                              <input type="url" value={proofLinkValue}
-                                onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
-                                placeholder="https://drive.google.com/…"
-                                className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
-                                  proofLinkError
-                                    ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                    : isDark
-                                      ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
-                                      : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
-                                }`}
-                              />
-                              <button onClick={() => handleProofLinkSubmit(c.id)}
-                                disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
-                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                                {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
-                              </button>
-                            </div>
-                            {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
-                            <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
-                          </>
-                        ) : proofSelectedFile ? (
-                          <div className="flex items-center gap-2">
-                            <span className={`flex-1 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{proofSelectedFile.name}</span>
-                            <button onClick={() => setProofSelectedFile(null)} className={`text-xs ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>✕</button>
-                            <button onClick={() => handleProofSubmitFile(c.id)} disabled={submittingProofId === c.id}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                              {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
-                            </button>
-                          </div>
-                        ) : (
-                          <button onClick={() => proofFileRef.current?.click()}
-                            className={`w-full py-3 rounded-xl border-2 border-dashed text-xs font-medium transition-colors ${isDark ? 'border-white/10 text-gray-500 hover:border-violet-500/40 hover:text-violet-400' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-600'}`}>
-                            Click to upload PDF, JPG, or PNG (max 10 MB)
+                        <div className="flex gap-2">
+                          <input type="url" value={proofLinkValue}
+                            onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
+                            placeholder="https://drive.google.com/…"
+                            className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
+                              proofLinkError
+                                ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                : isDark
+                                  ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
+                                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
+                            }`}
+                          />
+                          <button onClick={() => handleProofLinkSubmit(c.id)}
+                            disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                            {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
                           </button>
-                        )}
+                        </div>
+                        {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
+                        <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
                       </div>
                     )}
                   </div>
