@@ -2051,7 +2051,9 @@ export default function ProfessorDashboard() {
             .sort((a,b) => (a.time || a.time_start).localeCompare(b.time || b.time_start));
           return { label: lbl, dateStr: ds, dateObj: d, items, isToday: ds === todayStr };
         });
-        const totalCount = weekDays.reduce((acc, d) => acc + d.items.length, 0);
+        const visibleDays = weeklySelectedDate ? weekDays.filter(d => d.dateStr === weeklySelectedDate) : weekDays;
+        const totalCount = visibleDays.reduce((acc, d) => acc + d.items.length, 0);
+        const selectedDay = weeklySelectedDate ? weekDays.find(d => d.dateStr === weeklySelectedDate) : null;
         return (
           <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4" onClick={() => { setWeeklyModalOpen(false); setWeeklySelectedDate(null); }}>
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -2068,25 +2070,49 @@ export default function ProfessorDashboard() {
               </div>
               {/* Header */}
               <div className={`flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
-                <div>
-                  <h2 className={`text-base sm:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Weekly Overview</h2>
-                  <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {mon.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} –{' '}
-                    {new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    {totalCount > 0 && <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>{totalCount} total</span>}
-                  </p>
+                <div className="flex items-center gap-3 min-w-0">
+                  {weeklySelectedDate && (
+                    <button
+                      onClick={() => setWeeklySelectedDate(null)}
+                      className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                      title="Back to full week"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+                  )}
+                  <div>
+                    <h2 className={`text-base sm:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {selectedDay
+                        ? `${selectedDay.label} — ${selectedDay.dateObj.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                        : 'Weekly Overview'}
+                    </h2>
+                    <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {selectedDay ? (
+                        <>
+                          {totalCount > 0
+                            ? <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>{totalCount} consultation{totalCount !== 1 ? 's' : ''}</span>
+                            : 'No consultations this day'}
+                        </>
+                      ) : (
+                        <>
+                          {mon.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} –{' '}
+                          {new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {totalCount > 0 && <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>{totalCount} total</span>}
+                        </>
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <button onClick={() => { setWeeklyModalOpen(false); setWeeklySelectedDate(null); }} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                <button onClick={() => { setWeeklyModalOpen(false); setWeeklySelectedDate(null); }} className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
               </div>
               {/* Body */}
               <div className="overflow-y-auto flex-1 px-3 sm:px-5 py-3 sm:py-4 space-y-3">
-                {weekDays.map(day => (
+                {visibleDays.map(day => (
                   <div
                     key={day.dateStr}
                     id={`wday-${day.dateStr}`}
-                    ref={el => { if (el && weeklySelectedDate === day.dateStr) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); }}
                     className={`rounded-xl overflow-hidden border transition-shadow ${
                       weeklySelectedDate === day.dateStr
                         ? isDark ? 'border-sky-400/50 shadow-[0_0_0_2px_rgba(56,189,248,0.25)]' : 'border-sky-400 shadow-[0_0_0_2px_rgba(14,165,233,0.15)]'
