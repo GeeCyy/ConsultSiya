@@ -941,49 +941,24 @@ export default function BookProfPage() {
           </div>
         </div>
 
-        {/* My Consultations with this professor */}
+        {/* My Consultations with this professor — proof only */}
         {myConsults.length > 0 && (
           <div className="mt-8">
             <h2 className={`text-base font-bold mb-3 ${tp}`}>My Consultations with {professor.professor_name}</h2>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {myConsults.map(c => {
-                const statusColor = ({
-                  pending:     isDark ? 'bg-amber-500/10 text-amber-400'   : 'bg-amber-50 text-amber-700',
-                  confirmed:   isDark ? 'bg-sky-500/10 text-sky-400'       : 'bg-sky-50 text-sky-700',
-                  completed:   isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700',
-                  missed:      isDark ? 'bg-red-500/10 text-red-400'       : 'bg-red-50 text-red-700',
-                  rescheduled: isDark ? 'bg-violet-500/10 text-violet-400' : 'bg-violet-50 text-violet-700',
-                } as Record<string, string>)[c.status] ?? (isDark ? 'bg-gray-500/10 text-gray-400' : 'bg-gray-50 text-gray-600');
-
                 const timeStr = (c.time || c.time_start || '').slice(0, 5);
-                const nature = (() => {
-                  try { const p = JSON.parse(c.nature_of_advising ?? ''); return Array.isArray(p) ? p.join(', ') : c.nature_of_advising; }
-                  catch { return c.nature_of_advising; }
-                })();
-
+                const dateLabel = c.date
+                  ? new Date(c.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+                  : '—';
                 return (
-                  <div key={c.id} className={`rounded-2xl border p-4 ${card}`}>
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="min-w-0">
-                        <p className={`text-sm font-semibold ${tp}`}>
-                          {c.date ? new Date(c.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                          {timeStr && ` · ${formatTime12(timeStr)}`}
-                        </p>
-                        {nature && <p className={`text-xs mt-0.5 truncate ${ts}`}>{nature}</p>}
-                      </div>
-                      <span className={`flex-shrink-0 text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${statusColor}`}>
-                        {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
-                      </span>
-                    </div>
-
-                    {/* Proof section */}
-                    <div className={`pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                  <div key={c.id}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`text-xs ${ts}`}>{dateLabel}{timeStr ? ` · ${formatTime12(timeStr)}` : ''}</span>
                       {c.proof_of_evidence ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                        <>
+                          <span className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             Proof Submitted
                           </span>
                           {c.proof_type === 'link' ? (
@@ -1001,68 +976,66 @@ export default function BookProfPage() {
                             className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}>
                             Replace
                           </button>
-                        </div>
+                        </>
                       ) : (
                         <button onClick={() => openProofPanel(c.id)}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'}`}>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                          </svg>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                           Submit Proof of Evidence
                         </button>
                       )}
+                    </div>
 
-                      {proofPanelId === c.id && (
-                        <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                          <div className="flex gap-2 mb-3">
-                            {(['link', 'file'] as const).map(m => (
-                              <button key={m} onClick={() => { setProofMode(m); setProofSelectedFile(null); setProofLinkValue(''); setProofLinkError(''); }}
-                                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${proofMode === m ? 'bg-violet-500 text-white' : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
-                                {m === 'link' ? 'Share Link' : 'Upload File'}
-                              </button>
-                            ))}
-                          </div>
-                          {proofMode === 'link' ? (
-                            <>
-                              <div className="flex gap-2">
-                                <input type="url" value={proofLinkValue}
-                                  onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
-                                  placeholder="https://drive.google.com/…"
-                                  className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
-                                    proofLinkError
-                                      ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                      : isDark
-                                        ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
-                                        : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
-                                  }`}
-                                />
-                                <button onClick={() => handleProofLinkSubmit(c.id)}
-                                  disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
-                                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                                  {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
-                                </button>
-                              </div>
-                              {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
-                              <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
-                            </>
-                          ) : proofSelectedFile ? (
-                            <div className="flex items-center gap-2">
-                              <span className={`flex-1 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{proofSelectedFile.name}</span>
-                              <button onClick={() => setProofSelectedFile(null)} className={`text-xs ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>✕</button>
-                              <button onClick={() => handleProofSubmitFile(c.id)} disabled={submittingProofId === c.id}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                    {proofPanelId === c.id && (
+                      <div className={`mt-2 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
+                        <div className="flex gap-2 mb-3">
+                          {(['link', 'file'] as const).map(m => (
+                            <button key={m} onClick={() => { setProofMode(m); setProofSelectedFile(null); setProofLinkValue(''); setProofLinkError(''); }}
+                              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${proofMode === m ? 'bg-violet-500 text-white' : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                              {m === 'link' ? 'Share Link' : 'Upload File'}
+                            </button>
+                          ))}
+                        </div>
+                        {proofMode === 'link' ? (
+                          <>
+                            <div className="flex gap-2">
+                              <input type="url" value={proofLinkValue}
+                                onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
+                                placeholder="https://drive.google.com/…"
+                                className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
+                                  proofLinkError
+                                    ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                    : isDark
+                                      ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
+                                      : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
+                                }`}
+                              />
+                              <button onClick={() => handleProofLinkSubmit(c.id)}
+                                disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
                                 {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
                               </button>
                             </div>
-                          ) : (
-                            <button onClick={() => proofFileRef.current?.click()}
-                              className={`w-full py-3 rounded-xl border-2 border-dashed text-xs font-medium transition-colors ${isDark ? 'border-white/10 text-gray-500 hover:border-violet-500/40 hover:text-violet-400' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-600'}`}>
-                              Click to upload PDF, JPG, or PNG (max 10 MB)
+                            {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
+                            <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
+                          </>
+                        ) : proofSelectedFile ? (
+                          <div className="flex items-center gap-2">
+                            <span className={`flex-1 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{proofSelectedFile.name}</span>
+                            <button onClick={() => setProofSelectedFile(null)} className={`text-xs ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>✕</button>
+                            <button onClick={() => handleProofSubmitFile(c.id)} disabled={submittingProofId === c.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                              {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
                             </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => proofFileRef.current?.click()}
+                            className={`w-full py-3 rounded-xl border-2 border-dashed text-xs font-medium transition-colors ${isDark ? 'border-white/10 text-gray-500 hover:border-violet-500/40 hover:text-violet-400' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-600'}`}>
+                            Click to upload PDF, JPG, or PNG (max 10 MB)
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
