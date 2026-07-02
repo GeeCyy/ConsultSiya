@@ -3,8 +3,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+const PROOF_LINK_PREFIXES = [
+  'https://drive.google.com/',
+  'https://docs.google.com/',
+  'https://onedrive.live.com/',
+  'https://1drv.ms/',
+];
+const isValidProofLink = (url: string) => PROOF_LINK_PREFIXES.some(p => url.startsWith(p));
+
+type MyConsult = {
+  id: number;
+  date: string;
+  time?: string | null;
+  time_start?: string;
+  status: string;
+  nature_of_advising: string | null;
+  proof_of_evidence: string | null;
+  proof_type: 'file' | 'link' | null;
+  professor_id: number;
+};
 
 const NATURE_OPTIONS = [
   'Thesis/Design Subject concerns',
@@ -167,6 +188,17 @@ export default function BookSlotPage() {
   const isDark = mounted ? _isDark : false;
 
   const preferredTimeRef = useRef<HTMLDivElement>(null);
+  const proofFileRef = useRef<HTMLInputElement>(null);
+
+  const { toasts, toast, removeToast } = useToast();
+  const [myConsults, setMyConsults] = useState<MyConsult[]>([]);
+  const [proofPanelId, setProofPanelId] = useState<number | null>(null);
+  const [proofMode, setProofMode] = useState<'link' | 'file'>('link');
+  const [proofLinkValue, setProofLinkValue] = useState('');
+  const [proofLinkError, setProofLinkError] = useState('');
+  const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
+  const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
+  const [viewingFile, setViewingFile] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -215,6 +247,87 @@ export default function BookSlotPage() {
       setLoadingSlot(false);
     }).catch(() => { setNotFound(true); setLoadingSlot(false); });
   }, [authReady, token, slotId]);
+
+  useEffect(() => {
+    if (!authReady || !token || !slot) return;
+    api.get('/api/consultations', token).then((data: unknown) => {
+      if (Array.isArray(data)) {
+        setMyConsults(data.filter((c: MyConsult) => c.professor_id === slot.professor_id && c.status !== 'cancelled'));
+      }
+    }).catch(() => {});
+  }, [authReady, token, slot]);
+
+  const validateProofFile = (file: File): boolean => {
+    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (!allowedExt.includes(ext)) { toast.error('Only PDF, JPG, and PNG files are allowed.'); return false; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('File must be under 10 MB.'); return false; }
+    return true;
+  };
+
+  const handleProofFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !validateProofFile(file)) return;
+    setProofSelectedFile(file);
+  };
+
+  const handleProofSubmitFile = async (id: number) => {
+    const file = proofSelectedFile;
+    if (!file) return;
+    setSubmittingProofId(id);
+    const formData = new FormData();
+    formData.append('proof', file);
+    try {
+      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
+      });
+      const data = await res.json();
+      if (data.error) { toast.error(data.error); return; }
+      toast.success('Proof of evidence submitted!');
+      setProofPanelId(null);
+      setProofSelectedFile(null);
+      setMyConsults(prev => prev.map(c => c.id === id ? { ...c, proof_of_evidence: data.proof_of_evidence, proof_type: data.proof_type } : c));
+    } finally { setSubmittingProofId(null); }
+  };
+
+  const handleProofLinkSubmit = async (id: number) => {
+    const link = proofLinkValue.trim();
+    if (!link) { toast.error('Please enter a valid link.'); return; }
+    if (!isValidProofLink(link)) { setProofLinkError('Must be a Google Drive or OneDrive link.'); return; }
+    setProofLinkError('');
+    setSubmittingProofId(id);
+    try {
+      const data = await api.post(`/api/consultations/${id}/proof`, { link }, token!);
+      if (data.error) { toast.error(data.error); return; }
+      toast.success('Proof link submitted!');
+      setProofPanelId(null);
+      setProofLinkValue('');
+      setMyConsults(prev => prev.map(c => c.id === id ? { ...c, proof_of_evidence: data.proof_of_evidence, proof_type: data.proof_type } : c));
+    } finally { setSubmittingProofId(null); }
+  };
+
+  const handleViewFile = async (id: number) => {
+    setViewingFile(id);
+    try {
+      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Could not open file.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } finally { setViewingFile(null); }
+  };
+
+  const openProofPanel = (id: number) => {
+    setProofPanelId(proofPanelId === id ? null : id);
+    setProofLinkValue('');
+    setProofLinkError('');
+    setProofSelectedFile(null);
+    setProofMode('link');
+  };
 
   const toggleNature = (opt: string) => {
     setBookForm(f => {
@@ -296,6 +409,7 @@ export default function BookSlotPage() {
   const takenInfo = bookedTimes[`${slot.id}-${bookForm.date}`] ?? { booked: {} as Record<string, { booked_count: number; topics: string[] }>, blocked: [] as string[] };
 
   return (
+    <>
     <div className="min-h-screen" style={{ backgroundColor: pageBg }}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
 
@@ -684,7 +798,140 @@ export default function BookSlotPage() {
           </div>
         </div>
 
+        {/* My Consultations with this professor */}
+        {myConsults.length > 0 && (
+          <div className="mt-8">
+            <h2 className={`text-base font-bold mb-3 ${tp}`}>My Consultations with {slot.professor_name}</h2>
+            <div className="space-y-3">
+              {myConsults.map(c => {
+                const statusColor = ({
+                  pending:     isDark ? 'bg-amber-500/10 text-amber-400'   : 'bg-amber-50 text-amber-700',
+                  confirmed:   isDark ? 'bg-sky-500/10 text-sky-400'       : 'bg-sky-50 text-sky-700',
+                  completed:   isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700',
+                  missed:      isDark ? 'bg-red-500/10 text-red-400'       : 'bg-red-50 text-red-700',
+                  rescheduled: isDark ? 'bg-violet-500/10 text-violet-400' : 'bg-violet-50 text-violet-700',
+                } as Record<string, string>)[c.status] ?? (isDark ? 'bg-gray-500/10 text-gray-400' : 'bg-gray-50 text-gray-600');
+
+                const timeStr = (c.time || c.time_start || '').slice(0, 5);
+                const nature = (() => {
+                  try { const p = JSON.parse(c.nature_of_advising ?? ''); return Array.isArray(p) ? p.join(', ') : c.nature_of_advising; }
+                  catch { return c.nature_of_advising; }
+                })();
+
+                return (
+                  <div key={c.id} className={`rounded-2xl border p-4 ${card}`}>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${tp}`}>
+                          {c.date ? new Date(c.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                          {timeStr && ` · ${formatTime12(timeStr)}`}
+                        </p>
+                        {nature && <p className={`text-xs mt-0.5 truncate ${ts}`}>{nature}</p>}
+                      </div>
+                      <span className={`flex-shrink-0 text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${statusColor}`}>
+                        {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                      </span>
+                    </div>
+
+                    {/* Proof section */}
+                    <div className={`pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                      {c.proof_of_evidence ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Proof Submitted
+                          </span>
+                          {c.proof_type === 'link' ? (
+                            <a href={c.proof_of_evidence} target="_blank" rel="noopener noreferrer"
+                              className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                              View Link →
+                            </a>
+                          ) : (
+                            <button onClick={() => handleViewFile(c.id)} disabled={viewingFile === c.id}
+                              className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                              {viewingFile === c.id ? '…' : 'View File'}
+                            </button>
+                          )}
+                          <button onClick={() => openProofPanel(c.id)}
+                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}>
+                            Replace
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => openProofPanel(c.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'}`}>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                          Submit Proof of Evidence
+                        </button>
+                      )}
+
+                      {proofPanelId === c.id && (
+                        <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
+                          <div className="flex gap-2 mb-3">
+                            {(['link', 'file'] as const).map(m => (
+                              <button key={m} onClick={() => { setProofMode(m); setProofSelectedFile(null); setProofLinkValue(''); setProofLinkError(''); }}
+                                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${proofMode === m ? 'bg-violet-500 text-white' : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                                {m === 'link' ? 'Share Link' : 'Upload File'}
+                              </button>
+                            ))}
+                          </div>
+                          {proofMode === 'link' ? (
+                            <>
+                              <div className="flex gap-2">
+                                <input type="url" value={proofLinkValue}
+                                  onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
+                                  placeholder="https://drive.google.com/…"
+                                  className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
+                                    proofLinkError
+                                      ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                      : isDark
+                                        ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
+                                        : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
+                                  }`}
+                                />
+                                <button onClick={() => handleProofLinkSubmit(c.id)}
+                                  disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
+                                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                                  {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
+                                </button>
+                              </div>
+                              {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
+                              <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
+                            </>
+                          ) : proofSelectedFile ? (
+                            <div className="flex items-center gap-2">
+                              <span className={`flex-1 text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{proofSelectedFile.name}</span>
+                              <button onClick={() => setProofSelectedFile(null)} className={`text-xs ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}>✕</button>
+                              <button onClick={() => handleProofSubmitFile(c.id)} disabled={submittingProofId === c.id}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                                {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={() => proofFileRef.current?.click()}
+                              className={`w-full py-3 rounded-xl border-2 border-dashed text-xs font-medium transition-colors ${isDark ? 'border-white/10 text-gray-500 hover:border-violet-500/40 hover:text-violet-400' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-600'}`}>
+                              Click to upload PDF, JPG, or PNG (max 10 MB)
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
+
       </div>
     </div>
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </>
   );
 }
