@@ -21,6 +21,7 @@ import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardC
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Ban, Trash2, UserCheck, Users, BarChart3, ClipboardList } from 'lucide-react';
 import ChatbotWidget from '@/components/ChatbotWidget';
+import NavigationTour from '@/components/NavigationTour';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -1055,6 +1056,7 @@ export default function AdminDashboard() {
             return (
               <button
                 key={item.key}
+                data-tour={`nav-${item.key}`}
                 onClick={() => setTab(item.key as Tab)}
                 className={`relative flex items-center gap-1.5 rounded-lg text-[14px] font-semibold whitespace-nowrap transition-colors px-2.5 pt-2 pb-3 flex-shrink-0 ${
                   isActive
@@ -1085,6 +1087,7 @@ export default function AdminDashboard() {
           {/* Notification bell */}
           <div className="relative" ref={topNavNotifRef}>
             <button
+              data-tour="notifications"
               onClick={() => setTopNavNotifOpen(o => !o)}
               className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
             >
@@ -3305,6 +3308,7 @@ export default function AdminDashboard() {
       />
 
       <ChatbotWidget token={token} role="admin" />
+      <NavigationTour isDark={isDark} role="admin" />
     </div>
   );
 }
