@@ -284,6 +284,11 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
             `${studentName} booked a consultation on ${fmtDate}`,
             { consultation_id: result.rows[0].id, student_name: studentName, date, route: 'consultations' }
           );
+          notifModule.pushNotification(profUserRow.rows[0].user_id, {
+            type: 'consultation_status_update',
+            consultation_id: result.rows[0].id,
+            status: 'pending',
+          });
         }
 
         // Notify all admins (fire-and-forget)
@@ -512,6 +517,11 @@ router.patch('/:id/confirm', authenticate, authorize('professor'), async (req, r
           `Your consultation with ${professor_name} on ${fmtDate} was confirmed`,
           { consultation_id: Number(id), professor_name, date, route: 'my' }
         );
+        notifModule.pushNotification(student_user_id, {
+          type: 'consultation_status_update',
+          consultation_id: Number(id),
+          status: 'confirmed',
+        });
       }
     } catch { /* best-effort */ }
 
@@ -630,12 +640,22 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
             `Your consultation with ${professor_name} on ${fmtDate} was cancelled`,
             { consultation_id: Number(id), professor_name, date, route: 'my' }
           );
+          notifModule.pushNotification(student_user_id, {
+            type: 'consultation_status_update',
+            consultation_id: Number(id),
+            status: 'cancelled',
+          });
         } else {
           await notifModule.insertAndPush(
             prof_user_id, 'cancelled',
             `${student_name} cancelled their consultation on ${fmtDate}`,
             { consultation_id: Number(id), student_name, date, route: 'consultations' }
           );
+          notifModule.pushNotification(prof_user_id, {
+            type: 'consultation_status_update',
+            consultation_id: Number(id),
+            status: 'cancelled',
+          });
         }
       }
     } catch { /* best-effort */ }
@@ -760,6 +780,11 @@ router.patch('/:id/complete', authenticate, authorize('professor'), async (req, 
           `Your consultation with ${professor_name} on ${fmtDate} was completed`,
           { consultation_id: Number(id), professor_name, date, route: 'my' }
         );
+        notifModule.pushNotification(student_user_id, {
+          type: 'consultation_status_update',
+          consultation_id: Number(id),
+          status: 'completed',
+        });
       }
     } catch { /* best-effort */ }
 
@@ -839,6 +864,31 @@ router.patch('/:id/reschedule', authenticate, authorize('professor'), async (req
        VALUES ($1, 'Referred to', $2, $3, $4)`,
       [id, referral || null, referral_specify || null, remarks || null]
     );
+
+    // Notify student + push real-time status update
+    try {
+      const row = await pool.query(`
+        SELECT s.user_id AS student_user_id, p.full_name AS professor_name, c.date::text AS date
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN professors p ON c.professor_id = p.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        const { student_user_id, professor_name, date } = row.rows[0];
+        const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        await notifModule.insertAndPush(
+          student_user_id, 'status_update',
+          `Your consultation with ${professor_name} on ${fmtDate} was rescheduled`,
+          { consultation_id: Number(id), professor_name, date, route: 'my' }
+        );
+        notifModule.pushNotification(student_user_id, {
+          type: 'consultation_status_update',
+          consultation_id: Number(id),
+          status: 'rescheduled',
+        });
+      }
+    } catch { /* best-effort */ }
 
     // Email student — best-effort
     try {

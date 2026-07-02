@@ -775,13 +775,26 @@ export default function StudentDashboard() {
       errorCount = 0;
       try {
         const data = JSON.parse(e.data);
-        if (data.type !== 'professor_session_update') return;
-        const { professor_id, in_session: inSession } = data as { professor_id: number; in_session: boolean };
-        setProfessorInSession(prev => ({ ...prev, [professor_id]: inSession }));
-        if (!inSession) {
-          setConsultations(prev => prev.map(c =>
-            c.professor_id === professor_id ? { ...c, in_session: false } : c
-          ));
+        if (data.type === 'professor_session_update') {
+          const { professor_id, in_session: inSession } = data as { professor_id: number; in_session: boolean };
+          setProfessorInSession(prev => ({ ...prev, [professor_id]: inSession }));
+          if (!inSession) {
+            setConsultations(prev => prev.map(c =>
+              c.professor_id === professor_id ? { ...c, in_session: false } : c
+            ));
+          }
+        } else if (data.type === 'consultation_status_update') {
+          api.get('/api/consultations', token!).then((consult: unknown) => {
+            const freshConsults: Consultation[] = Array.isArray(consult) ? consult : [];
+            setConsultations(freshConsults);
+            const sessionMap: Record<number, boolean> = {};
+            for (const c of freshConsults) {
+              if ((c.in_session || c.prof_in_session) && c.status === 'confirmed') {
+                sessionMap[c.professor_id] = true;
+              }
+            }
+            setProfessorInSession(sessionMap);
+          }).catch(() => {});
         }
       } catch { /* ignore malformed */ }
     };
