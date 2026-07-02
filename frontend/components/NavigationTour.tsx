@@ -340,28 +340,33 @@ export default function NavigationTour({
     const spMidY = sp.top  + sp.height / 2;
     const spMidX = sp.left + sp.width  / 2;
 
-    // Right of element
-    const rightOfEl = sp.left + sp.width + 12;
-    if (rightOfEl + TOOLTIP_WIDTH <= vw - 12) {
-      const top = Math.max(TOP_MIN, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
-      return { style: { position: 'fixed', top, left: rightOfEl, width: TOOLTIP_WIDTH }, placement: 'right', arrowPx: spMidY - top };
+    // Force below for top-navbar elements so the card never overlaps the bar
+    const inNavbar = sp.top + sp.height <= TOP_MIN + 16;
+
+    if (!inNavbar) {
+      // Right of element
+      const rightOfEl = sp.left + sp.width + 12;
+      if (rightOfEl + TOOLTIP_WIDTH <= vw - 12) {
+        const top = Math.max(TOP_MIN, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
+        return { style: { position: 'fixed', top, left: rightOfEl, width: TOOLTIP_WIDTH }, placement: 'right', arrowPx: spMidY - top };
+      }
+
+      // Left of element
+      const leftOfEl = sp.left - TOOLTIP_WIDTH - 12;
+      if (leftOfEl >= 12) {
+        const top = Math.max(TOP_MIN, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
+        return { style: { position: 'fixed', top, left: leftOfEl, width: TOOLTIP_WIDTH }, placement: 'left', arrowPx: spMidY - top };
+      }
+
+      // Above element
+      const aboveTop = sp.top - TOOLTIP_H_EST - 12;
+      if (aboveTop >= 12) {
+        const left = Math.max(12, Math.min(spMidX - TOOLTIP_WIDTH / 2, vw - TOOLTIP_WIDTH - 12));
+        return { style: { position: 'fixed', top: aboveTop, left, width: TOOLTIP_WIDTH }, placement: 'above', arrowPx: spMidX - left };
+      }
     }
 
-    // Left of element
-    const leftOfEl = sp.left - TOOLTIP_WIDTH - 12;
-    if (leftOfEl >= 12) {
-      const top = Math.max(TOP_MIN, Math.min(spMidY - 100, vh - TOOLTIP_H_EST - 12));
-      return { style: { position: 'fixed', top, left: leftOfEl, width: TOOLTIP_WIDTH }, placement: 'left', arrowPx: spMidY - top };
-    }
-
-    // Above element
-    const aboveTop = sp.top - TOOLTIP_H_EST - 12;
-    if (aboveTop >= 12) {
-      const left = Math.max(12, Math.min(spMidX - TOOLTIP_WIDTH / 2, vw - TOOLTIP_WIDTH - 12));
-      return { style: { position: 'fixed', top: aboveTop, left, width: TOOLTIP_WIDTH }, placement: 'above', arrowPx: spMidX - left };
-    }
-
-    // Below (fallback)
+    // Below (fallback + navbar elements)
     const left = Math.max(12, Math.min(spMidX - TOOLTIP_WIDTH / 2, vw - TOOLTIP_WIDTH - 12));
     const top  = Math.min(sp.top + sp.height + 12, vh - TOOLTIP_H_EST - 12);
     return { style: { position: 'fixed', top, left, width: TOOLTIP_WIDTH }, placement: 'below', arrowPx: spMidX - left };
