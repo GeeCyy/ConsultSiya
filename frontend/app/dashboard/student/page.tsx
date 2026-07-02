@@ -2163,13 +2163,6 @@ export default function StudentDashboard() {
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 )}
-                <button onClick={handleDownloadSlip} disabled={downloadingSlip === -1}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10 ring-1 ring-white/10' : 'bg-white text-gray-600 hover:bg-gray-50 ring-1 ring-gray-200 shadow-sm'}`}>
-                  {downloadingSlip === -1
-                    ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
-                  Download Consultation Form Template
-                </button>
               </div>
             </div>
 
@@ -2336,25 +2329,7 @@ export default function StudentDashboard() {
                               Replace
                             </button>
                           </div>
-                        ) : (
-                          <>
-                            <p className={`text-xs mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              💡 You may save your consultation form to Google Drive or OneDrive and submit it as a shareable link.
-                            </p>
-                            <button
-                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                isDark
-                                  ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20'
-                                  : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'
-                              }`}>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                              </svg>
-                              Submit Proof of Evidence
-                            </button>
-                          </>
-                        )}
+                        ) : null}
 
                         {/* Expandable proof submission panel */}
                         {proofPanelId === c.id && (
