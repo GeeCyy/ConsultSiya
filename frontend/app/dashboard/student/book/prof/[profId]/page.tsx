@@ -1015,7 +1015,7 @@ export default function BookProfPage() {
 
       </div>
     </div>
-    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   );
 }

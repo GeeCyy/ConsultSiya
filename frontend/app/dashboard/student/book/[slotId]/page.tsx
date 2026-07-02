@@ -899,7 +899,7 @@ export default function BookSlotPage() {
 
       </div>
     </div>
-    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   );
 }
