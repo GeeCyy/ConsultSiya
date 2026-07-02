@@ -466,6 +466,7 @@ export default function BookProfPage() {
   });
 
   return (
+    <>
     <div className="min-h-screen" style={{ backgroundColor: pageBg }}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
 
@@ -1047,5 +1048,6 @@ export default function BookProfPage() {
       </div>
     </div>
     <ToastContainer toasts={toasts} removeToast={removeToast} />
+    </>
   );
 }
