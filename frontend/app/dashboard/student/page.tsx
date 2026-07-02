@@ -1268,7 +1268,7 @@ export default function StudentDashboard() {
                             <div className={`w-px h-4 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.professor_name}</p>
-                              <p className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{c.nature_of_advising || '—'}</p>
+                              <p className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{parseNature(c.nature_of_advising).join(', ') || '—'}</p>
                             </div>
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${statusColors[c.status] ?? (isDark ? 'bg-gray-500/15 text-gray-400' : 'bg-gray-100 text-gray-500')}`}>
                               {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
