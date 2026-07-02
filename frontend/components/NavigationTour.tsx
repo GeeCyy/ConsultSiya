@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 const TOUR_DONE_KEYS = {
   student:   'consulta-tour-done-student',
   professor: 'consulta-tour-done-professor',
+  admin:     'consulta-tour-done-admin',
 };
 
 const PAD = 8;
@@ -53,6 +54,75 @@ const STUDENT_STEPS: TourStep[] = [
     description:
       'Review all your completed, cancelled, or missed consultations in one place.',
     target: '[data-tour="nav-history"]',
+  },
+  {
+    title: 'FAQ & AI Assistant',
+    description:
+      'Need help? Click this button anytime to browse FAQs or chat with the AI assistant for instant answers.',
+    target: '[data-tour="chatbot-fab"]',
+  },
+];
+
+const ADMIN_STEPS: TourStep[] = [
+  {
+    title: 'Welcome to Consulta Admin!',
+    description:
+      "Let's walk you through the key sections so you can manage the platform with confidence.",
+    target: null,
+  },
+  {
+    title: 'Notifications',
+    description:
+      'Pending account approvals and system alerts appear here. Keep an eye on it for new user requests.',
+    target: '[data-tour="notifications"]',
+  },
+  {
+    title: 'Home',
+    description:
+      'Your admin overview — platform stats, academic calendar, and recent consultation activity at a glance.',
+    target: '[data-tour="nav-home"]',
+  },
+  {
+    title: 'Consultations',
+    description:
+      'Browse all student-professor consultation records across the platform. Filter by status or search by name.',
+    target: '[data-tour="nav-consultations"]',
+  },
+  {
+    title: 'Accounts',
+    description:
+      'Approve new user registrations, manage existing student and professor accounts, and control access.',
+    target: '[data-tour="nav-accounts"]',
+  },
+  {
+    title: 'Schedules',
+    description:
+      "View all professors' consultation slots in one place. Useful for spotting availability gaps.",
+    target: '[data-tour="nav-schedules"]',
+  },
+  {
+    title: 'Reports',
+    description:
+      'Generate and export consultation reports for administrative and accreditation purposes.',
+    target: '[data-tour="nav-reports"]',
+  },
+  {
+    title: 'History',
+    description:
+      'Review all completed, cancelled, and missed consultations archived across terms.',
+    target: '[data-tour="nav-history"]',
+  },
+  {
+    title: 'Term Archive',
+    description:
+      'Access consultation records from previous academic terms, organized for easy retrieval.',
+    target: '[data-tour="nav-archive"]',
+  },
+  {
+    title: 'Calendar',
+    description:
+      'Manage the academic calendar — set exam weeks, mode overrides, and blocked dates for the whole institution.',
+    target: '[data-tour="nav-calendar"]',
   },
   {
     title: 'FAQ & AI Assistant',
@@ -159,9 +229,9 @@ export default function NavigationTour({
   role = 'student',
 }: {
   isDark: boolean;
-  role?: 'student' | 'professor';
+  role?: 'student' | 'professor' | 'admin';
 }) {
-  const steps   = role === 'professor' ? PROFESSOR_STEPS : STUDENT_STEPS;
+  const steps   = role === 'professor' ? PROFESSOR_STEPS : role === 'admin' ? ADMIN_STEPS : STUDENT_STEPS;
   const doneKey = TOUR_DONE_KEYS[role];
 
   const [visible, setVisible] = useState(false);
