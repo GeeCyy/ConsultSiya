@@ -955,6 +955,9 @@ export default function ProfessorDashboard() {
   const [bulkCancelError, setBulkCancelError] = useState('');
   const [bulkMeetingLinkOpen,  setBulkMeetingLinkOpen]  = useState(false);
   const [bulkMeetingLinkInput, setBulkMeetingLinkInput] = useState('');
+  const [bulkRescheduleOpen,   setBulkRescheduleOpen]   = useState(false);
+  const [bulkRescheduleForm,   setBulkRescheduleForm]   = useState({ referral: '', referral_specify: '', remarks: '' });
+  const [bulkRescheduleError,  setBulkRescheduleError]  = useState('');
 
   // Profile
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '', avatar: null });
@@ -1313,6 +1316,18 @@ export default function ProfessorDashboard() {
     clearSelection();
     fetchAll();
     toast.success(`${toCancel.length} consultation${toCancel.length !== 1 ? 's' : ''} cancelled.`);
+  };
+
+  const handleBulkReschedule = async () => {
+    const toReschedule = visibleConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed'));
+    if (!toReschedule.length) return;
+    setBulkRescheduleError('');
+    await Promise.all(toReschedule.map(c => api.patch(`/api/consultations/${c.id}/reschedule`, bulkRescheduleForm, token!)));
+    setBulkRescheduleOpen(false);
+    setBulkRescheduleForm({ referral: '', referral_specify: '', remarks: '' });
+    clearSelection();
+    fetchAll();
+    toast.success(`${toReschedule.length} consultation${toReschedule.length !== 1 ? 's' : ''} marked as rescheduled.`);
   };
 
   const openRescheduleModal = (c: Consultation) => {
@@ -2871,6 +2886,13 @@ export default function ProfessorDashboard() {
                       Confirm ({displayedConsultations.filter(c => selectedIds.has(c.id) && c.status === 'pending').length} pending)
                     </button>
                   )}
+                  {displayedConsultations.some(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')) && (
+                    <button
+                      onClick={() => { setBulkRescheduleOpen(true); setBulkRescheduleForm({ referral: '', referral_specify: '', remarks: '' }); setBulkRescheduleError(''); }}
+                      className={`px-3 py-1.5 text-xs ${btnPrimary}`}>
+                      Reschedule ({displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length})
+                    </button>
+                  )}
                   <button
                     onClick={() => { setBulkCancelOpen(true); setBulkCancelReason(''); setBulkCancelError(''); }}
                     className={`px-3 py-1.5 text-xs ${btnDanger}`}>
@@ -4401,6 +4423,56 @@ export default function ProfessorDashboard() {
               </button>
               <button onClick={handleBulkCancel} className={`flex-1 py-2.5 text-sm ${btnDanger}`}>
                 Cancel {selectedIds.size} Consultation{selectedIds.size !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Bulk Reschedule Modal ── */}
+      {bulkRescheduleOpen && (
+        <Modal title="Reschedule Selected Consultations" onClose={() => setBulkRescheduleOpen(false)} isDark={isDark}>
+          <div className="px-5 py-5 space-y-4">
+            <div className={`flex items-center gap-2 p-3 rounded-xl ${isDark ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-orange-50 border border-orange-200'}`}>
+              <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-orange-400 text-xs font-medium">
+                This will mark <span className="font-bold">{displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length}</span> consultation{displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length !== 1 ? 's' : ''} as rescheduled.
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs mb-2">Referred To (optional)</p>
+              <div className="space-y-1.5">
+                {REFERRAL_OPTIONS.map(opt => (
+                  <label key={opt} className={radioCls(bulkRescheduleForm.referral === opt)}>
+                    {radioBtn(bulkRescheduleForm.referral === opt)}
+                    {opt}
+                    <input type="radio" className="sr-only" checked={bulkRescheduleForm.referral === opt}
+                      onChange={() => setBulkRescheduleForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
+                  </label>
+                ))}
+              </div>
+              {bulkRescheduleForm.referral === 'Other Office (Please Specify)' && (
+                <input className={`mt-2 w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                  placeholder="Specify office…"
+                  value={bulkRescheduleForm.referral_specify}
+                  onChange={e => setBulkRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
+              )}
+            </div>
+            <div>
+              <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
+              <textarea value={bulkRescheduleForm.remarks} onChange={e => setBulkRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
+                rows={2} className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                placeholder="Reason for rescheduling…" />
+            </div>
+            {bulkRescheduleError && <p className="text-red-400 text-xs">{bulkRescheduleError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setBulkRescheduleOpen(false)} className={`flex-1 py-2.5 text-sm ${btnSecondary}`}>
+                Back
+              </button>
+              <button onClick={handleBulkReschedule} className={`flex-1 py-2.5 text-sm ${btnPrimary}`}>
+                Mark as Rescheduled
               </button>
             </div>
           </div>
