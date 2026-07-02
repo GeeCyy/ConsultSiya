@@ -35,12 +35,19 @@ export function useNotifications(token: string | null) {
       .then((data: LiveNotif[]) => setNotifs(data))
       .catch(() => {});
 
-    // Open SSE stream — token in query param since EventSource can't send headers
+    // Open SSE stream — token in query param since EventSource can't send custom headers
+    // (Brave and Safari block cross-origin cookies, so we can't rely on the auth cookie)
     const es = new EventSource(
       `${API}/api/notifications/stream?token=${encodeURIComponent(token)}`
     );
 
+    // Count consecutive errors so we stop retrying with a stale/expired token.
+    // The browser would otherwise retry indefinitely with exponential backoff.
+    // React re-runs this effect when `token` changes, which opens a fresh connection.
+    let errorCount = 0;
+
     es.onmessage = (e) => {
+      errorCount = 0; // successful message — connection is healthy
       try {
         const data = JSON.parse(e.data) as LiveNotif & { type: string };
         if (data.type === 'connected') return;
@@ -49,7 +56,12 @@ export function useNotifications(token: string | null) {
       } catch { /* ignore malformed events */ }
     };
 
-    es.onerror = () => { /* SSE auto-reconnects — no action needed */ };
+    es.onerror = () => {
+      errorCount++;
+      // After 5 consecutive failures (≈ 2–3 min with browser backoff), close and stop
+      // retrying. If the token refreshes, the effect re-runs and opens a new connection.
+      if (errorCount >= 5) es.close();
+    };
 
     return () => {
       es.close();

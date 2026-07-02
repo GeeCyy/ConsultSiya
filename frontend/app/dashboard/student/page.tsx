@@ -765,10 +765,14 @@ export default function StudentDashboard() {
   // Subscribe to professor session status changes via SSE
   useEffect(() => {
     if (!authReady || !token) return;
+    // Token in query param — EventSource can't send custom headers,
+    // and Brave/Safari block cross-origin cookies by default.
     const es = new EventSource(
       `${API_URL}/api/notifications/stream?token=${encodeURIComponent(token)}`
     );
+    let errorCount = 0;
     es.onmessage = (e) => {
+      errorCount = 0;
       try {
         const data = JSON.parse(e.data);
         if (data.type !== 'professor_session_update') return;
@@ -781,7 +785,10 @@ export default function StudentDashboard() {
         }
       } catch { /* ignore malformed */ }
     };
-    es.onerror = () => { /* SSE auto-reconnects */ };
+    es.onerror = () => {
+      errorCount++;
+      if (errorCount >= 5) es.close(); // stop retrying; effect re-runs on token change
+    };
     return () => es.close();
   }, [authReady, token]);
 
