@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Megaphone } from 'lucide-react';
 import { ToastContainer, useToast } from '@/components/Toast';
+import DashboardNavbar, { type NavItem } from '@/components/DashboardNavbar';
 
 const NATURE_OPTIONS = [
   'Thesis/Design Subject concerns',
@@ -26,6 +27,13 @@ const PROOF_LINK_PREFIXES = [
   'https://1drv.ms/',
 ];
 const isValidProofLink = (url: string) => PROOF_LINK_PREFIXES.some(p => url.startsWith(p));
+
+const STUDENT_NAV_ITEMS: NavItem[] = [
+  { key: 'home',    label: 'Home' },
+  { key: 'book',    label: 'Book a Slot' },
+  { key: 'my',      label: 'My Consultations' },
+  { key: 'history', label: 'History' },
+];
 
 type MyConsult = {
   id: number;
@@ -240,6 +248,8 @@ export default function BookProfPage() {
   const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
   const [viewingFile, setViewingFile] = useState<number | null>(null);
   const [downloadingSlip, setDownloadingSlip] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
 
   const handleDownloadSlip = async () => {
     setDownloadingSlip(true);
@@ -316,6 +326,18 @@ export default function BookProfPage() {
       }
     }).catch(() => {});
   }, [authReady, token, profId]);
+
+  useEffect(() => {
+    if (!authReady || !token) return;
+    api.get('/api/auth/profile', token).then((data: unknown) => {
+      if (data && typeof data === 'object') {
+        const d = data as { full_name?: string; avatar?: string | null };
+        if (d.full_name) setProfileName(d.full_name);
+        const av = d.avatar && !d.avatar.startsWith('/uploads/') ? d.avatar : null;
+        setProfileAvatar(av);
+      }
+    }).catch(() => {});
+  }, [authReady, token]);
 
   const validateProofFile = (file: File): boolean => {
     const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
@@ -436,9 +458,10 @@ export default function BookProfPage() {
   };
 
   // Style tokens
-  const pageBg  = isDark ? '#1e2235' : '#EEF2FF';
+  const bgClass = isDark ? 'bg-[#1e2235]' : '';
+  const bgStyle = !isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined;
   const card    = isDark
-    ? 'bg-[#252525] border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200'
+    ? 'bg-[#1e1f22] border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200'
     : 'bg-white border-sky-100 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
   const tp      = isDark ? 'text-white'    : 'text-gray-900';
   const ts      = isDark ? 'text-gray-400' : 'text-gray-500';
@@ -448,7 +471,7 @@ export default function BookProfPage() {
 
   if (!authReady || loadingSlot) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: pageBg }}>
+      <div className={`min-h-screen flex items-center justify-center ${bgClass}`} style={bgStyle}>
         <div className="w-8 h-8 border-2 border-[#0EA5E9] border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -456,7 +479,7 @@ export default function BookProfPage() {
 
   if (notFound || slots.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: pageBg }}>
+      <div className={`min-h-screen flex flex-col items-center justify-center gap-4 ${bgClass}`} style={bgStyle}>
         <p className={`text-lg font-semibold ${tp}`}>Professor not found</p>
         <button onClick={() => router.push('/dashboard/student?view=book')}
           className="px-5 py-2.5 rounded-xl text-sm font-medium bg-[#0EA5E9] text-white hover:bg-[#0284C7] transition-colors">
@@ -485,36 +508,24 @@ export default function BookProfPage() {
 
   return (
     <>
-    <div className="min-h-screen" style={{ backgroundColor: pageBg }}>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-
-        {/* Back button + theme toggle */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={() => router.push('/dashboard/student?view=book')}
-            className={`inline-flex items-center gap-2 text-sm font-medium transition-colors ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Book a Slot
-          </button>
-          <button
-            onClick={toggleTheme}
-            title="Toggle theme"
-            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-black/5'}`}
-          >
-            {isDark ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" />
-              </svg>
-            )}
-          </button>
-        </div>
+    <div className={`min-h-screen ${bgClass}`} style={bgStyle}>
+      <img src="/mapua-logo.png" alt="" aria-hidden
+        className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.18]' : 'opacity-[0.12]'}`}
+        style={isDark
+          ? { filter: 'drop-shadow(0 0 80px rgba(122,0,0,0.6)) drop-shadow(0 0 40px rgba(180,0,0,0.4)) drop-shadow(0 0 120px rgba(122,0,0,0.3))' }
+          : { filter: 'drop-shadow(0 0 60px rgba(122,0,0,0.35)) drop-shadow(0 0 30px rgba(180,0,0,0.25))' }}
+      />
+      <DashboardNavbar
+        role="student"
+        navItems={STUDENT_NAV_ITEMS}
+        activeTab="book"
+        onTabChange={tab => router.push(`/dashboard/student?view=${tab}`)}
+        profileName={profileName}
+        profileAvatar={profileAvatar}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+      />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 relative z-10">
 
         {/* Page title */}
         <div className="flex items-start justify-between gap-3 mb-6">
@@ -722,6 +733,74 @@ export default function BookProfPage() {
                 );
               })()}
             </div>
+
+            {/* Proof of Evidence */}
+            {myConsults.length > 0 && (
+              <div className={`rounded-2xl border p-5 ${card}`}>
+                <h3 className={`text-sm font-bold mb-3 ${tp}`}>Proof of Evidence</h3>
+                <div className="space-y-2">
+                  {myConsults.map(c => (
+                    <div key={c.id}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {c.proof_of_evidence ? (
+                          <>
+                            <span className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                              Proof Submitted
+                            </span>
+                            {c.proof_type === 'link' ? (
+                              <a href={c.proof_of_evidence} target="_blank" rel="noopener noreferrer"
+                                className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                View Link →
+                              </a>
+                            ) : (
+                              <button onClick={() => handleViewFile(c.id)} disabled={viewingFile === c.id}
+                                className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                {viewingFile === c.id ? '…' : 'View File'}
+                              </button>
+                            )}
+                            <button onClick={() => openProofPanel(c.id)}
+                              className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}>
+                              Replace
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => openProofPanel(c.id)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                            Submit Proof of Evidence
+                          </button>
+                        )}
+                      </div>
+                      {proofPanelId === c.id && (
+                        <div className={`mt-2 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
+                          <div className="flex gap-2">
+                            <input type="url" value={proofLinkValue}
+                              onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
+                              placeholder="https://drive.google.com/…"
+                              className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
+                                proofLinkError
+                                  ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                  : isDark
+                                    ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
+                                    : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
+                              }`}
+                            />
+                            <button onClick={() => handleProofLinkSubmit(c.id)}
+                              disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
+                              className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                              {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
+                            </button>
+                          </div>
+                          {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
+                          <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Date picker — professor-wide calendar */}
             <div className={`rounded-2xl border p-5 ${card}`}>
@@ -940,76 +1019,6 @@ export default function BookProfPage() {
 
           </div>
         </div>
-
-        {/* My Consultations with this professor — proof only */}
-        {myConsults.length > 0 && (
-          <div className="mt-8">
-            <div className="space-y-2">
-              {myConsults.map(c => {
-                return (
-                  <div key={c.id}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {c.proof_of_evidence ? (
-                        <>
-                          <span className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            Proof Submitted
-                          </span>
-                          {c.proof_type === 'link' ? (
-                            <a href={c.proof_of_evidence} target="_blank" rel="noopener noreferrer"
-                              className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
-                              View Link →
-                            </a>
-                          ) : (
-                            <button onClick={() => handleViewFile(c.id)} disabled={viewingFile === c.id}
-                              className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
-                              {viewingFile === c.id ? '…' : 'View File'}
-                            </button>
-                          )}
-                          <button onClick={() => openProofPanel(c.id)}
-                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}>
-                            Replace
-                          </button>
-                        </>
-                      ) : (
-                        <button onClick={() => openProofPanel(c.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'}`}>
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                          Submit Proof of Evidence
-                        </button>
-                      )}
-                    </div>
-
-                    {proofPanelId === c.id && (
-                      <div className={`mt-2 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                        <div className="flex gap-2">
-                          <input type="url" value={proofLinkValue}
-                            onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
-                            placeholder="https://drive.google.com/…"
-                            className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
-                              proofLinkError
-                                ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                : isDark
-                                  ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
-                                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
-                            }`}
-                          />
-                          <button onClick={() => handleProofLinkSubmit(c.id)}
-                            disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
-                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                            {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
-                          </button>
-                        </div>
-                        {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
-                        <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
 
