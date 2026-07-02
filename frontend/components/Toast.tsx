@@ -64,7 +64,7 @@ function ToastEntry({ item, onRemove }: { item: ToastItem; onRemove: (id: number
 export function ToastContainer({ toasts, onRemove }: { toasts: ToastItem[]; onRemove: (id: number) => void }) {
   if (toasts.length === 0) return null;
   return (
-    <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2 w-80 max-w-[calc(100vw-32px)] pointer-events-none">
+    <div className="fixed top-[68px] right-4 z-[200] flex flex-col gap-2 w-80 max-w-[calc(100vw-32px)] pointer-events-none">
       {toasts.map(t => (
         <div key={t.id} className="pointer-events-auto">
           <ToastEntry item={t} onRemove={onRemove} />
