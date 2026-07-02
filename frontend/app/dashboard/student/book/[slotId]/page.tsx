@@ -828,17 +828,11 @@ export default function BookSlotPage() {
         {/* My Consultations with this professor */}
         {myConsults.length > 0 && (
           <div className="mt-8">
-            <h2 className={`text-base font-bold mb-3 ${tp}`}>My Consultations with {slot.professor_name}</h2>
             <div className="space-y-2">
               {myConsults.map(c => {
-                const timeStr = (c.time || c.time_start || '').slice(0, 5);
-                const dateLabel = c.date
-                  ? new Date(c.date + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-                  : '—';
                 return (
                   <div key={c.id}>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-xs ${ts}`}>{dateLabel}{timeStr ? ` · ${formatTime12(timeStr)}` : ''}</span>
                       {c.proof_of_evidence ? (
                         <>
                           <span className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
