@@ -353,7 +353,7 @@ function CalendarView({
                       title={c.id}
                       onClick={() => setNoteDraftColor(c.id)}
                       className={`w-4 h-4 rounded-full ${c.dot} transition-transform ${
-                        noteDraftColor === c.id ? `scale-125 ring-2 ${c.ring} ring-offset-1 ring-offset-[#2b2d31]` : 'hover:scale-110'
+                        noteDraftColor === c.id ? `scale-125 ring-2 ${c.ring} ring-offset-1 ring-offset-[#2b2d31]` : ''
                       }`}
                     />
                   ))}

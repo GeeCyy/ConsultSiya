@@ -974,11 +974,11 @@ export default function AdminDashboard() {
 
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600';
 
-  const btnPrimary = 'bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(14,165,233,0.4)] shadow-[0_2px_8px_rgba(14,165,233,0.2)]';
-  const btnSecondary = 'border-2 border-[#0EA5E9] text-[#0EA5E9] bg-transparent font-medium rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] hover:text-white hover:border-transparent';
-  const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] shadow-sm';
-  const btnDeactivate = 'bg-[linear-gradient(135deg,#F97316,#EA580C)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] shadow-sm';
-  const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
+  const btnPrimary = 'bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] text-white font-semibold rounded-[10px] transition-colors duration-200 hover:shadow-[0_0_20px_rgba(14,165,233,0.4)] shadow-[0_2px_8px_rgba(14,165,233,0.2)]';
+  const btnSecondary = 'border-2 border-[#0EA5E9] text-[#0EA5E9] bg-transparent font-medium rounded-[10px] transition-colors duration-200 hover:bg-[linear-gradient(135deg,#0369A1,#0EA5E9)] hover:text-white hover:border-transparent';
+  const btnDanger = 'bg-[linear-gradient(135deg,#EF4444,#DC2626)] text-white font-semibold rounded-[10px] transition-colors duration-200 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)] shadow-sm';
+  const btnDeactivate = 'bg-[linear-gradient(135deg,#F97316,#EA580C)] text-white font-semibold rounded-[10px] transition-colors duration-200 hover:shadow-[0_0_20px_rgba(249,115,22,0.4)] shadow-sm';
+  const btnSuccess = 'bg-[linear-gradient(135deg,#10B981,#059669)] text-white font-semibold rounded-[10px] transition-colors duration-200 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]';
 
   return (
     <div className={`h-screen flex overflow-hidden relative ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>

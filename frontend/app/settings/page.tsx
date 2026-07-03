@@ -352,26 +352,13 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [loading, setLoading] = useState(true);
   const [isDark, setIsDark] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
     setIsDark(localStorage.getItem('consulta-theme') === 'dark');
     const handler = (e: Event) => setIsDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
     window.addEventListener('consulta-theme-change', handler);
-
-    const savedMotion = localStorage.getItem('consulta-reduce-motion') === 'true';
-    setReduceMotion(savedMotion);
-    document.body.classList.toggle('reduce-motion', savedMotion);
-
     return () => window.removeEventListener('consulta-theme-change', handler);
   }, []);
-
-  const handleReduceMotion = (val: boolean) => {
-    setReduceMotion(val);
-    localStorage.setItem('consulta-reduce-motion', String(val));
-    document.body.classList.toggle('reduce-motion', val);
-    window.dispatchEvent(new CustomEvent('consulta-reduce-motion-change', { detail: val }));
-  };
 
   // Profile state
   const [profile, setProfile] = useState<Profile>({
@@ -1193,19 +1180,6 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     )}
-
-                    {/* Accessibility */}
-                    <div>
-                      <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Accessibility</p>
-                      <div className={`rounded-xl px-4 divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
-                        <ToggleRow
-                          label="Reduce Motion"
-                          sublabel="Disable hover shake effects and animations (recommended for ADHD)"
-                          checked={reduceMotion}
-                          onChange={handleReduceMotion}
-                        />
-                      </div>
-                    </div>
 
                     <div>
                       <button

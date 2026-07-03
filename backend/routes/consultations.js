@@ -915,6 +915,153 @@ router.patch('/:id/reschedule', authenticate, authorize('professor'), async (req
   }
 });
 
+// Professor requests student to pick a new time (needs_reschedule flow)
+router.patch('/:id/request-reschedule', authenticate, authorize('professor'), async (req, res) => {
+  const { id } = req.params;
+  const { reschedule_remarks } = req.body;
+  try {
+    const prof = await pool.query(`SELECT id FROM professors WHERE user_id = $1`, [req.user.id]);
+    if (prof.rows.length === 0) return res.status(404).json({ error: 'Professor profile not found.' });
+
+    const consultation = await pool.query(`SELECT professor_id, status FROM consultations WHERE id = $1`, [id]);
+    if (consultation.rows.length === 0) return res.status(404).json({ error: 'Consultation not found.' });
+    if (consultation.rows[0].professor_id !== prof.rows[0].id) {
+      return res.status(403).json({ error: 'You can only reschedule your own consultations.' });
+    }
+    if (!['pending', 'confirmed'].includes(consultation.rows[0].status)) {
+      return res.status(400).json({ error: 'Only pending or confirmed consultations can be reschedule-requested.' });
+    }
+
+    await pool.query(
+      `UPDATE consultations SET status = 'needs_reschedule', reschedule_remarks = $2 WHERE id = $1`,
+      [id, reschedule_remarks?.trim() || null]
+    );
+
+    try {
+      const row = await pool.query(`
+        SELECT s.user_id AS student_user_id, p.full_name AS professor_name, c.date::text AS date
+        FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        JOIN professors p ON c.professor_id = p.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        const { student_user_id, professor_name, date } = row.rows[0];
+        const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        await notifModule.insertAndPush(
+          student_user_id, 'reschedule_request',
+          `Your professor has requested to reschedule your consultation on ${fmtDate}. Please select a new time.`,
+          { consultation_id: Number(id), professor_name, date, route: 'my' }
+        );
+        notifModule.pushNotification(student_user_id, {
+          type: 'consultation_status_update',
+          consultation_id: Number(id),
+          status: 'needs_reschedule',
+        });
+      }
+    } catch { /* best-effort */ }
+
+    res.json({ message: 'Reschedule request sent to student.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Student accepts reschedule request by picking a new date/time
+router.patch('/:id/accept-reschedule', authenticate, authorize('student'), async (req, res) => {
+  const { id } = req.params;
+  const { date, time, schedule_id } = req.body;
+  try {
+    const student = await pool.query(`SELECT id FROM students WHERE user_id = $1`, [req.user.id]);
+    if (student.rows.length === 0) return res.status(404).json({ error: 'Student profile not found.' });
+
+    const consultation = await pool.query(
+      `SELECT student_id, professor_id, status, reschedule_remarks FROM consultations WHERE id = $1`, [id]
+    );
+    if (consultation.rows.length === 0) return res.status(404).json({ error: 'Consultation not found.' });
+    if (consultation.rows[0].student_id !== student.rows[0].id) {
+      return res.status(403).json({ error: 'You can only update your own consultations.' });
+    }
+    if (consultation.rows[0].status !== 'needs_reschedule') {
+      return res.status(400).json({ error: 'This consultation is not awaiting a reschedule.' });
+    }
+    if (!date) return res.status(400).json({ error: 'Please select a date.' });
+    if (!time) return res.status(400).json({ error: 'Please select a time.' });
+    if (!schedule_id) return res.status(400).json({ error: 'Schedule ID is required.' });
+
+    const schedResult = await pool.query(
+      `SELECT time_start, time_end, time_ranges FROM schedules WHERE id = $1`, [schedule_id]
+    );
+    if (schedResult.rows.length === 0) return res.status(404).json({ error: 'Schedule not found.' });
+    const sched = schedResult.rows[0];
+    const ranges = Array.isArray(sched.time_ranges) && sched.time_ranges.length > 0
+      ? sched.time_ranges
+      : [{ time_start: sched.time_start, time_end: sched.time_end }];
+    const inRange = ranges.some(r => time >= r.time_start.slice(0, 5) && time < r.time_end.slice(0, 5));
+    if (!inRange) return res.status(400).json({ error: 'Selected time is not within the available time ranges for this slot.' });
+
+    const pastCheck = await pool.query(
+      `SELECT ($1::date + $2::time) < (NOW() AT TIME ZONE 'Asia/Manila') AS is_past`, [date, time]
+    );
+    if (pastCheck.rows[0].is_past) {
+      return res.status(400).json({ error: 'This time slot has already passed. Please select an upcoming time.' });
+    }
+
+    const dupCheck = await pool.query(
+      `SELECT id FROM consultations
+       WHERE student_id = $1 AND professor_id = $2 AND date = $3 AND time IS NOT DISTINCT FROM $4
+         AND status IN ('pending', 'confirmed', 'rescheduled', 'needs_reschedule') AND id <> $5`,
+      [student.rows[0].id, consultation.rows[0].professor_id, date, time, id]
+    );
+    if (dupCheck.rows.length > 0) {
+      return res.status(409).json({ error: 'You already have a booking with this professor at this time.' });
+    }
+
+    const archivedNote = consultation.rows[0].reschedule_remarks
+      ? `[Reschedule request: ${consultation.rows[0].reschedule_remarks}]`
+      : null;
+
+    await pool.query(
+      `UPDATE consultations
+       SET status = 'pending', date = $2, time = $3, schedule_id = $4,
+           reschedule_remarks = NULL,
+           notes = CASE WHEN $5::text IS NOT NULL THEN COALESCE(NULLIF(notes,'') || E'\n', '') || $5 ELSE notes END
+       WHERE id = $1`,
+      [id, date, time, schedule_id, archivedNote]
+    );
+
+    try {
+      const row = await pool.query(`
+        SELECT p.user_id AS prof_user_id, s.full_name AS student_name, c.date::text AS date
+        FROM consultations c
+        JOIN professors p ON c.professor_id = p.id
+        JOIN students s ON c.student_id = s.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        const { prof_user_id, student_name, date: newDate } = row.rows[0];
+        const fmtDate = new Date(newDate + 'T12:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        await notifModule.insertAndPush(
+          prof_user_id, 'new_booking',
+          `${student_name} selected a new schedule on ${fmtDate}`,
+          { consultation_id: Number(id), student_name, date: newDate, route: 'consultations' }
+        );
+        notifModule.pushNotification(prof_user_id, {
+          type: 'consultation_status_update',
+          consultation_id: Number(id),
+          status: 'pending',
+        });
+      }
+    } catch { /* best-effort */ }
+
+    res.json({ message: 'New schedule confirmed. Consultation is now pending.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Student submits proof of evidence (file upload OR external link)
 router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) => {
   const ct = req.headers['content-type'] || '';

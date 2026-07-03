@@ -196,10 +196,20 @@ app.listen(PORT, '0.0.0.0', () => {
   pool.query(`
     ALTER TABLE consultations DROP CONSTRAINT IF EXISTS consultations_status_check;
     ALTER TABLE consultations ADD CONSTRAINT consultations_status_check
-      CHECK (status IN ('pending','confirmed','completed','cancelled','rescheduled','missed'))
+      CHECK (status IN ('pending','confirmed','completed','cancelled','rescheduled','missed','needs_reschedule'));
+    ALTER TABLE consultations ADD COLUMN IF NOT EXISTS reschedule_remarks TEXT;
   `)
-    .then(() => console.log('[startup] consultations.status constraint updated (added missed)'))
+    .then(() => console.log('[startup] consultations.status constraint updated (added needs_reschedule)'))
     .catch(err => console.error('[startup] consultations status constraint migration failed:', err.message));
+
+  pool.query(`
+    DROP INDEX IF EXISTS uq_consultation_active;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_consultation_active
+      ON consultations (student_id, professor_id, date, time)
+      WHERE status IN ('pending', 'confirmed', 'rescheduled', 'needs_reschedule');
+  `)
+    .then(() => console.log('[startup] uq_consultation_active index updated (includes needs_reschedule)'))
+    .catch(err => console.error('[startup] uq_consultation_active index migration failed:', err.message));
 
   pool.query(`
     CREATE TABLE IF NOT EXISTS system_settings (
