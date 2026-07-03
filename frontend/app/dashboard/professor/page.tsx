@@ -1218,6 +1218,7 @@ export default function ProfessorDashboard() {
     const body = meetingLink ? { meeting_link: meetingLink } : {};
     const data = await api.patch(`/api/consultations/${id}/confirm`, body, token!);
     if (data.error) { toast.error(data.error); return; }
+    setConsultations(prev => prev.map(x => x.id === id ? { ...x, status: 'confirmed', meeting_link: data.meeting_link } : x));
     fetchAll();
   };
 
@@ -1238,6 +1239,8 @@ export default function ProfessorDashboard() {
     setEditLinkError('');
     const data = await api.patch(`/api/consultations/${editLinkConsult.id}/meeting-link`, { meeting_link: link || null }, token!);
     if (data.error) { toast.error(data.error); return; }
+    const consultId = editLinkConsult.id;
+    setConsultations(prev => prev.map(x => x.id === consultId ? { ...x, meeting_link: data.meeting_link } : x));
     setEditLinkConsult(null);
     setEditLinkInput('');
     fetchAll();
@@ -3025,12 +3028,12 @@ export default function ProfessorDashboard() {
                           <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                             <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Meeting</p>
                             {(() => {
-                              const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F');
+                              const effMode = c.mode || (c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : 'F2F');
                               return (
                                 <>
                                   <div className="flex items-center gap-1.5">
-                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
-                                    <span className={`text-sm font-medium ${effMode === 'F2F' ? 'text-purple-300' : effMode === 'BOTH' ? 'text-teal-300' : 'text-cyan-300'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-emerald-400'}`} />
+                                    <span className={`text-sm font-medium ${effMode === 'F2F' ? 'text-purple-300' : effMode === 'BOTH' ? 'text-teal-300' : 'text-emerald-300'}`}>
                                       {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
                                     </span>
                                   </div>
@@ -3038,7 +3041,7 @@ export default function ProfessorDashboard() {
                                     <p className="text-gray-500 text-xs mt-0.5 truncate">{c.location}</p>
                                   )}
                                   {effMode === 'BOTH' && c.preferred_mode && (
-                                    <p className={`text-xs mt-1.5 flex items-center gap-1 ${c.preferred_mode === 'F2F' ? 'text-purple-400' : 'text-cyan-400'}`}>
+                                    <p className={`text-xs mt-1.5 flex items-center gap-1 ${c.preferred_mode === 'F2F' ? 'text-purple-400' : 'text-emerald-400'}`}>
                                       <span className="font-medium">Student Preference:</span>
                                       {c.preferred_mode === 'F2F' ? 'Face-to-Face' : 'Online'}
                                     </p>
@@ -3049,7 +3052,7 @@ export default function ProfessorDashboard() {
                             {(c.slot_mode === 'BOTH' || c.slot_mode === 'OL' || c.mode === 'OL' || c.mode === 'BOTH') && c.meeting_link && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
-                                  className="text-cyan-400 text-xs truncate hover:underline flex-1 min-w-0">
+                                  className="text-emerald-400 text-xs truncate hover:underline flex-1 min-w-0">
                                   Join Meeting →
                                 </a>
                                   <button
@@ -3063,7 +3066,7 @@ export default function ProfessorDashboard() {
                             {(c.slot_mode === 'BOTH' || c.slot_mode === 'OL' || c.mode === 'OL' || c.mode === 'BOTH') && !c.meeting_link && (
                               <button
                                 onClick={() => { setEditLinkConsult(c); setEditLinkInput(''); }}
-                                className="text-cyan-600 hover:text-cyan-400 text-xs mt-0.5 transition-colors">
+                                className="text-emerald-600 hover:text-emerald-400 text-xs mt-0.5 transition-colors">
                                 + Add Meeting Link
                               </button>
                             )}

@@ -21,9 +21,10 @@ type Schedule = {
 type BookingSlotInfo = { booked_count: number; topics: string[] };
 type BookedTimesData = { booked: Record<string, BookingSlotInfo>; blocked: string[] };
 
-function findMatchingSlot(slots: Schedule[], dateStr: string): Schedule | undefined {
+function findMatchingSlots(slots: Schedule[], dateStr: string): Schedule[] {
   const dayName = DAYS_OF_WEEK[new Date(dateStr + 'T12:00:00').getDay()];
-  return slots.find(s => s.date === dateStr) ?? slots.find(s => !s.date && s.day === dayName);
+  const dated = slots.filter(s => s.date === dateStr);
+  return dated.length > 0 ? dated : slots.filter(s => !s.date && s.day === dayName);
 }
 
 function getTimeSlots(start: string, end: string): string[] {
@@ -106,9 +107,9 @@ function BookingCalendar({ slots, bookedDatesMap, selected, onSelect, isDark }: 
           const day = i + 1;
           const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isPast = new Date(viewYear, viewMonth, day) < today;
-          const matchingSlot = findMatchingSlot(slots, dateStr);
-          const isAvailable = !!matchingSlot && !isPast;
-          const isFullyBooked = matchingSlot ? (bookedDatesMap[matchingSlot.id] ?? []).includes(dateStr) : false;
+          const matchingSlots = findMatchingSlots(slots, dateStr);
+          const isAvailable = matchingSlots.length > 0 && !isPast;
+          const isFullyBooked = matchingSlots.length > 0 && matchingSlots.every(ms => (bookedDatesMap[ms.id] ?? []).includes(dateStr));
           const isDisabled = !isAvailable || isFullyBooked;
           const isSelected = selected === dateStr;
           return (
@@ -148,8 +149,9 @@ export default function RescheduleBookingPanel({
 }: RescheduleBookingPanelProps) {
   const [slots, setSlots] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSlot, setSelectedSlot] = useState<Schedule | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<Schedule[]>([]);
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [bookedDatesMap, setBookedDatesMap] = useState<Record<number, string[]>>({});
   const [bookedTimes, setBookedTimes] = useState<Record<string, BookedTimesData>>({});
@@ -172,60 +174,55 @@ export default function RescheduleBookingPanel({
     }).catch(() => setLoading(false));
   }, [token, professorId]);
 
-  const timeRanges = selectedSlot
-    ? (selectedSlot.time_ranges?.length
-        ? selectedSlot.time_ranges
-        : [{ time_start: selectedSlot.time_start, time_end: selectedSlot.time_end }])
-    : [];
-  const takenInfo: BookedTimesData = (selectedSlot && bookedTimes[`${selectedSlot.id}-${selectedDate}`]) ?? { booked: {}, blocked: [] };
+  const slotRanges = (s: Schedule) => s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }];
 
   const onDateSelect = (dateStr: string) => {
-    const matched = findMatchingSlot(slots, dateStr);
-    setSelectedSlot(matched ?? null);
+    const matched = findMatchingSlots(slots, dateStr);
+    setSelectedSlots(matched);
 
-    // Auto-select first non-past time slot
+    // Auto-select first non-past time slot across all matching slots
+    let autoScheduleId: number | null = null;
     let autoTime = '';
-    if (matched) {
-      const { today, mins: nowMins } = getPhtNow();
-      const isToday = dateStr === today;
-      const ranges = matched.time_ranges?.length
-        ? matched.time_ranges
-        : [{ time_start: matched.time_start, time_end: matched.time_end }];
-      for (const r of ranges) {
+    const { today, mins: nowMins } = getPhtNow();
+    const isToday = dateStr === today;
+    outer:
+    for (const m of matched) {
+      for (const r of slotRanges(m)) {
         const ts = getTimeSlots(r.time_start.slice(0, 5), r.time_end.slice(0, 5));
-        const avail = isToday ? ts.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > nowMins; }) : ts;
-        if (avail.length > 0) { autoTime = avail[0]; break; }
+        const avail = isToday ? ts.filter(t => { const [h, mm] = t.split(':').map(Number); return h * 60 + mm + 30 > nowMins; }) : ts;
+        if (avail.length > 0) { autoScheduleId = m.id; autoTime = avail[0]; break outer; }
       }
     }
     setSelectedDate(dateStr);
+    setSelectedScheduleId(autoScheduleId);
     setSelectedTime(autoTime);
 
-    if (matched) {
-      const key = `${matched.id}-${dateStr}`;
+    matched.forEach(m => {
+      const key = `${m.id}-${dateStr}`;
       if (!bookedTimes[key]) {
-        api.get(`/api/schedules/${matched.id}/booked-times?date=${dateStr}`, token)
+        api.get(`/api/schedules/${m.id}/booked-times?date=${dateStr}`, token)
           .then(data => {
             if (data && typeof data === 'object' && !Array.isArray(data)) {
               const entry: BookedTimesData = { booked: data.booked ?? {}, blocked: data.blocked ?? [] };
               setBookedTimes(prev => ({ ...prev, [key]: entry }));
-              setSelectedTime(t => entry.blocked.includes(t) ? '' : t);
+              setSelectedTime(t => (m.id === autoScheduleId && entry.blocked.includes(t)) ? '' : t);
             }
           })
           .catch(() => {});
       }
-    }
+    });
     setTimeout(() => timePickerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
   };
 
   const handleSubmit = async () => {
-    if (!selectedSlot || !selectedDate || !selectedTime || saving) return;
+    if (!selectedScheduleId || !selectedDate || !selectedTime || saving) return;
     setError('');
     setSaving(true);
     try {
       const data = await api.patch(`/api/consultations/${consultId}/accept-reschedule`, {
         date: selectedDate,
         time: selectedTime,
-        schedule_id: selectedSlot.id,
+        schedule_id: selectedScheduleId,
       }, token);
       if (data.error) { setError(data.error); return; }
       onSuccess();
@@ -290,10 +287,10 @@ export default function RescheduleBookingPanel({
           isDark={isDark}
           onSelect={onDateSelect}
         />
-        {selectedSlot && selectedDate && (
-          <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs ${isDark ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>
+        {selectedSlots.length > 0 && selectedDate && (
+          <div className={`mt-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl text-xs ${isDark ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-            {timeRanges.map((r, i) => (
+            {selectedSlots.flatMap(s => slotRanges(s)).map((r, i) => (
               <span key={i}>{formatTime12(r.time_start.slice(0, 5))}–{formatTime12(r.time_end.slice(0, 5))}</span>
             ))}
           </div>
@@ -313,49 +310,52 @@ export default function RescheduleBookingPanel({
             {(() => {
               const { today: todayStr, mins: currentTimeMins } = getPhtNow();
               const isToday = selectedDate === todayStr;
-              return timeRanges.map((range, ri) => {
-                let timeSlots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
-                if (isToday) timeSlots = timeSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > currentTimeMins; });
-                const session = parseInt(range.time_start.slice(0, 2), 10) < 12 ? 'Morning' : 'Afternoon';
-                return (
-                  <div key={ri}>
-                    <p className={`text-[11px] font-semibold mb-2 uppercase tracking-wide ${ts}`}>
-                      {session} · {formatTime12(range.time_start.slice(0, 5))}–{formatTime12(range.time_end.slice(0, 5))}
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {timeSlots.map(t => {
-                        const info = takenInfo.booked[t];
-                        const isBlocked = takenInfo.blocked.includes(t);
-                        const isBooked = !!info && !isBlocked;
-                        const isSel = selectedTime === t;
-                        return (
-                          <button key={t} type="button" disabled={isBlocked} onClick={() => setSelectedTime(t)}
-                            className={`flex flex-col p-2.5 rounded-xl border-2 text-left transition-all ${
-                              isBlocked   ? `cursor-not-allowed opacity-40 ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50'}`
-                              : isSel     ? 'border-sky-500 bg-sky-500/10'
-                              : isBooked  ? isDark ? 'border-amber-500/40 bg-amber-500/10 hover:border-amber-500/60' : 'border-amber-300 bg-amber-50 hover:border-amber-400'
-                              :             isDark ? 'border-white/10 bg-white/[0.03] hover:border-white/20' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                            }`}>
-                            <span className={`text-xs font-bold leading-none ${
-                              isBlocked ? isDark ? 'text-gray-700' : 'text-gray-300'
-                              : isSel    ? 'text-sky-400'
-                              : isBooked ? isDark ? 'text-amber-300' : 'text-amber-700'
-                              :            isDark ? 'text-white'    : 'text-gray-900'
-                            }`}>{formatTime12(t)}</span>
-                            <span className={`text-[9px] mt-1 ${
-                              isBlocked ? isDark ? 'text-gray-700'      : 'text-gray-300'
-                              : isSel    ? 'text-sky-400/60'
-                              : isBooked ? isDark ? 'text-amber-400/70' : 'text-amber-600'
-                              :            isDark ? 'text-gray-700'     : 'text-gray-300'
-                            }`}>
-                              {isBlocked ? 'Unavailable' : isBooked ? `${info.booked_count} booked` : 'Open'}
-                            </span>
-                          </button>
-                        );
-                      })}
+              return selectedSlots.flatMap(slot => {
+                const takenInfo: BookedTimesData = bookedTimes[`${slot.id}-${selectedDate}`] ?? { booked: {}, blocked: [] };
+                return slotRanges(slot).map((range, ri) => {
+                  let timeSlots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
+                  if (isToday) timeSlots = timeSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > currentTimeMins; });
+                  const session = parseInt(range.time_start.slice(0, 2), 10) < 12 ? 'Morning' : 'Afternoon';
+                  return (
+                    <div key={`${slot.id}-${ri}`}>
+                      <p className={`text-[11px] font-semibold mb-2 uppercase tracking-wide ${ts}`}>
+                        {session} · {formatTime12(range.time_start.slice(0, 5))}–{formatTime12(range.time_end.slice(0, 5))}{slot.mode ? ` · ${slot.mode === 'F2F' ? 'Face-to-Face' : slot.mode === 'OL' ? 'Online' : 'Face-to-Face & Online'}` : ''}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {timeSlots.map(t => {
+                          const info = takenInfo.booked[t];
+                          const isBlocked = takenInfo.blocked.includes(t);
+                          const isBooked = !!info && !isBlocked;
+                          const isSel = selectedScheduleId === slot.id && selectedTime === t;
+                          return (
+                            <button key={t} type="button" disabled={isBlocked} onClick={() => { setSelectedScheduleId(slot.id); setSelectedTime(t); }}
+                              className={`flex flex-col p-2.5 rounded-xl border-2 text-left transition-all ${
+                                isBlocked   ? `cursor-not-allowed opacity-40 ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50'}`
+                                : isSel     ? 'border-sky-500 bg-sky-500/10'
+                                : isBooked  ? isDark ? 'border-amber-500/40 bg-amber-500/10 hover:border-amber-500/60' : 'border-amber-300 bg-amber-50 hover:border-amber-400'
+                                :             isDark ? 'border-white/10 bg-white/[0.03] hover:border-white/20' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                              }`}>
+                              <span className={`text-xs font-bold leading-none ${
+                                isBlocked ? isDark ? 'text-gray-700' : 'text-gray-300'
+                                : isSel    ? 'text-sky-400'
+                                : isBooked ? isDark ? 'text-amber-300' : 'text-amber-700'
+                                :            isDark ? 'text-white'    : 'text-gray-900'
+                              }`}>{formatTime12(t)}</span>
+                              <span className={`text-[9px] mt-1 ${
+                                isBlocked ? isDark ? 'text-gray-700'      : 'text-gray-300'
+                                : isSel    ? 'text-sky-400/60'
+                                : isBooked ? isDark ? 'text-amber-400/70' : 'text-amber-600'
+                                :            isDark ? 'text-gray-700'     : 'text-gray-300'
+                              }`}>
+                                {isBlocked ? 'Unavailable' : isBooked ? `${info.booked_count} booked` : 'Open'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
+                  );
+                });
               });
             })()}
           </div>
@@ -378,7 +378,7 @@ export default function RescheduleBookingPanel({
           className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
           Cancel
         </button>
-        <button onClick={handleSubmit} disabled={!selectedDate || !selectedTime || saving}
+        <button onClick={handleSubmit} disabled={!selectedDate || !selectedScheduleId || !selectedTime || saving}
           className="flex-[2] py-3 rounded-xl text-sm font-semibold bg-sky-500 text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
           {saving ? (
             <>
