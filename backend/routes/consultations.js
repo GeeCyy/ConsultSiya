@@ -559,6 +559,23 @@ router.patch('/:id/meeting-link', authenticate, authorize('professor'), async (r
       `UPDATE consultations SET meeting_link = $2 WHERE id = $1 RETURNING *`,
       [id, meeting_link || null]
     );
+
+    // Push live SSE event so the student's dashboard reflects the new link without a refresh
+    try {
+      const row = await pool.query(`
+        SELECT s.user_id AS student_user_id FROM consultations c
+        JOIN students s ON c.student_id = s.id
+        WHERE c.id = $1
+      `, [id]);
+      if (row.rows[0]) {
+        notifModule.pushNotification(row.rows[0].student_user_id, {
+          type: 'consultation_status_update',
+          consultation_id: Number(id),
+          status: 'confirmed',
+        });
+      }
+    } catch { /* best-effort */ }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);

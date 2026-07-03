@@ -516,7 +516,7 @@ function FullCalendar({
                         <div className="flex-1 min-w-0">
                           <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.professor_name}</p>
                           <p className={`text-[10px] ${tm}`}>
-                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}
+                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {(() => { const m = c.mode || (c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : 'F2F'); return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}
                           </p>
                         </div>
                         <StatusBadge status={c.status} isDark={isDark} />
@@ -671,7 +671,6 @@ export default function StudentDashboard() {
   // File upload / download
   const [uploadingId, setUploadingId]               = useState<number | null>(null);
   const [downloadingSlip, setDownloadingSlip]       = useState<number | null>(null);
-  const [downloadingReceipt, setDownloadingReceipt] = useState<number | null>(null);
   const [expandedRemarks, setExpandedRemarks]       = useState<Set<number>>(new Set());
   const [dayModal, setDayModal]                     = useState<{ date: string; label: string; dateObj: Date } | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
@@ -935,23 +934,6 @@ export default function StudentDashboard() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } finally { setDownloadingSlip(null); }
-  };
-
-  const handleDownloadReceipt = async (c: Consultation) => {
-    setDownloadingReceipt(c.id);
-    try {
-      const res = await fetch(`${API_URL}/api/forms/advising-slip/${c.id}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { toast.error('Failed to generate receipt.'); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `receipt-consultation-${c.id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } finally { setDownloadingReceipt(null); }
   };
 
   const triggerUpload = (id: number) => { uploadForId.current = id; fileInputRef.current?.click(); };
@@ -1933,10 +1915,8 @@ export default function StudentDashboard() {
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                      {[displayedProfessors.filter((_, i) => i % 2 === 0), displayedProfessors.filter((_, i) => i % 2 !== 0)].map((col, colIdx) => (
-                        <div key={colIdx} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minWidth: 0 }}>
-                          {col.map(prof => {
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                      {displayedProfessors.map(prof => {
                         const slotsSorted = [...prof.slots].sort((a, b) => {
                           if (a.date && b.date) return a.date.localeCompare(b.date);
                           if (a.date) return -1; if (b.date) return 1;
@@ -2060,9 +2040,7 @@ export default function StudentDashboard() {
                             </div>
                           </div>
                         );
-                          })}
-                        </div>
-                      ))}
+                      })}
                     </div>
                   )}
                 </>
@@ -2301,12 +2279,12 @@ export default function StudentDashboard() {
                       <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                         <p className={`text-xs uppercase tracking-wide mb-1 font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Meeting</p>
                         {(() => {
-                          const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F');
+                          const effMode = c.mode || (c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : 'F2F');
                           return (
                             <>
                               <div className="flex items-center gap-1.5">
-                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-cyan-400'}`} />
-                                <span className={`text-base font-semibold ${effMode === 'F2F' ? (isDark ? 'text-purple-300' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-300' : 'text-teal-600') : (isDark ? 'text-cyan-300' : 'text-cyan-600')}`}>
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${effMode === 'F2F' ? 'bg-purple-400' : effMode === 'BOTH' ? 'bg-teal-400' : 'bg-emerald-400'}`} />
+                                <span className={`text-base font-semibold ${effMode === 'F2F' ? (isDark ? 'text-purple-300' : 'text-purple-600') : effMode === 'BOTH' ? (isDark ? 'text-teal-300' : 'text-teal-600') : (isDark ? 'text-emerald-300' : 'text-emerald-600')}`}>
                                   {effMode === 'F2F' ? 'Face-to-Face' : effMode === 'BOTH' ? 'Face-to-Face & Online' : 'Online'}
                                 </span>
                               </div>
@@ -2315,7 +2293,7 @@ export default function StudentDashboard() {
                               )}
                               {(effMode === 'OL' || effMode === 'BOTH') && c.status === 'confirmed' && (
                                 c.meeting_link
-                                  ? <a href={c.meeting_link} target="_blank" rel="noopener noreferrer" className={`text-xs mt-0.5 block hover:underline truncate ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Join Meeting →</a>
+                                  ? <a href={c.meeting_link} target="_blank" rel="noopener noreferrer" className={`text-xs mt-0.5 block hover:underline truncate ${effMode === 'BOTH' ? (isDark ? 'text-teal-400' : 'text-teal-600') : (isDark ? 'text-emerald-400' : 'text-emerald-600')}`}>Join Meeting →</a>
                                   : <p className={`text-xs mt-0.5 italic ${tm}`}>No meeting link added yet</p>
                               )}
                             </>
@@ -2352,27 +2330,14 @@ export default function StudentDashboard() {
                       </div>
                     )}
 
-                    <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2`}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {c.status === 'completed' && (
-                          <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
-                            {downloadingReceipt === c.id
-                              ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                              : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
-                            Download Receipt
-                          </button>
-                        )}
-
-                      </div>
-
-                      {(c.status === 'pending' || c.status === 'confirmed') && (
+                    {(c.status === 'pending' || c.status === 'confirmed') && (
+                      <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-wrap items-center gap-2`}>
                         <button onClick={() => handleCancel(c.id)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ring-1 ${isDark ? 'bg-red-500/10 text-red-400 ring-red-500/30 hover:bg-red-500/20 hover:ring-red-500/50' : 'bg-red-50 text-red-600 ring-red-200 hover:bg-red-100 hover:ring-red-300'}`}>
                           Cancel
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* ── Proof of Evidence ─────────────────────────────── */}
                     {c.status !== 'cancelled' && (
