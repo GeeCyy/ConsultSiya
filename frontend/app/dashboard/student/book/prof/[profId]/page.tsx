@@ -73,12 +73,16 @@ type Schedule = {
 type BookingSlotInfo = { booked_count: number; topics: string[] };
 type BookedTimesData = { booked: Record<string, BookingSlotInfo>; blocked: string[] };
 
-function findMatchingSlot(slots: Schedule[], dateStr: string): Schedule | undefined {
+function findMatchingSlots(slots: Schedule[], dateStr: string): Schedule[] {
   const d = new Date(dateStr + 'T12:00:00');
   const dayName = DAYS_OF_WEEK[d.getDay()];
-  const dateSpecific = slots.find(s => s.date === dateStr);
-  if (dateSpecific) return dateSpecific;
-  return slots.find(s => !s.date && s.day === dayName);
+  const dateSpecific = slots.filter(s => s.date === dateStr);
+  if (dateSpecific.length > 0) return dateSpecific;
+  return slots.filter(s => !s.date && s.day === dayName);
+}
+
+function slotRanges(s: Schedule): TimeRange[] {
+  return s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }];
 }
 
 function getTimeSlots(start: string, end: string): string[] {
@@ -172,9 +176,9 @@ function ProfBookingCalendar({ slots, bookedDatesMap, selected, onSelect, isDark
           const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const cellDate = new Date(viewYear, viewMonth, day);
           const isPast = cellDate < today;
-          const matchingSlot = findMatchingSlot(slots, dateStr);
-          const isAvailable = !!matchingSlot && !isPast;
-          const isFullyBooked = matchingSlot ? (bookedDatesMap[matchingSlot.id] ?? []).includes(dateStr) : false;
+          const matchingSlots = findMatchingSlots(slots, dateStr);
+          const isAvailable = matchingSlots.length > 0 && !isPast;
+          const isFullyBooked = matchingSlots.length > 0 && matchingSlots.every(ms => (bookedDatesMap[ms.id] ?? []).includes(dateStr));
           const isDisabled = !isAvailable || isFullyBooked;
           const isSelected = selected === dateStr;
 
@@ -215,7 +219,9 @@ export default function BookProfPage() {
   const [loadingSlot, setLoadingSlot] = useState(true);
   const [notFound, setNotFound]       = useState(false);
 
-  const [selectedSlot, setSelectedSlot] = useState<Schedule | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<Schedule[]>([]);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
+  const selectedSlot = selectedSlots.find(s => s.id === selectedScheduleId) ?? null;
 
   const [bookForm, setBookForm] = useState({
     nature_of_advising: [] as string[],
@@ -539,12 +545,6 @@ export default function BookProfPage() {
 
   const professor = slots[0];
 
-  // Time ranges for the currently selected slot
-  const timeRanges = selectedSlot
-    ? (selectedSlot.time_ranges?.length
-        ? selectedSlot.time_ranges
-        : [{ time_start: selectedSlot.time_start, time_end: selectedSlot.time_end }])
-    : [];
   const takenInfo: BookedTimesData = (selectedSlot && bookedTimes[`${selectedSlot.id}-${bookForm.date}`]) || { booked: {}, blocked: [] };
 
   const sortedSlots = [...slots].sort((a, b) => {
@@ -833,9 +833,8 @@ export default function BookProfPage() {
                 selected={bookForm.date}
                 isDark={isDark}
                 onSelect={dateStr => {
-                  const matched = findMatchingSlot(slots, dateStr);
-                  setSelectedSlot(matched ?? null);
-                  const autoMode = matched?.mode === 'OL' ? 'OL' : matched?.mode === 'BOTH' ? 'BOTH' : 'F2F';
+                  const matched = findMatchingSlots(slots, dateStr);
+                  setSelectedSlots(matched);
                   const phtPs = new Intl.DateTimeFormat('en-CA', {
                     timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
                     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -844,46 +843,53 @@ export default function BookProfPage() {
                   const phtTodayAuto = `${pg2('year')}-${pg2('month')}-${pg2('day')}`;
                   const phtMinsAuto  = parseInt(pg2('hour'), 10) * 60 + parseInt(pg2('minute'), 10);
                   const isDateToday  = dateStr === phtTodayAuto;
+                  let autoScheduleId: number | null = null;
                   let autoTime = '';
-                  if (matched) {
-                    const autoRanges = matched.time_ranges?.length
-                      ? matched.time_ranges
-                      : [{ time_start: matched.time_start, time_end: matched.time_end }];
-                    for (const r of autoRanges) {
+                  let autoMode: 'F2F' | 'OL' | 'BOTH' = 'F2F';
+                  outer:
+                  for (const m of matched) {
+                    for (const r of slotRanges(m)) {
                       const ts = getTimeSlots(r.time_start.slice(0, 5), r.time_end.slice(0, 5));
                       const avail = isDateToday
-                        ? ts.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > phtMinsAuto; })
+                        ? ts.filter(t => { const [h, mm] = t.split(':').map(Number); return h * 60 + mm + 30 > phtMinsAuto; })
                         : ts;
-                      if (avail.length > 0) { autoTime = avail[0]; break; }
+                      if (avail.length > 0) {
+                        autoScheduleId = m.id;
+                        autoTime = avail[0];
+                        autoMode = m.mode === 'OL' ? 'OL' : m.mode === 'BOTH' ? 'BOTH' : 'F2F';
+                        break outer;
+                      }
                     }
                   }
+                  setSelectedScheduleId(autoScheduleId);
                   setBookForm(f => ({ ...f, date: dateStr, time: autoTime, mode: autoMode, preferredMode: '' }));
-                  if (matched) {
-                    const key = `${matched.id}-${dateStr}`;
+                  matched.forEach(m => {
+                    const key = `${m.id}-${dateStr}`;
                     if (bookedTimes[key] === undefined) {
-                      api.get(`/api/schedules/${matched.id}/booked-times?date=${dateStr}`, token!)
+                      api.get(`/api/schedules/${m.id}/booked-times?date=${dateStr}`, token!)
                         .then(data => {
                           if (data && typeof data === 'object' && !Array.isArray(data)) {
                             const entry: BookedTimesData = { booked: data.booked ?? {}, blocked: data.blocked ?? [] };
                             setBookedTimes(prev => ({ ...prev, [key]: entry }));
-                            // Clear auto-selected or manually picked time if it's actually blocked
-                            setBookForm(f => entry.blocked.includes(f.time ?? '') ? { ...f, time: '' } : f);
+                            // Clear auto-selected time if it's actually blocked
+                            if (m.id === autoScheduleId) {
+                              setBookForm(f => entry.blocked.includes(f.time ?? '') ? { ...f, time: '' } : f);
+                            }
                           }
                         })
                         .catch(() => {});
                     }
-                  }
+                  });
                   setTimeout(() => {
                     preferredTimeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                   }, 300);
                 }}
               />
-              {/* Show which slot was matched after date selection */}
-              {selectedSlot && bookForm.date && (
-                <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs ${isDark ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>
+              {/* Show which slots were matched after date selection */}
+              {selectedSlots.length > 0 && bookForm.date && (
+                <div className={`mt-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl text-xs ${isDark ? 'bg-sky-500/10 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>
                   <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
-                  {(selectedSlot.time_ranges?.length ? selectedSlot.time_ranges : [{ time_start: selectedSlot.time_start, time_end: selectedSlot.time_end }])
-                    .map((r, i) => (
+                  {selectedSlots.flatMap(s => slotRanges(s)).map((r, i) => (
                       <span key={i}>{formatTime12(r.time_start.slice(0, 5))}–{formatTime12(r.time_end.slice(0, 5))}</span>
                     ))}
                 </div>
@@ -910,21 +916,23 @@ export default function BookProfPage() {
                     const todayStr = `${phtGet('year')}-${phtGet('month')}-${phtGet('day')}`;
                     const currentTimeMins = parseInt(phtGet('hour'), 10) * 60 + parseInt(phtGet('minute'), 10);
                     const isToday = bookForm.date === todayStr;
-                    return timeRanges.map((range, ri) => {
+                    return selectedSlots.flatMap(slot => {
+                    const slotTakenInfo: BookedTimesData = bookedTimes[`${slot.id}-${bookForm.date}`] ?? { booked: {}, blocked: [] };
+                    return slotRanges(slot).map((range, ri) => {
                     let slots = getTimeSlots(range.time_start.slice(0, 5), range.time_end.slice(0, 5));
                     if (isToday) slots = slots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m + 30 > currentTimeMins; });
                     const session = parseInt(range.time_start.slice(0, 2), 10) < 12 ? 'Morning' : 'Afternoon';
                     return (
-                      <div key={ri}>
+                      <div key={`${slot.id}-${ri}`}>
                         <p className={`text-[11px] font-semibold mb-2 uppercase tracking-wide ${ts}`}>
-                          {session} · {formatTime12(range.time_start.slice(0, 5))}–{formatTime12(range.time_end.slice(0, 5))}
+                          {session} · {formatTime12(range.time_start.slice(0, 5))}–{formatTime12(range.time_end.slice(0, 5))}{slot.mode ? ` · ${slot.mode === 'F2F' ? 'Face-to-Face' : slot.mode === 'OL' ? 'Online' : 'Face-to-Face & Online'}` : ''}
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {slots.map(t => {
-                            const info = takenInfo.booked[t];
-                            const isBlocked = takenInfo.blocked.includes(t);
+                            const info = slotTakenInfo.booked[t];
+                            const isBlocked = slotTakenInfo.blocked.includes(t);
                             const isBooked = !!info && !isBlocked;
-                            const isSelected = bookForm.time === t;
+                            const isSelected = selectedScheduleId === slot.id && bookForm.time === t;
                             const topics = info?.topics ?? [];
                             const firstTopic = topics[0] ?? null;
                             return (
@@ -932,7 +940,7 @@ export default function BookProfPage() {
                                 key={t}
                                 type="button"
                                 disabled={isBlocked}
-                                onClick={() => setBookForm(f => ({ ...f, time: t }))}
+                                onClick={() => { setSelectedScheduleId(slot.id); setBookForm(f => ({ ...f, time: t, mode: slot.mode === 'OL' ? 'OL' : slot.mode === 'BOTH' ? 'BOTH' : 'F2F', preferredMode: '' })); }}
                                 className={`group relative flex flex-col p-2.5 rounded-xl border-2 text-left transition-all ${
                                   isBlocked
                                     ? `cursor-not-allowed opacity-40 ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50'}`
@@ -982,10 +990,11 @@ export default function BookProfPage() {
                       </div>
                     );
                   });
+                  });
                   })()}
                 </div>
               )}
-              {bookForm.time && takenInfo.booked[bookForm.time] && !takenInfo.blocked.includes(bookForm.time) && (
+              {selectedSlot && bookForm.time && takenInfo.booked[bookForm.time] && !takenInfo.blocked.includes(bookForm.time) && (
                 <div className={`mt-3 flex items-start gap-2.5 px-3.5 py-3 rounded-xl border ${isDark ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
                   <svg className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
