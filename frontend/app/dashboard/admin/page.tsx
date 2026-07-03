@@ -105,7 +105,8 @@ const STATUS_STYLES: Record<string, { darkBg: string; lightBg: string; darkText:
   completed:   { darkBg: 'bg-emerald-500/15', lightBg: 'bg-emerald-50',  darkText: 'text-emerald-400',  lightText: 'text-emerald-700',  dot: 'bg-emerald-500',  label: 'Completed' },
   cancelled:   { darkBg: 'bg-red-500/15',     lightBg: 'bg-red-50',      darkText: 'text-red-400',      lightText: 'text-red-700',      dot: 'bg-red-500',      label: 'Cancelled' },
   missed:      { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
-  rescheduled: { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
+  rescheduled:      { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
+  needs_reschedule: { darkBg: 'bg-amber-500/15',   lightBg: 'bg-amber-50',    darkText: 'text-amber-400',    lightText: 'text-amber-700',    dot: 'bg-amber-500',    label: 'Needs Reschedule' },
 };
 
 function StatusBadge({ status, isDark }: { status: string; isDark?: boolean }) {
@@ -1003,8 +1004,8 @@ export default function AdminDashboard() {
         src="/mapua-logo.png"
         alt=""
         aria-hidden
-        className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.18]' : 'opacity-[0.12]'}`}
-        style={isDark ? { filter: 'drop-shadow(0 0 80px rgba(14,165,233,0.6)) drop-shadow(0 0 40px rgba(99,102,241,0.4)) drop-shadow(0 0 120px rgba(14,165,233,0.3))' } : { filter: 'drop-shadow(0 0 30px rgba(99,102,241,0.15))' }}
+        className={`pointer-events-none select-none fixed inset-0 w-full h-full object-contain z-0 ${isDark ? 'opacity-[0.06]' : 'opacity-[0.05]'}`}
+        style={isDark ? { filter: 'blur(1px) drop-shadow(0 0 80px rgba(14,165,233,0.6)) drop-shadow(0 0 40px rgba(99,102,241,0.4)) drop-shadow(0 0 120px rgba(14,165,233,0.3))' } : { filter: 'blur(1px) drop-shadow(0 0 30px rgba(99,102,241,0.15))' }}
       />
 
       {/* Consulta logo watermark */}
@@ -1921,6 +1922,7 @@ export default function AdminDashboard() {
                       <option value="cancelled">Cancelled</option>
                       <option value="missed">Missed</option>
                       <option value="rescheduled">Rescheduled</option>
+                      <option value="needs_reschedule">Needs Reschedule</option>
                     </select>
                   </div>
                 </div>
