@@ -112,6 +112,7 @@ type Consultation = {
   referral: string | null;
   referral_specify: string | null;
   remarks: string | null;
+  reschedule_remarks?: string | null;
   notes?: string | null;
   location?: string;
   meeting_link?: string | null;
@@ -153,8 +154,9 @@ const STATUS_STYLES: Record<string, { darkBg: string; lightBg: string; darkText:
   confirmed:   { darkBg: 'bg-blue-500/15',    lightBg: 'bg-blue-50',     darkText: 'text-blue-400',     lightText: 'text-blue-700',     dot: 'bg-blue-500',     label: 'Confirmed' },
   completed:   { darkBg: 'bg-emerald-500/15', lightBg: 'bg-emerald-50',  darkText: 'text-emerald-400',  lightText: 'text-emerald-700',  dot: 'bg-emerald-500',  label: 'Completed' },
   cancelled:   { darkBg: 'bg-red-500/15',     lightBg: 'bg-red-50',      darkText: 'text-red-400',      lightText: 'text-red-700',      dot: 'bg-red-500',      label: 'Cancelled' },
-  rescheduled: { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
-  missed:      { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
+  rescheduled:      { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
+  needs_reschedule: { darkBg: 'bg-amber-500/15',   lightBg: 'bg-amber-50',    darkText: 'text-amber-400',    lightText: 'text-amber-700',    dot: 'bg-amber-500',    label: 'Reschedule Requested' },
+  missed:           { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
 };
 
 function StatusBadge({ status, isDark }: { status: string; isDark?: boolean }) {
@@ -878,8 +880,9 @@ export default function ProfessorDashboard() {
 
   // Reschedule modal
   const [reschedulingConsult, setReschedulingConsult] = useState<Consultation | null>(null);
-  const [rescheduleForm, setRescheduleForm] = useState({ referral: '', referral_specify: '', remarks: '' });
+  const [rescheduleRemarks, setRescheduleRemarks] = useState('');
   const [rescheduleError, setRescheduleError] = useState('');
+  const [rescheduleSaving, setRescheduleSaving] = useState(false);
 
   // History page
   const [histSearch,     setHistSearch]     = useState('');
@@ -941,7 +944,7 @@ export default function ProfessorDashboard() {
 
   // My Consultations — search / filter / sort
   const [consultSearch,       setConsultSearch]       = useState('');
-  const [consultStatusFilter, setConsultStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'rescheduled'>('all');
+  const [consultStatusFilter, setConsultStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'rescheduled' | 'needs_reschedule'>('all');
   const [consultSortBy,       setConsultSortBy]       = useState<'date' | 'name' | 'status'>('date');
   const [consultSortDir,      setConsultSortDir]      = useState<'asc' | 'desc'>('desc');
   const [sortMenuOpen,        setSortMenuOpen]        = useState(false);
@@ -955,9 +958,9 @@ export default function ProfessorDashboard() {
   const [bulkCancelError, setBulkCancelError] = useState('');
   const [bulkMeetingLinkOpen,  setBulkMeetingLinkOpen]  = useState(false);
   const [bulkMeetingLinkInput, setBulkMeetingLinkInput] = useState('');
-  const [bulkRescheduleOpen,   setBulkRescheduleOpen]   = useState(false);
-  const [bulkRescheduleForm,   setBulkRescheduleForm]   = useState({ referral: '', referral_specify: '', remarks: '' });
-  const [bulkRescheduleError,  setBulkRescheduleError]  = useState('');
+  const [bulkRescheduleOpen,    setBulkRescheduleOpen]    = useState(false);
+  const [bulkRescheduleRemarks, setBulkRescheduleRemarks] = useState('');
+  const [bulkRescheduleError,   setBulkRescheduleError]   = useState('');
 
   // Profile
   const [profile, setProfile] = useState<ProfProfile>({ full_name: '', department: '', email: '', phone: '', avatar: null });
@@ -1322,27 +1325,33 @@ export default function ProfessorDashboard() {
     const toReschedule = visibleConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed'));
     if (!toReschedule.length) return;
     setBulkRescheduleError('');
-    await Promise.all(toReschedule.map(c => api.patch(`/api/consultations/${c.id}/reschedule`, bulkRescheduleForm, token!)));
+    await Promise.all(toReschedule.map(c => api.patch(`/api/consultations/${c.id}/request-reschedule`, { reschedule_remarks: bulkRescheduleRemarks }, token!)));
     setBulkRescheduleOpen(false);
-    setBulkRescheduleForm({ referral: '', referral_specify: '', remarks: '' });
+    setBulkRescheduleRemarks('');
     clearSelection();
     fetchAll();
-    toast.success(`${toReschedule.length} consultation${toReschedule.length !== 1 ? 's' : ''} marked as rescheduled.`);
+    toast.success(`Reschedule request sent for ${toReschedule.length} consultation${toReschedule.length !== 1 ? 's' : ''}.`);
   };
 
   const openRescheduleModal = (c: Consultation) => {
     setReschedulingConsult(c);
-    setRescheduleForm({ referral: '', referral_specify: '', remarks: '' });
+    setRescheduleRemarks('');
     setRescheduleError('');
   };
 
   const handleReschedule = async () => {
-    if (!reschedulingConsult) return;
+    if (!reschedulingConsult || rescheduleSaving) return;
     setRescheduleError('');
-    const data = await api.patch(`/api/consultations/${reschedulingConsult.id}/reschedule`, rescheduleForm, token!);
-    if (data.error) { setRescheduleError(data.error); return; }
-    setReschedulingConsult(null);
-    fetchAll();
+    setRescheduleSaving(true);
+    try {
+      const data = await api.patch(`/api/consultations/${reschedulingConsult.id}/request-reschedule`, { reschedule_remarks: rescheduleRemarks }, token!);
+      if (data.error) { setRescheduleError(data.error); return; }
+      setReschedulingConsult(null);
+      fetchAll();
+      toast.success('Reschedule request sent to student.');
+    } finally {
+      setRescheduleSaving(false);
+    }
   };
 
   const handleDownloadStudentForm = async (id: number) => {
@@ -1617,7 +1626,7 @@ export default function ProfessorDashboard() {
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   const visibleConsultations = consultations.filter(
-    c => c.status === 'confirmed' || c.status === 'rescheduled' || (c.status === 'pending' && c.date >= todayStr)
+    c => c.status === 'confirmed' || c.status === 'rescheduled' || c.status === 'needs_reschedule' || (c.status === 'pending' && c.date >= todayStr)
   );
   const stats = {
     total: visibleConsultations.length,
@@ -2776,14 +2785,16 @@ export default function ProfessorDashboard() {
                   { key: 'all',         label: 'All',         dot: isDark ? 'bg-gray-400' : 'bg-gray-500',   count: visibleConsultations.length },
                   { key: 'pending',     label: 'Pending',     dot: 'bg-amber-400',                           count: visibleConsultations.filter(c => c.status === 'pending').length },
                   { key: 'confirmed',   label: 'Confirmed',   dot: 'bg-sky-400',                             count: visibleConsultations.filter(c => c.status === 'confirmed').length },
-                  { key: 'rescheduled', label: 'Rescheduled', dot: 'bg-orange-400',                          count: visibleConsultations.filter(c => c.status === 'rescheduled').length },
+                  { key: 'rescheduled',      label: 'Rescheduled',         dot: 'bg-orange-400', count: visibleConsultations.filter(c => c.status === 'rescheduled').length },
+                  { key: 'needs_reschedule', label: 'Reschedule Requested', dot: 'bg-amber-500', count: visibleConsultations.filter(c => c.status === 'needs_reschedule').length },
                 ] as const).map(s => {
                   const isActive = consultStatusFilter === s.key;
                   const activeCls =
-                    s.key === 'pending'     ? (isDark ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'   : 'bg-amber-50 text-amber-700 border-amber-200') :
-                    s.key === 'confirmed'   ? (isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'         : 'bg-sky-50 text-sky-700 border-sky-200') :
-                    s.key === 'rescheduled' ? (isDark ? 'bg-orange-500/15 text-orange-300 border-orange-500/30': 'bg-orange-50 text-orange-700 border-orange-200') :
-                                              (isDark ? 'bg-white/8 text-white border-white/15'                : 'bg-gray-100 text-gray-800 border-gray-300');
+                    s.key === 'pending'          ? (isDark ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'   : 'bg-amber-50 text-amber-700 border-amber-200') :
+                    s.key === 'confirmed'        ? (isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'         : 'bg-sky-50 text-sky-700 border-sky-200') :
+                    s.key === 'rescheduled'      ? (isDark ? 'bg-orange-500/15 text-orange-300 border-orange-500/30': 'bg-orange-50 text-orange-700 border-orange-200') :
+                    s.key === 'needs_reschedule' ? (isDark ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'   : 'bg-amber-50 text-amber-700 border-amber-200') :
+                                                  (isDark ? 'bg-white/8 text-white border-white/15'                : 'bg-gray-100 text-gray-800 border-gray-300');
                   return (
                     <button
                       key={s.key}
@@ -2888,7 +2899,7 @@ export default function ProfessorDashboard() {
                   )}
                   {displayedConsultations.some(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')) && (
                     <button
-                      onClick={() => { setBulkRescheduleOpen(true); setBulkRescheduleForm({ referral: '', referral_specify: '', remarks: '' }); setBulkRescheduleError(''); }}
+                      onClick={() => { setBulkRescheduleOpen(true); setBulkRescheduleRemarks(''); setBulkRescheduleError(''); }}
                       className={`px-3 py-1.5 text-xs ${btnPrimary}`}>
                       Reschedule ({displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length})
                     </button>
@@ -3182,6 +3193,27 @@ export default function ProfessorDashboard() {
                                 <CheckCheck className="w-3.5 h-3.5" />
                                 Mark Completed
                               </button>
+                            </div>
+                          )}
+                          {c.status === 'needs_reschedule' && (
+                            <div className="flex flex-col gap-2">
+                              {c.reschedule_remarks && (
+                                <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-xs ${isDark ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                  <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                                  <span>Remark: {c.reschedule_remarks}</span>
+                                </div>
+                              )}
+                              <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-700'}`}>
+                                <svg className="w-3.5 h-3.5 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" opacity=".2"/><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                                Waiting for student to select a new schedule
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button onClick={() => openCancelModal(c)}
+                                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isDark ? 'border-red-400/60 text-red-400 hover:bg-red-950/60' : 'border-red-400 text-red-600 hover:bg-red-50'}`}>
+                                  <X className="w-3.5 h-3.5" />
+                                  Cancel
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -4194,9 +4226,9 @@ export default function ProfessorDashboard() {
         </Modal>
       )}
 
-      {/* Reschedule modal */}
+      {/* Reschedule request modal */}
       {reschedulingConsult && (
-        <Modal title="Mark as Rescheduled" onClose={() => setReschedulingConsult(null)} isDark={isDark}>
+        <Modal title="Request Reschedule" onClose={() => setReschedulingConsult(null)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
             <div className={`flex items-center gap-3 p-3 rounded-xl border ${isDark ? 'bg-white/3 border-white/5' : 'bg-gray-50 border-gray-200'}`}>
               <Avatar name={reschedulingConsult.student_name} avatarUrl={reschedulingConsult.student_avatar} size="sm" />
@@ -4205,39 +4237,27 @@ export default function ProfessorDashboard() {
                 <p className="text-gray-500 text-xs mt-0.5">{reschedulingConsult.student_number} · {fmtDate(reschedulingConsult.date, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
             </div>
-            <p className="text-gray-500 text-xs">This marks the consultation as rescheduled (referred/moved to another session).</p>
+            <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>The student will be notified and asked to select a new schedule slot.</p>
             <div>
-              <p className="text-gray-500 text-xs mb-2">Referred To (optional)</p>
-              <div className="space-y-1.5">
-                {REFERRAL_OPTIONS.map(opt => (
-                  <label key={opt} className={radioCls(rescheduleForm.referral === opt)}>
-                    {radioBtn(rescheduleForm.referral === opt)}
-                    {opt}
-                    <input type="radio" className="sr-only" checked={rescheduleForm.referral === opt}
-                      onChange={() => setRescheduleForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
-                  </label>
-                ))}
-              </div>
-              {rescheduleForm.referral === 'Other Office (Please Specify)' && (
-                <input className={`mt-2 w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                  placeholder="Specify office…"
-                  value={rescheduleForm.referral_specify}
-                  onChange={e => setRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
-              )}
-            </div>
-            <div>
-              <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
-              <textarea value={rescheduleForm.remarks} onChange={e => setRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
-                rows={2} className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                placeholder="Reason for rescheduling…" />
+              <Label className={`text-xs mb-1.5 block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reason for rescheduling (optional)</Label>
+              <textarea
+                value={rescheduleRemarks}
+                onChange={e => setRescheduleRemarks(e.target.value)}
+                rows={3}
+                className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                placeholder="e.g. I have a conflict at this time, please pick another slot…"
+              />
             </div>
             {rescheduleError && <p className="text-red-400 text-xs">{rescheduleError}</p>}
             <div className="flex gap-2 pt-1">
               <button onClick={() => setReschedulingConsult(null)} className={`flex-1 py-2.5 text-sm ${btnSecondary}`}>
                 Cancel
               </button>
-              <button onClick={handleReschedule} className={`flex-1 py-2.5 text-sm ${btnPrimary}`}>
-                Mark as Rescheduled
+              <button onClick={handleReschedule} disabled={rescheduleSaving} className={`flex-1 py-2.5 text-sm disabled:opacity-50 ${btnPrimary}`}>
+                {rescheduleSaving
+                  ? <span className="flex items-center justify-center gap-2"><span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Sending…</span>
+                  : 'Send Reschedule Request'
+                }
               </button>
             </div>
           </div>
@@ -4431,40 +4451,26 @@ export default function ProfessorDashboard() {
 
       {/* ── Bulk Reschedule Modal ── */}
       {bulkRescheduleOpen && (
-        <Modal title="Reschedule Selected Consultations" onClose={() => setBulkRescheduleOpen(false)} isDark={isDark}>
+        <Modal title="Request Reschedule for Selected" onClose={() => setBulkRescheduleOpen(false)} isDark={isDark}>
           <div className="px-5 py-5 space-y-4">
-            <div className={`flex items-center gap-2 p-3 rounded-xl ${isDark ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-orange-50 border border-orange-200'}`}>
-              <svg className="w-4 h-4 text-orange-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className={`flex items-center gap-2 p-3 rounded-xl ${isDark ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+              <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p className="text-orange-400 text-xs font-medium">
-                This will mark <span className="font-bold">{displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length}</span> consultation{displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length !== 1 ? 's' : ''} as rescheduled.
+              <p className="text-amber-400 text-xs font-medium">
+                Reschedule request will be sent for <span className="font-bold">{displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length}</span> consultation{displayedConsultations.filter(c => selectedIds.has(c.id) && (c.status === 'pending' || c.status === 'confirmed')).length !== 1 ? 's' : ''}.
               </p>
             </div>
+            <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Each affected student will be notified and asked to select a new schedule slot.</p>
             <div>
-              <p className="text-gray-500 text-xs mb-2">Referred To (optional)</p>
-              <div className="space-y-1.5">
-                {REFERRAL_OPTIONS.map(opt => (
-                  <label key={opt} className={radioCls(bulkRescheduleForm.referral === opt)}>
-                    {radioBtn(bulkRescheduleForm.referral === opt)}
-                    {opt}
-                    <input type="radio" className="sr-only" checked={bulkRescheduleForm.referral === opt}
-                      onChange={() => setBulkRescheduleForm(f => ({ ...f, referral: opt, referral_specify: '' }))} />
-                  </label>
-                ))}
-              </div>
-              {bulkRescheduleForm.referral === 'Other Office (Please Specify)' && (
-                <input className={`mt-2 w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                  placeholder="Specify office…"
-                  value={bulkRescheduleForm.referral_specify}
-                  onChange={e => setBulkRescheduleForm(f => ({ ...f, referral_specify: e.target.value }))} />
-              )}
-            </div>
-            <div>
-              <Label className="text-gray-500 text-xs mb-1.5 block">Remarks (optional)</Label>
-              <textarea value={bulkRescheduleForm.remarks} onChange={e => setBulkRescheduleForm(f => ({ ...f, remarks: e.target.value }))}
-                rows={2} className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
-                placeholder="Reason for rescheduling…" />
+              <Label className={`text-xs mb-1.5 block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reason for rescheduling (optional)</Label>
+              <textarea
+                value={bulkRescheduleRemarks}
+                onChange={e => setBulkRescheduleRemarks(e.target.value)}
+                rows={3}
+                className={`w-full ${fieldCls} resize-none ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`}
+                placeholder="e.g. I have a conflict at this time, please pick another slot…"
+              />
             </div>
             {bulkRescheduleError && <p className="text-red-400 text-xs">{bulkRescheduleError}</p>}
             <div className="flex gap-2 pt-1">
@@ -4472,7 +4478,7 @@ export default function ProfessorDashboard() {
                 Back
               </button>
               <button onClick={handleBulkReschedule} className={`flex-1 py-2.5 text-sm ${btnPrimary}`}>
-                Mark as Rescheduled
+                Send Reschedule Requests
               </button>
             </div>
           </div>

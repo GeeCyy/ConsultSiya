@@ -125,6 +125,7 @@ type Consultation = {
   referral: string | null;
   referral_specify: string | null;
   remarks: string | null;
+  reschedule_remarks?: string | null;
   time?: string | null;
   location?: string;
   meeting_link?: string | null;
@@ -162,8 +163,9 @@ const STATUS_STYLES: Record<string, { darkBg: string; lightBg: string; darkText:
   confirmed:   { darkBg: 'bg-blue-500/15',    lightBg: 'bg-blue-50',     darkText: 'text-blue-400',     lightText: 'text-blue-700',     dot: 'bg-blue-500',     label: 'Confirmed' },
   completed:   { darkBg: 'bg-emerald-500/15', lightBg: 'bg-emerald-50',  darkText: 'text-emerald-400',  lightText: 'text-emerald-700',  dot: 'bg-emerald-500',  label: 'Completed' },
   cancelled:   { darkBg: 'bg-red-500/15',     lightBg: 'bg-red-50',      darkText: 'text-red-400',      lightText: 'text-red-700',      dot: 'bg-red-500',      label: 'Cancelled' },
-  rescheduled: { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
-  missed:      { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
+  rescheduled:      { darkBg: 'bg-orange-500/15',  lightBg: 'bg-orange-50',   darkText: 'text-orange-400',   lightText: 'text-orange-700',   dot: 'bg-orange-500',   label: 'Rescheduled' },
+  needs_reschedule: { darkBg: 'bg-amber-500/15',   lightBg: 'bg-amber-50',    darkText: 'text-amber-500',    lightText: 'text-amber-700',    dot: 'bg-amber-500',    label: 'Please select another schedule' },
+  missed:           { darkBg: 'bg-purple-500/15',  lightBg: 'bg-purple-50',   darkText: 'text-purple-400',   lightText: 'text-purple-700',   dot: 'bg-purple-500',   label: 'Missed' },
 };
 
 function StatusBadge({ status, isDark }: { status: string; isDark?: boolean }) {
@@ -1085,7 +1087,7 @@ export default function StudentDashboard() {
     .sort((a, b) => (a.time || a.time_start).localeCompare(b.time || b.time_start));
 
   // My Consultations tab grouping
-  const activeTabConsultations = consultations.filter(c => ['pending', 'confirmed', 'rescheduled'].includes(c.status));
+  const activeTabConsultations = consultations.filter(c => ['pending', 'confirmed', 'rescheduled', 'needs_reschedule'].includes(c.status));
   const pastTabConsultations   = consultations.filter(c => ['completed', 'cancelled', 'missed'].includes(c.status));
 
   const recentConsultations = [...consultations]
@@ -1468,7 +1470,7 @@ export default function StudentDashboard() {
                     </div>
                     <button
                       onClick={() => handleTabChange('book')}
-                      className="w-full mt-2 py-2.5 rounded-full text-sm font-semibold transition-all bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30 hover:-translate-y-0.5"
+                      className="w-full mt-2 py-2.5 rounded-full text-sm font-semibold transition-colors bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] text-white hover:from-[#0284c7] hover:to-[#38bdf8] shadow-md shadow-sky-900/30 hover:shadow-sky-500/30"
                     >
                       Book a Consultation
                     </button>
@@ -2185,7 +2187,7 @@ export default function StudentDashboard() {
             </div>
 
             {(() => {
-              const displayActive = statusFilter && ['pending', 'confirmed', 'rescheduled'].includes(statusFilter)
+              const displayActive = statusFilter && ['pending', 'confirmed', 'rescheduled', 'needs_reschedule'].includes(statusFilter)
                 ? activeTabConsultations.filter(c => c.status === statusFilter) : activeTabConsultations;
               const displayPast = statusFilter && ['completed', 'cancelled', 'missed'].includes(statusFilter)
                 ? pastTabConsultations.filter(c => c.status === statusFilter) : pastTabConsultations;
@@ -2274,6 +2276,34 @@ export default function StudentDashboard() {
                         })()}
                       </div>
                     </div>
+
+                    {c.status === 'needs_reschedule' && (
+                      <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
+                        <div className={`flex items-start gap-2.5 p-3 rounded-xl mb-3 ${isDark ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                          <svg className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-semibold ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Your professor requested to reschedule this consultation.</p>
+                            {c.reschedule_remarks && (
+                              <p className={`text-xs mt-0.5 ${isDark ? 'text-amber-400/80' : 'text-amber-700'}`}>"{c.reschedule_remarks}"</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => router.push(`/dashboard/student/book/prof/${c.professor_id}?reschedule=${c.id}`)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDark ? 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/25' : 'bg-amber-100 text-amber-700 ring-1 ring-amber-300 hover:bg-amber-200'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            Select New Schedule
+                          </button>
+                          <button onClick={() => handleCancel(c.id)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'}`}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2`}>
                       <div className="flex flex-wrap items-center gap-2">

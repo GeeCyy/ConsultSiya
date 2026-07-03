@@ -126,6 +126,19 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS in_session BOOLEAN DEFAULT FA
 -- Session start timestamp: survives page refreshes so the timer resumes from the correct elapsed time
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS session_started_at TIMESTAMPTZ;
 
+-- Reschedule-request flow: professor asks student to pick a new time slot
+ALTER TABLE consultations DROP CONSTRAINT IF EXISTS consultations_status_check;
+ALTER TABLE consultations ADD CONSTRAINT consultations_status_check
+  CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'rescheduled', 'missed', 'needs_reschedule'));
+
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS reschedule_remarks TEXT;
+
+-- Extend unique-active index to cover needs_reschedule so the old slot stays locked
+DROP INDEX IF EXISTS uq_consultation_active;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_consultation_active
+  ON consultations (student_id, professor_id, date, time)
+  WHERE status IN ('pending', 'confirmed', 'rescheduled', 'needs_reschedule');
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,

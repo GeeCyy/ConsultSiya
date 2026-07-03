@@ -598,7 +598,7 @@ export default function HelpPage() {
         {/* Toggle button */}
         <button
           onClick={() => setChatOpen(v => !v)}
-          className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95"
+          className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-colors"
           style={{ backgroundColor: '#4F6BED' }}
           aria-label="Toggle AI assistant"
         >
