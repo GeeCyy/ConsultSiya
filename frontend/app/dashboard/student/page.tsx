@@ -12,6 +12,7 @@ import { type LeaderboardItem } from '@/components/LeaderboardCard';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import CustomSelect from '@/components/CustomSelect';
+import RescheduleBookingPanel from '@/components/RescheduleBookingPanel';
 import {
   CURRENT_TERM, buildTermFromConfig, getAcademicWeek, getWeekMode,
   daysUntil, getTermDates, getTermProgress,
@@ -515,7 +516,7 @@ function FullCalendar({
                         <div className="flex-1 min-w-0">
                           <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.professor_name}</p>
                           <p className={`text-[10px] ${tm}`}>
-                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode; return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}
+                            {formatTime12((c.time || c.time_start)?.slice(0,5) ?? '')} · {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'F2F' ? 'In-Person' : m === 'BOTH' ? 'F2F & Online' : 'Online'; })()}
                           </p>
                         </div>
                         <StatusBadge status={c.status} isDark={isDark} />
@@ -690,6 +691,7 @@ export default function StudentDashboard() {
 
   // Profile card popup
   const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
+  const [rescheduleModal, setRescheduleModal] = useState<{ consultId: number; professorId: number; profName: string; remarks: string | null } | null>(null);
 
   // Student profile
   const [profile, setProfile] = useState<StudentProfile>({
@@ -1139,7 +1141,7 @@ export default function StudentDashboard() {
   const innerCard = isDark ? 'bg-white/[0.03] border-white/5' : 'bg-gray-50 border-gray-200';
   const hoverBg   = isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-sky-50/60';
 
-  const activeConsults = consultations.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
+  const activeConsults = activeTabConsultations.length;
 
   const natureLabel = (c: Consultation) => {
     const items = parseNature(c.nature_of_advising);
@@ -1200,6 +1202,51 @@ export default function StudentDashboard() {
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
       />
+
+      {/* Reschedule booking modal */}
+      {rescheduleModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onClick={() => setRescheduleModal(null)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className={`relative z-10 w-full max-w-lg flex flex-col shadow-2xl rounded-2xl border max-h-[90vh] ${isDark ? 'border-white/10 bg-[#1e1f22]' : 'border-gray-200 bg-white'}`}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+              <div>
+                <h2 className={`text-base font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Select New Schedule</h2>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Rescheduling with {rescheduleModal.profName}
+                </p>
+              </div>
+              <button
+                onClick={() => setRescheduleModal(null)}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              <RescheduleBookingPanel
+                key={rescheduleModal.consultId}
+                consultId={rescheduleModal.consultId}
+                professorId={rescheduleModal.professorId}
+                rescheduleRemarks={rescheduleModal.remarks}
+                token={token!}
+                isDark={isDark}
+                onSuccess={() => {
+                  setRescheduleModal(null);
+                  toast.success(`New schedule confirmed with ${rescheduleModal.profName}!`);
+                  fetchData();
+                }}
+                onCancel={() => setRescheduleModal(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <DashboardNavbar
         role="student"
@@ -2254,7 +2301,7 @@ export default function StudentDashboard() {
                       <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                         <p className={`text-xs uppercase tracking-wide mb-1 font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Meeting</p>
                         {(() => {
-                          const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
+                          const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F');
                           return (
                             <>
                               <div className="flex items-center gap-1.5">
@@ -2292,13 +2339,13 @@ export default function StudentDashboard() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button
-                            onClick={() => router.push(`/dashboard/student/book/prof/${c.professor_id}?reschedule=${c.id}`)}
+                            onClick={() => setRescheduleModal({ consultId: c.id, professorId: c.professor_id, profName: c.professor_name, remarks: c.reschedule_remarks ?? null })}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDark ? 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/25' : 'bg-amber-100 text-amber-700 ring-1 ring-amber-300 hover:bg-amber-200'}`}>
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                             Select New Schedule
                           </button>
                           <button onClick={() => handleCancel(c.id)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'}`}>
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ring-1 ${isDark ? 'bg-red-500/10 text-red-400 ring-red-500/30 hover:bg-red-500/20 hover:ring-red-500/50' : 'bg-red-50 text-red-600 ring-red-200 hover:bg-red-100 hover:ring-red-300'}`}>
                             Cancel
                           </button>
                         </div>
@@ -2321,7 +2368,7 @@ export default function StudentDashboard() {
 
                       {(c.status === 'pending' || c.status === 'confirmed') && (
                         <button onClick={() => handleCancel(c.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'}`}>
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ring-1 ${isDark ? 'bg-red-500/10 text-red-400 ring-red-500/30 hover:bg-red-500/20 hover:ring-red-500/50' : 'bg-red-50 text-red-600 ring-red-200 hover:bg-red-100 hover:ring-red-300'}`}>
                           Cancel
                         </button>
                       )}

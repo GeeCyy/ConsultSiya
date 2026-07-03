@@ -18,8 +18,8 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 
 export default function LeaderboardCard({ title, items, highlight, isDark = true, compact = false }: Props) {
   const cardBg    = isDark
-    ? 'bg-[#252535] border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200'
-    : 'bg-white border-sky-100 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.16),0_8px_20px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200';
+    ? 'bg-[#252535] border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]'
+    : 'bg-white border-sky-100 shadow-[0_10px_40px_rgba(0,0,0,0.12),0_4px_12px_rgba(0,0,0,0.08)]';
   const divider   = isDark ? 'divide-white/5'               : 'divide-gray-100';
   const headerBdr = isDark ? 'border-white/5'               : 'border-gray-100';
   const tp        = isDark ? 'text-white'                   : 'text-gray-900';

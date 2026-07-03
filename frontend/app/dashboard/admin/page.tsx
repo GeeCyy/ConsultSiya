@@ -563,7 +563,16 @@ export default function AdminDashboard() {
     if (Array.isArray(data)) setCalOverrides(data);
   };
 
-  const handleLogout = () => { localStorage.clear(); router.push('/login'); };
+  const handleLogout = () => {
+    const tourStudent = localStorage.getItem('consulta-tour-done-student');
+    const tourProf    = localStorage.getItem('consulta-tour-done-professor');
+    const tourAdmin   = localStorage.getItem('consulta-tour-done-admin');
+    localStorage.clear();
+    if (tourStudent) localStorage.setItem('consulta-tour-done-student', tourStudent);
+    if (tourProf)    localStorage.setItem('consulta-tour-done-professor', tourProf);
+    if (tourAdmin)   localStorage.setItem('consulta-tour-done-admin', tourAdmin);
+    router.push('/login');
+  };
 
   const handleDownload = async (url: string, filename: string, key: string) => {
     setExporting(key);
@@ -888,7 +897,13 @@ export default function AdminDashboard() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to save. Please try again.';
       if (msg.includes('Insufficient permissions')) {
+        const tourStudent = localStorage.getItem('consulta-tour-done-student');
+        const tourProf    = localStorage.getItem('consulta-tour-done-professor');
+        const tourAdmin   = localStorage.getItem('consulta-tour-done-admin');
         localStorage.clear();
+        if (tourStudent) localStorage.setItem('consulta-tour-done-student', tourStudent);
+        if (tourProf)    localStorage.setItem('consulta-tour-done-professor', tourProf);
+        if (tourAdmin)   localStorage.setItem('consulta-tour-done-admin', tourAdmin);
         router.push('/login');
         return;
       }

@@ -760,7 +760,7 @@ function ProfCalendar({
                       <div className="flex-1 min-w-0">
                         <p className={`text-[11px] font-semibold truncate ${tp}`}>{c.student_name}</p>
                         <p className={`text-[10px] ${tm}`}>
-                          {to12h((c.time || c.time_start)?.slice(0,5) ?? '')} · {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'In-Person' : 'Online'}
+                          {to12h((c.time || c.time_start)?.slice(0,5) ?? '')} · {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'BOTH' ? 'F2F & Online' : m === 'F2F' ? 'In-Person' : 'Online'; })()}
                         </p>
                       </div>
                       <StatusBadge status={c.status} isDark={isDark} />
@@ -866,6 +866,7 @@ export default function ProfessorDashboard() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const [topNavNotifOpen, setTopNavNotifOpen] = useState(false);
   const [topNavProfileOpen, setTopNavProfileOpen] = useState(false);
+  const [seenPendingIds, setSeenPendingIds] = useState<Set<number>>(new Set());
   const topNavNotifRef        = useRef<HTMLDivElement>(null);
   const topNavNotifPanelRef   = useRef<HTMLDivElement>(null);
   const topNavProfileRef      = useRef<HTMLDivElement>(null);
@@ -1135,6 +1136,15 @@ export default function ProfessorDashboard() {
     return () => document.removeEventListener('mousedown', handler);
   }, [topNavNotifOpen]);
 
+  // Load previously-seen pending IDs from localStorage when profile is ready
+  useEffect(() => {
+    if (!profile.email) return;
+    try {
+      const stored = localStorage.getItem(`prof_seen_pending_${profile.email}`);
+      if (stored) setSeenPendingIds(new Set(JSON.parse(stored) as number[]));
+    } catch {}
+  }, [profile.email]);
+
   // Close desktop top-nav profile dropdown on outside click
   useEffect(() => {
     if (!topNavProfileOpen) return;
@@ -1275,7 +1285,7 @@ export default function ProfessorDashboard() {
   const handleBulkConfirm = async () => {
     const toConfirm = visibleConsultations.filter(c => selectedIds.has(c.id) && c.status === 'pending');
     if (!toConfirm.length) return;
-    const needsLink = toConfirm.some(c => c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH');
+    const needsLink = toConfirm.some(c => c.slot_mode === 'BOTH' || c.slot_mode === 'OL' || c.mode === 'OL' || c.mode === 'BOTH');
     if (needsLink) {
       setBulkMeetingLinkInput('');
       setBulkMeetingLinkOpen(true);
@@ -1298,7 +1308,7 @@ export default function ProfessorDashboard() {
     setBulkMeetingLinkError('');
     const link = rawLink || undefined;
     await Promise.all(toConfirm.map(c => {
-      const needsLink = c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH';
+      const needsLink = c.slot_mode === 'BOTH' || c.slot_mode === 'OL' || c.mode === 'OL' || c.mode === 'BOTH';
       return api.patch(`/api/consultations/${c.id}/confirm`, needsLink ? { meeting_link: link } : {}, token!);
     }));
     setBulkMeetingLinkOpen(false);
@@ -1418,6 +1428,7 @@ export default function ProfessorDashboard() {
   const handleRequestAddSchedule = () => {
     setSchedError('');
     if (!newSchedDate) { setSchedError('Please select a date.'); return; }
+    if (newSchedMode === 'F2F' && !newSched.location.trim()) { setSchedError('Location is required for Face-to-Face slots.'); return; }
     if (newSched.time_ranges.length === 0) { setSchedError('At least one time range is required.'); return; }
     for (const r of newSched.time_ranges) {
       if (!r.time_start || !r.time_end) { setSchedError('Please fill in all time range fields.'); return; }
@@ -1479,6 +1490,7 @@ export default function ProfessorDashboard() {
   const handleRequestEditSchedule = () => {
     setEditSchedError('');
     if (!editSchedDate) { setEditSchedError('Please select a date.'); return; }
+    if (editSchedMode === 'F2F' && !editSched.location.trim()) { setEditSchedError('Location is required for Face-to-Face slots.'); return; }
     if (editSched.time_ranges.length === 0) { setEditSchedError('At least one time range is required.'); return; }
     for (const r of editSched.time_ranges) {
       if (!r.time_start || !r.time_end) { setEditSchedError('Please fill in all time range fields.'); return; }
@@ -1718,7 +1730,7 @@ export default function ProfessorDashboard() {
   const sundayStr = toLocalDateStr(sunday);
 
   const thisWeek  = consultations.filter(c => c.date >= mondayStr && c.date <= sundayStr);
-  const activeSessionConsult = consultations.find(c => c.in_session) ?? null;
+  const activeSessionConsult = consultations.find(c => c.in_session && !!c.session_started_at) ?? null;
   const profInSession = activeSessionConsult !== null;
 
   const scheduledCount = thisWeek.filter(c => c.status === 'pending' || c.status === 'confirmed').length;
@@ -1745,7 +1757,7 @@ export default function ProfessorDashboard() {
   );
 
   // Shared style helpers for the home tab
-  const card      = isDark ? 'relative z-[1] rounded-2xl bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.75),0_8px_20px_rgba(0,0,0,0.50)] hover:-translate-y-0.5 transition-all duration-200' : 'hover:-translate-y-0.5 transition-all duration-200';
+  const card      = isDark ? 'relative z-[1] rounded-2xl bg-[#252525] border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : '';
   const glassStyle = {
     background: 'rgba(255, 255, 255, 0.82)',
     backdropFilter: 'blur(12px)',
@@ -1781,9 +1793,11 @@ export default function ProfessorDashboard() {
   const handleNavSignOut = () => {
     const tourStudent = localStorage.getItem('consulta-tour-done-student');
     const tourProf    = localStorage.getItem('consulta-tour-done-professor');
+    const tourAdmin   = localStorage.getItem('consulta-tour-done-admin');
     localStorage.clear();
     if (tourStudent) localStorage.setItem('consulta-tour-done-student', tourStudent);
     if (tourProf)    localStorage.setItem('consulta-tour-done-professor', tourProf);
+    if (tourAdmin)   localStorage.setItem('consulta-tour-done-admin', tourAdmin);
     router.push('/login');
   };
 
@@ -1801,6 +1815,8 @@ export default function ProfessorDashboard() {
       </div>
     );
   }
+
+  const unseenPendingCount = consultations.filter(c => c.status === 'pending' && !seenPendingIds.has(c.id)).length;
 
   return (
     <div className={`h-screen flex overflow-hidden relative ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
@@ -1918,15 +1934,23 @@ export default function ProfessorDashboard() {
             <div className="relative" ref={topNavNotifRef}>
               <button
                 data-tour="notifications"
-                onClick={() => setTopNavNotifOpen(o => !o)}
+                onClick={() => {
+                  const opening = !topNavNotifOpen;
+                  setTopNavNotifOpen(o => !o);
+                  if (opening) {
+                    const ids = new Set([...seenPendingIds, ...consultations.filter(c => c.status === 'pending').map(c => c.id)]);
+                    setSeenPendingIds(ids);
+                    try { localStorage.setItem(`prof_seen_pending_${profile.email || 'default'}`, JSON.stringify([...ids])); } catch {}
+                  }
+                }}
                 className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
-                {consultations.filter(c => c.status === 'pending').length > 0 && (
+                {unseenPendingCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-[#CC0000] text-white text-[9px] font-bold flex items-center justify-center">
-                    {consultations.filter(c => c.status === 'pending').length > 9 ? '9+' : consultations.filter(c => c.status === 'pending').length}
+                    {unseenPendingCount > 9 ? '9+' : unseenPendingCount}
                   </span>
                 )}
               </button>
@@ -1970,9 +1994,9 @@ export default function ProfessorDashboard() {
           <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
             <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Notifications
-              {consultations.filter(c => c.status === 'pending').length > 0 && (
+              {unseenPendingCount > 0 && (
                 <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">
-                  {consultations.filter(c => c.status === 'pending').length} new
+                  {unseenPendingCount} new
                 </span>
               )}
             </p>
@@ -2001,7 +2025,7 @@ export default function ProfessorDashboard() {
                       {new Date(c.date.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}
                     </p>
                   </div>
-                  <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 bg-[#CC0000]" />
+                  {!seenPendingIds.has(c.id) && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 bg-[#CC0000]" />}
                 </button>
               </div>
             ))}
@@ -2178,7 +2202,7 @@ export default function ProfessorDashboard() {
                               <div className="flex-1 min-w-0">
                                 <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.student_name}</p>
                                 <p className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                  {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'In-Person' : 'Online'}
+                                  {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'BOTH' ? 'F2F & Online' : m === 'F2F' ? 'In-Person' : 'Online'; })()}
                                 </p>
                               </div>
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${isDark ? s.darkBg + ' ' + s.darkText : s.lightBg + ' ' + s.lightText}`}>
@@ -2594,7 +2618,7 @@ export default function ProfessorDashboard() {
                                 {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
                               </span>
                               <span className={`text-[10px] flex-shrink-0 ${tm}`}>
-                                {c.mode === 'BOTH' ? 'F2F & Online' : c.mode === 'F2F' ? 'F2F' : 'Online'}
+                                {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'BOTH' ? 'F2F & Online' : m === 'F2F' ? 'F2F' : 'Online'; })()}
                               </span>
                             </div>
                           );
@@ -3001,7 +3025,7 @@ export default function ProfessorDashboard() {
                           <div className={`rounded-lg border px-3 py-2.5 ${innerCard}`}>
                             <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${tm}`}>Meeting</p>
                             {(() => {
-                              const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.mode;
+                              const effMode = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F');
                               return (
                                 <>
                                   <div className="flex items-center gap-1.5">
@@ -3022,7 +3046,7 @@ export default function ProfessorDashboard() {
                                 </>
                               );
                             })()}
-                            {(c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH') && c.meeting_link && (
+                            {(c.slot_mode === 'BOTH' || c.slot_mode === 'OL' || c.mode === 'OL' || c.mode === 'BOTH') && c.meeting_link && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <a href={c.meeting_link} target="_blank" rel="noopener noreferrer"
                                   className="text-cyan-400 text-xs truncate hover:underline flex-1 min-w-0">
@@ -3036,7 +3060,7 @@ export default function ProfessorDashboard() {
                                   </button>
                               </div>
                             )}
-                            {(c.slot_mode === 'BOTH' || c.mode === 'OL' || c.mode === 'BOTH') && !c.meeting_link && (
+                            {(c.slot_mode === 'BOTH' || c.slot_mode === 'OL' || c.mode === 'OL' || c.mode === 'BOTH') && !c.meeting_link && (
                               <button
                                 onClick={() => { setEditLinkConsult(c); setEditLinkInput(''); }}
                                 className="text-cyan-600 hover:text-cyan-400 text-xs mt-0.5 transition-colors">
@@ -3127,17 +3151,17 @@ export default function ProfessorDashboard() {
                                     onClick={() => handleToggleInSession(c)}
                                     disabled={togglingSession === c.id}
                                     className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
-                                      c.in_session
+                                      (c.in_session && c.session_started_at)
                                         ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
                                         : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
                                     }`}>
                                     {togglingSession === c.id
                                       ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                      : c.in_session
+                                      : (c.in_session && c.session_started_at)
                                         ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                                         : <span className="w-2 h-2 rounded-full border-2 border-current" />
                                     }
-                                    {c.in_session ? `End Session · ${formatElapsed(sessionElapsed)}` : 'Start Session'}
+                                    {(c.in_session && c.session_started_at) ? `End Session · ${formatElapsed(sessionElapsed)}` : 'Start Session'}
                                   </button>
                                 )
                               )}
@@ -3170,17 +3194,17 @@ export default function ProfessorDashboard() {
                                   onClick={() => handleToggleInSession(c)}
                                   disabled={togglingSession === c.id}
                                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
-                                    c.in_session
+                                    (c.in_session && c.session_started_at)
                                       ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]'
                                       : isDark ? 'border border-amber-400/50 text-amber-400 hover:bg-amber-950/50' : 'border border-amber-400 text-amber-600 hover:bg-amber-50'
                                   }`}>
                                   {togglingSession === c.id
                                     ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    : c.in_session
+                                    : (c.in_session && c.session_started_at)
                                       ? <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                                       : <span className="w-2 h-2 rounded-full border-2 border-current" />
                                   }
-                                  {c.in_session ? `End Session · ${formatElapsed(sessionElapsed)}` : 'Start Session'}
+                                  {(c.in_session && c.session_started_at) ? `End Session · ${formatElapsed(sessionElapsed)}` : 'Start Session'}
                                 </button>
                               )}
                               <button onClick={() => openCancelModal(c)}
@@ -3337,7 +3361,7 @@ export default function ProfessorDashboard() {
                                 <Avatar name={c.student_name} avatarUrl={c.student_avatar} size="sm" />
                                 <div>
                                   <p className={`text-sm font-medium ${tp}`}>{c.student_name}</p>
-                                  <p className={`text-xs ${tm}`}>{fmtTime(c)} · {c.mode === 'BOTH' ? 'Face-to-Face & Online' : c.mode === 'F2F' ? 'Face-to-Face' : 'Online'}</p>
+                                  <p className={`text-xs ${tm}`}>{fmtTime(c)} · {(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'BOTH' ? 'Face-to-Face & Online' : m === 'F2F' ? 'Face-to-Face' : 'Online'; })()}</p>
                                 </div>
                               </div>
                               <StatusBadge status={c.status} isDark={isDark} />
@@ -3433,7 +3457,7 @@ export default function ProfessorDashboard() {
                 {/* Location — shown for F2F */}
                 {newSchedMode === 'F2F' && (
                   <div className="mb-3">
-                    <Label className="text-gray-500 text-xs mb-1.5 block">Location <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional)</span></Label>
+                    <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
                     <input
                       type="text"
                       value={newSched.location}
@@ -3830,7 +3854,7 @@ export default function ProfessorDashboard() {
                                                 <div className="flex gap-6 flex-wrap">
                                                   <div>
                                                     <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Mode</p>
-                                                    <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{c.mode === 'BOTH' ? 'Face-to-Face & Online' : c.mode === 'F2F' ? 'In-Person' : c.mode === 'OL' ? 'Online' : c.mode || '—'}</p>
+                                                    <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{(() => { const m = c.slot_mode === 'BOTH' ? 'BOTH' : c.slot_mode === 'OL' ? 'OL' : c.slot_mode ? 'F2F' : (c.mode || 'F2F'); return m === 'BOTH' ? 'Face-to-Face & Online' : m === 'F2F' ? 'In-Person' : 'Online'; })()}</p>
                                                   </div>
                                                   <div>
                                                     <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Time</p>
@@ -4300,7 +4324,7 @@ export default function ProfessorDashboard() {
             </div>
             {editSchedMode === 'F2F' && (
               <div>
-                <Label className="text-gray-500 text-xs mb-1.5 block">Location <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(Optional)</span></Label>
+                <Label className="text-gray-500 text-xs mb-1.5 block">Location</Label>
                 <input type="text" value={editSched.location} onChange={e => setEditSched(f => ({ ...f, location: e.target.value }))}
                   placeholder="e.g. Room 201"
                   className={`w-full ${fieldCls} ${isDark ? 'placeholder-gray-600' : 'placeholder-gray-400'}`} />
