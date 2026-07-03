@@ -44,7 +44,7 @@ const getReportData = async (professorId, { period, dateFrom, dateTo, status } =
       c.id, c.date, c.nature_of_advising, c.mode, c.status, c.uploaded_form_path, c.proof_of_evidence, c.proof_type,
       s.full_name AS student_name, s.student_number, s.program,
       p.full_name AS professor_name, p.department,
-      sch.day, sch.time_start, sch.time_end,
+      sch.day, sch.time_start, sch.time_end, sch.mode AS slot_mode,
       cd.action_taken, cd.referral, cd.remarks
      FROM consultations c
      JOIN students s ON c.student_id = s.id
@@ -100,6 +100,11 @@ const addExcelSheet = (workbook, professor, rows) => {
       if (Array.isArray(parsed)) nature = parsed.join('; ');
     } catch {}
 
+    const exSm = row.slot_mode;
+    const exCm = row.mode;
+    const exEff = exSm === 'BOTH' ? 'BOTH' : exSm === 'OL' ? 'OL' : exSm ? 'F2F' : (exCm || 'F2F');
+    const exMode = exEff === 'OL' ? 'OL' : exEff === 'BOTH' ? 'F2F/OL' : 'F2F';
+
     sheet.addRow([
       index + 1,
       row.student_name,
@@ -108,7 +113,7 @@ const addExcelSheet = (workbook, professor, rows) => {
       new Date(row.date).toLocaleDateString(),
       `${row.day} ${row.time_start?.slice(0, 5)}-${row.time_end?.slice(0, 5)}`,
       nature,
-      row.mode,
+      exMode,
       row.action_taken || '',
       row.referral || '',
       row.remarks || '',
@@ -160,9 +165,10 @@ function buildReportHtml(sections) {
 
   const pagesHtml = sections.map(({ professor, rows }, idx) => {
     const tableRows = rows.map((row, i) => {
-      let modeDisplay = 'F2F';
-      if (row.mode === 'OL')   modeDisplay = 'OL';
-      if (row.mode === 'BOTH') modeDisplay = 'F2F/OL';
+      const sm = row.slot_mode; // schedules.mode: 'FF', 'OL', 'BOTH'
+      const cm = row.mode;     // consultations.mode: 'F2F', 'OL', 'BOTH'
+      const effMode = sm === 'BOTH' ? 'BOTH' : sm === 'OL' ? 'OL' : sm ? 'F2F' : (cm || 'F2F');
+      const modeDisplay = effMode === 'OL' ? 'OL' : effMode === 'BOTH' ? 'F2F/OL' : 'F2F';
 
       let proofUrl = null;
       if (row.proof_type === 'link' && row.proof_of_evidence) {

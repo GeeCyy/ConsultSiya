@@ -991,10 +991,13 @@ router.patch('/:id/accept-reschedule', authenticate, authorize('student'), async
     if (!schedule_id) return res.status(400).json({ error: 'Schedule ID is required.' });
 
     const schedResult = await pool.query(
-      `SELECT time_start, time_end, time_ranges FROM schedules WHERE id = $1`, [schedule_id]
+      `SELECT time_start, time_end, time_ranges, mode FROM schedules WHERE id = $1`, [schedule_id]
     );
     if (schedResult.rows.length === 0) return res.status(404).json({ error: 'Schedule not found.' });
     const sched = schedResult.rows[0];
+    // Derive the consultation mode from the new slot's mode
+    const newSlotMode = sched.mode; // 'FF', 'OL', or 'BOTH'
+    const newConsultMode = newSlotMode === 'OL' ? 'OL' : newSlotMode === 'BOTH' ? 'BOTH' : 'F2F';
     const ranges = Array.isArray(sched.time_ranges) && sched.time_ranges.length > 0
       ? sched.time_ranges
       : [{ time_start: sched.time_start, time_end: sched.time_end }];
@@ -1024,11 +1027,11 @@ router.patch('/:id/accept-reschedule', authenticate, authorize('student'), async
 
     await pool.query(
       `UPDATE consultations
-       SET status = 'pending', date = $2, time = $3, schedule_id = $4,
+       SET status = 'pending', date = $2, time = $3, schedule_id = $4, mode = $5,
            reschedule_remarks = NULL,
-           notes = CASE WHEN $5::text IS NOT NULL THEN COALESCE(NULLIF(notes,'') || E'\n', '') || $5 ELSE notes END
+           notes = CASE WHEN $6::text IS NOT NULL THEN COALESCE(NULLIF(notes,'') || E'\n', '') || $6 ELSE notes END
        WHERE id = $1`,
-      [id, date, time, schedule_id, archivedNote]
+      [id, date, time, schedule_id, newConsultMode, archivedNote]
     );
 
     try {

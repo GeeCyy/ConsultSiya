@@ -6,6 +6,12 @@ import DashboardShell from '@/components/DashboardShell';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+const TOUR_DONE_KEYS: Record<string, string> = {
+  student:   'consulta-tour-done-student',
+  professor: 'consulta-tour-done-professor',
+  admin:     'consulta-tour-done-admin',
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tab = 'profile' | 'notifications' | 'system';
@@ -386,6 +392,9 @@ export default function SettingsPage() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifMsg, setNotifMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // Tour setting state
+  const [tourEnabled, setTourEnabled] = useState(true);
+
   // Password state — inline collapsible in Profile tab
   const [pwOpen,    setPwOpen]    = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
@@ -413,6 +422,8 @@ export default function SettingsPage() {
       return;
     }
     setRole(storedRole);
+    const tourKey = TOUR_DONE_KEYS[storedRole];
+    if (tourKey) setTourEnabled(!localStorage.getItem(tourKey));
 
     const headers = { Authorization: `Bearer ${token}` };
 
@@ -642,6 +653,17 @@ export default function SettingsPage() {
     } finally {
       setSysSaving(false);
     }
+  };
+
+  // ── Tour toggle (localStorage only, instant) ────────────────────────────────
+  const handleTourToggle = (enabled: boolean) => {
+    const tourKey = TOUR_DONE_KEYS[role];
+    if (!tourKey) return;
+    try {
+      if (enabled) localStorage.removeItem(tourKey);
+      else localStorage.setItem(tourKey, '1');
+    } catch { /**/ }
+    setTourEnabled(enabled);
   };
 
   // ── Tab definitions ─────────────────────────────────────────────────────────
@@ -1180,6 +1202,22 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     )}
+
+                    {/* App Experience */}
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>App Experience</p>
+                      <div className={`rounded-xl px-4 divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
+                        <ToggleRow
+                          label="Show Onboarding Tour"
+                          sublabel="Display the guided tour when you visit the dashboard"
+                          checked={tourEnabled}
+                          onChange={handleTourToggle}
+                        />
+                      </div>
+                      <p className={`mt-2 text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                        Enable to see the tour again on your next dashboard visit.
+                      </p>
+                    </div>
 
                     <div>
                       <button

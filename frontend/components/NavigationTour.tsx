@@ -306,14 +306,16 @@ export default function NavigationTour({
     };
   }, [isChatbotStep]);
 
-  const dismiss = () => {
+  const skipForNow = () => setVisible(false);
+
+  const dismissForever = () => {
     try { localStorage.setItem(doneKey, '1'); } catch { /**/ }
     setVisible(false);
   };
 
   const goNext = () => {
     if (stepIdx < steps.length - 1) setStepIdx(i => i + 1);
-    else dismiss();
+    else dismissForever();
   };
 
   const goPrev = () => { if (stepIdx > 0) setStepIdx(i => i - 1); };
@@ -430,17 +432,25 @@ export default function NavigationTour({
   );
 
   const buttons = (
-    <div className="flex items-center gap-2 mt-4">
-      {stepIdx > 0 && (
-        <button onClick={goPrev} className={`flex-1 text-xs py-1.5 px-3 rounded-lg transition-colors ${btnGhost}`}>
-          Back
+    <div className="flex flex-col gap-1.5 mt-4">
+      <div className="flex items-center gap-2">
+        {stepIdx > 0 && (
+          <button onClick={goPrev} className={`flex-1 text-xs py-1.5 px-3 rounded-lg transition-colors ${btnGhost}`}>
+            Back
+          </button>
+        )}
+        <button
+          onClick={goNext}
+          className="flex-1 text-xs py-2 px-3 rounded-lg bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-semibold transition-colors"
+        >
+          {isLast ? 'Done' : 'Next'}
         </button>
-      )}
+      </div>
       <button
-        onClick={goNext}
-        className="flex-1 text-xs py-2 px-3 rounded-lg bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-semibold transition-colors"
+        onClick={dismissForever}
+        className={`text-[11px] w-full text-center py-1 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
       >
-        {isLast ? 'Done' : 'Next'}
+        Don&apos;t show again
       </button>
     </div>
   );
@@ -448,7 +458,7 @@ export default function NavigationTour({
   const cardHeader = (
     <div className="flex items-center justify-between mb-3">
       {dots}
-      <button onClick={dismiss} className={`text-[11px] px-2 py-0.5 rounded transition-colors ${btnGhost}`}>
+      <button onClick={skipForNow} className={`text-[11px] px-2 py-0.5 rounded transition-colors ${btnGhost}`}>
         Skip tour
       </button>
     </div>

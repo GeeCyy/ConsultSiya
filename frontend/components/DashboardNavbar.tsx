@@ -201,7 +201,16 @@ export default function DashboardNavbar({
     return () => window.removeEventListener('resize', h);
   }, []);
 
-  const handleLogout = () => { localStorage.clear(); router.push('/login'); };
+  const handleLogout = () => {
+    const tourStudent = localStorage.getItem('consulta-tour-done-student');
+    const tourProf    = localStorage.getItem('consulta-tour-done-professor');
+    const tourAdmin   = localStorage.getItem('consulta-tour-done-admin');
+    localStorage.clear();
+    if (tourStudent) localStorage.setItem('consulta-tour-done-student', tourStudent);
+    if (tourProf)    localStorage.setItem('consulta-tour-done-professor', tourProf);
+    if (tourAdmin)   localStorage.setItem('consulta-tour-done-admin', tourAdmin);
+    router.push('/login');
+  };
 
   const [navScrolled, setNavScrolled] = useState(false);
   useEffect(() => {
