@@ -2376,83 +2376,34 @@ export default function AdminDashboard() {
                               ? isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-300'
                               : isDark ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25' : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
                           }`}>
-                          {v === 'rankings' ? 'Rankings' : 'Top Topics'}
+                          {v === 'rankings' ? 'Professors' : 'Topics'}
                         </button>
                       ))}
                     </div>
                     {lbView === 'rankings' && (
-                      <div className="space-y-4">
-                        <div>
-                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-amber-100 border border-amber-300'}`}>
-                            <span className="text-base leading-none">🏆</span>
-                            <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>Top Professors</p>
+                      <div className="overflow-y-auto flex-1 space-y-1">
+                        {lbProfs.length === 0 ? (
+                          <p className={`text-sm ${bs} py-1 px-2`}>No data.</p>
+                        ) : lbProfs.map(item => (
+                          <div key={item.rank} className={`flex items-center gap-3 py-2 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
+                            <span className={`flex-1 text-sm truncate font-medium min-w-0 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{item.label}</span>
+                            <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.count}</span>
                           </div>
-                          <div className="space-y-1.5">
-                            {lbProfs.slice(0, 3).map((item, i) => (
-                              <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
-                                <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                                <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{item.label}</span>
-                                <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.count}</span>
-                              </div>
-                            ))}
-                            {lbProfs.length === 0 && <p className={`text-sm ${bs} py-1 px-2`}>No data.</p>}
-                          </div>
-                        </div>
-                        <div className={`border-t ${isDark ? 'border-white/20' : 'border-gray-300'}`} />
-                        <div>
-                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-indigo-500/20 border border-indigo-500/30' : 'bg-indigo-100 border border-indigo-300'}`}>
-                            <span className="text-base leading-none">🎓</span>
-                            <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Top Students</p>
-                          </div>
-                          <div className="space-y-1.5">
-                            {lbStudents.slice(0, 3).map((item, i) => (
-                              <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
-                                <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                                <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{item.label}</span>
-                                <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.count}</span>
-                              </div>
-                            ))}
-                            {lbStudents.length === 0 && <p className={`text-sm ${bs} py-1 px-2`}>No data.</p>}
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     )}
-                    {lbView === 'consulted' && (() => {
-                      const top3 = lbTopics.slice(0, 3);
-                      const topCount = top3[0]?.count || 1;
-                      return (
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-3">
-                            <span className="text-xs leading-none">🔥</span>
-                            <p className={`text-[10px] font-bold uppercase tracking-wider ${bs}`}>Trending across all consultations</p>
+                    {lbView === 'consulted' && (
+                      <div className="overflow-y-auto flex-1 space-y-1">
+                        {lbTopics.length === 0 ? (
+                          <p className={`text-sm ${bs} py-1 px-2`}>No consultation data yet.</p>
+                        ) : lbTopics.map(t => (
+                          <div key={t.label} className={`flex items-center gap-3 py-2 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
+                            <span className={`flex-1 text-sm truncate font-medium min-w-0 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{t.label}</span>
+                            <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
                           </div>
-                          {top3.length === 0 ? (
-                            <p className={`text-xs ${bs} py-1`}>No consultation data yet.</p>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {top3.map((t, i) => {
-                                const cfg = RANK_CFG[i];
-                                const pct = Math.max(8, Math.round((t.count / topCount) * 100));
-                                return (
-                                  <div key={t.label} className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
-                                    <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
-                                        <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
-                                        <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
-                                      </div>
-                                      <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
-                                        <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`} style={{ width: `${pct}%` }} />
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Announcements CRUD */}
