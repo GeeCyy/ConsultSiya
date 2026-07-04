@@ -204,16 +204,16 @@ export default function BookSlotPage() {
   const [topicItems, setTopicItems] = useState<TopicItem[]>([]);
   const [profSpecializations, setProfSpecializations] = useState<TopicItem[]>([]);
 
-  const handleDownloadSlip = async () => {
+  const handleDownloadFilledSlip = async (consultationId: number) => {
     setDownloadingSlip(true);
     try {
-      const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { toast.error('Failed to download form template.'); return; }
+      const res = await fetch(`${API_URL}/api/forms/advising-slip/${consultationId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { toast.error('Booking confirmed, but slip download failed.'); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'advising-slip-FM-AS-11-02.pdf';
+      a.download = `advising-slip-${consultationId}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -398,6 +398,8 @@ export default function BookSlotPage() {
         mode: bookForm.mode,
       }, token!);
       if (data.error) { setBookError(data.error); return; }
+      toast.success('Booking confirmed! Downloading your advising slip…');
+      if (data.id) await handleDownloadFilledSlip(data.id);
       router.push('/dashboard/student?view=my');
     } finally {
       setIsBooking(false);
@@ -475,18 +477,9 @@ export default function BookSlotPage() {
         </div>
 
         {/* Page title */}
-        <div className="flex items-start justify-between gap-3 mb-6">
-          <div>
-            <h1 className={`text-2xl sm:text-3xl font-bold ${tp}`}>Book a Consultation</h1>
-            <p className={`text-sm mt-1 ${ts}`}>Fill in the details below to request a consultation session.</p>
-          </div>
-          <button onClick={handleDownloadSlip} disabled={downloadingSlip}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10 ring-1 ring-white/10' : 'bg-white text-gray-600 hover:bg-gray-50 ring-1 ring-gray-200 shadow-sm'}`}>
-            {downloadingSlip
-              ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-              : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>}
-            Download Consultation Form Template
-          </button>
+        <div className="mb-6">
+          <h1 className={`text-2xl sm:text-3xl font-bold ${tp}`}>Book a Consultation</h1>
+          <p className={`text-sm mt-1 ${ts}`}>Fill in the details below to request a consultation session. Your advising slip will be downloaded automatically upon confirmation.</p>
         </div>
 
         {/* Professor header card */}
