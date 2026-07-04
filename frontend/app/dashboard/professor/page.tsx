@@ -2969,7 +2969,7 @@ export default function ProfessorDashboard() {
                         onChange={() => allSelected ? clearSelection() : selectAll()}
                         className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
                       />
-                      <span className={`text-xs ${tm}`}>
+                      <span className={`text-xs ${tp}`}>
                         {allSelected ? 'Deselect all' : `Select all ${displayedConsultations.length}`}
                       </span>
                     </div>
