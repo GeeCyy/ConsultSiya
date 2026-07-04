@@ -282,7 +282,6 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [expandedSchedules, setExpandedSchedules] = useState<Set<string>>(new Set());
-  const [scheduleView, setScheduleView] = useState<'active' | 'past'>('active');
 
   // History filters
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('all');
@@ -1728,23 +1727,9 @@ export default function AdminDashboard() {
             {/* ── Schedules ── */}
             {tab === 'schedules' && (
               <>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 sm:mb-7">
-                  <div>
-                    <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Schedules</h1>
-                    <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>All professor availability slots</p>
-                  </div>
-                  <div className={`flex gap-1 p-1 rounded-xl ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
-                    {(['active', 'past'] as const).map(v => (
-                      <button key={v} onClick={() => setScheduleView(v)}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
-                          scheduleView === v
-                            ? 'bg-[#0EA5E9] text-white shadow-sm'
-                            : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
-                        }`}>
-                        {v === 'active' ? 'Active Slots' : 'Past Slots'}
-                      </button>
-                    ))}
-                  </div>
+                <div className="mb-5 sm:mb-7">
+                  <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Schedules</h1>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>All professor availability slots</p>
                 </div>
                 {Object.keys(schedulesByProf).length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-white/5 bg-[#161616]">
@@ -1753,7 +1738,7 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="space-y-3">
                     {Object.values(schedulesByProf).map((prof) => {
-                      const filteredSlots = prof.slots.filter(s => scheduleView === 'active' ? s.is_available : !s.is_available);
+                      const filteredSlots = prof.slots.filter(s => s.is_available);
                       if (filteredSlots.length === 0) return null;
                       const isOpen = expandedSchedules.has(prof.name);
                       return (
