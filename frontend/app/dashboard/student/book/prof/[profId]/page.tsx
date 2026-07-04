@@ -8,7 +8,7 @@ import { ToastContainer, useToast } from '@/components/Toast';
 import DashboardNavbar, { type NavItem } from '@/components/DashboardNavbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
 
-const NATURE_OPTIONS = [
+const NATURE_OPTIONS_FALLBACK = [
   'Thesis/Design Subject concerns',
   'Mentoring/Clarification on the Topic of the Subjects Enrolled',
   'Requirements in Courses Enrolled',
@@ -18,6 +18,8 @@ const NATURE_OPTIONS = [
   'Concerns regarding Personal/Family, etc.',
   'Others (Please Specify)',
 ];
+
+type TopicItem = { id: number; label: string; duration_minutes: number };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -263,6 +265,8 @@ export default function BookProfPage() {
   const [profileName, setProfileName] = useState('');
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [rescheduleRemarks, setRescheduleRemarks] = useState<string | null>(null);
+  const [topicItems, setTopicItems] = useState<TopicItem[]>([]);
+  const [profSpecializations, setProfSpecializations] = useState<TopicItem[]>([]);
 
   const handleDownloadSlip = async () => {
     setDownloadingSlip(true);
@@ -331,6 +335,22 @@ export default function BookProfPage() {
       }
       setLoadingSlot(false);
     }).catch(() => { setNotFound(true); setLoadingSlot(false); });
+  }, [authReady, token, profId]);
+
+  // Fetch topics from API (with fallback)
+  useEffect(() => {
+    fetch(`${API_URL}/api/topics`).then(r => r.ok ? r.json() : []).then(d => {
+      if (Array.isArray(d) && d.length > 0) setTopicItems(d);
+      else setTopicItems(NATURE_OPTIONS_FALLBACK.map((label, i) => ({ id: i + 1, label, duration_minutes: 30 })));
+    }).catch(() => setTopicItems(NATURE_OPTIONS_FALLBACK.map((label, i) => ({ id: i + 1, label, duration_minutes: 30 }))));
+  }, []);
+
+  // Fetch professor's specializations
+  useEffect(() => {
+    if (!authReady || !token || !profId) return;
+    fetch(`${API_URL}/api/admin/professors/${profId}/specializations-public`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : []).then(d => { if (Array.isArray(d)) setProfSpecializations(d); })
+      .catch(() => {});
   }, [authReady, token, profId]);
 
   // Fetch this student's consultations with this professor
@@ -650,15 +670,31 @@ export default function BookProfPage() {
           <div className={`space-y-4 ${rescheduleId ? 'hidden lg:hidden' : ''}`}>
             <div className={`rounded-2xl border p-5 ${card}`}>
               <h3 className={`text-sm font-bold mb-0.5 ${tp}`}>Nature of Advising</h3>
-              <p className={`text-xs mb-3 ${ts}`}>Select all that apply</p>
+              <p className={`text-xs mb-2 ${ts}`}>Select all that apply</p>
+
+              {/* Professor specializations */}
+              {profSpecializations.length > 0 && (
+                <div className="mb-3">
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-violet-400' : 'text-violet-700'}`}>This professor specializes in:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {profSpecializations.map(s => (
+                      <span key={s.id} className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/20' : 'bg-violet-50 text-violet-700 ring-1 ring-violet-200'}`}>
+                        {s.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-1.5">
-                {NATURE_OPTIONS.map(opt => {
-                  const checked = bookForm.nature_of_advising.includes(opt);
+                {topicItems.map(t => {
+                  const checked = bookForm.nature_of_advising.includes(t.label);
+                  const isSpecialized = profSpecializations.length === 0 || profSpecializations.some(s => s.id === t.id);
                   return (
-                    <label key={opt}
+                    <label key={t.id}
                       className={`flex items-start gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
                         checked ? 'bg-[#0EA5E9]/10 ring-1 ring-[#0EA5E9]/30' : isDark ? 'bg-white/[0.03] hover:bg-white/[0.06]' : 'bg-gray-50 hover:bg-gray-100'
-                      }`}>
+                      } ${!isSpecialized && !checked ? 'opacity-50' : ''}`}>
                       <span className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
                         checked ? 'border-[#0EA5E9] bg-[#0EA5E9]' : isDark ? 'border-gray-600' : 'border-gray-300'
                       }`}>
@@ -668,12 +704,32 @@ export default function BookProfPage() {
                           </svg>
                         )}
                       </span>
-                      <span className={`text-sm leading-snug ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{opt}</span>
-                      <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(opt)} />
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-sm leading-snug ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
+                        <span className={`block text-[10px] mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{t.duration_minutes} min</span>
+                      </div>
+                      <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(t.label)} />
                     </label>
                   );
                 })}
               </div>
+
+              {/* Estimated total duration */}
+              {bookForm.nature_of_advising.length > 0 && (() => {
+                const totalMin = bookForm.nature_of_advising.reduce((sum, label) => {
+                  const t = topicItems.find(x => x.label === label);
+                  return sum + (t?.duration_minutes ?? 30);
+                }, 0);
+                return (
+                  <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl ${isDark ? 'bg-sky-500/10 border border-sky-500/20' : 'bg-sky-50 border border-sky-200'}`}>
+                    <svg className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p className={`text-xs font-medium ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>
+                      Estimated consultation time: <span className="font-bold">{totalMin} min</span>
+                    </p>
+                  </div>
+                );
+              })()}
+
               {bookForm.nature_of_advising.includes('Others (Please Specify)') && (
                 <input
                   className={`mt-3 w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 ${inputCls}`}

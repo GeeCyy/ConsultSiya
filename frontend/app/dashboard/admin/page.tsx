@@ -234,7 +234,14 @@ function fmtDateTime(isoStr: string): string {
   return `${date} · ${time}`;
 }
 
-type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar' | 'archive';
+type Tab = 'home' | 'consultations' | 'accounts' | 'schedules' | 'reports' | 'history' | 'calendar' | 'archive' | 'topics';
+
+type Topic = {
+  id: number;
+  label: string;
+  duration_minutes: number;
+  display_order: number;
+};
 
 type ArchiveTerm = {
   term_label: string;
@@ -333,6 +340,19 @@ export default function AdminDashboard() {
   const [calPendingBlocked, setCalPendingBlocked] = useState<boolean | null>(null);
   const [calLabelEditing, setCalLabelEditing] = useState(false);
   const [calPendingBlockReason, setCalPendingBlockReason] = useState('');
+
+  // Topics management
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [topicForm, setTopicForm] = useState({ label: '', duration_minutes: 30 });
+  const [topicEditId, setTopicEditId] = useState<number | null>(null);
+  const [topicSaving, setTopicSaving] = useState(false);
+  const [topicError, setTopicError] = useState<string | null>(null);
+  // Professor specializations panel
+  const [specProfId, setSpecProfId] = useState<number | null>(null);
+  const [specProfName, setSpecProfName] = useState('');
+  const [specSelected, setSpecSelected] = useState<number[]>([]);
+  const [specSaving, setSpecSaving] = useState(false);
+  const [specLoading, setSpecLoading] = useState(false);
 
   // Leaderboards
   const [lbProfs, setLbProfs]       = useState<LeaderboardItem[]>([]);
@@ -436,9 +456,10 @@ export default function AdminDashboard() {
     if (!token) { router.push('/login'); return; }
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab') as Tab;
-    const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar', 'archive'];
+    const valid: Tab[] = ['home', 'consultations', 'accounts', 'schedules', 'reports', 'history', 'calendar', 'archive', 'topics'];
     if (t && valid.includes(t)) setTab(t);
     fetchAll();
+    fetchTopics();
   }, []);
 
   useEffect(() => {
@@ -490,6 +511,60 @@ export default function AdminDashboard() {
     setLbStudents(Array.isArray(lbS) ? lbS.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
     setLbTopics(Array.isArray(lbT) ? lbT : []);
     setLoading(false);
+  };
+
+  const fetchTopics = async () => {
+    const t = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const data = await fetch(`${API_URL}/api/topics`, t ? { headers: { Authorization: `Bearer ${t}` } } : undefined).then(r => r.json()).catch(() => []);
+    setTopics(Array.isArray(data) ? data : []);
+  };
+
+  const handleTopicSave = async () => {
+    if (!topicForm.label.trim()) { setTopicError('Label is required.'); return; }
+    setTopicSaving(true); setTopicError(null);
+    try {
+      const url = topicEditId ? `${API_URL}/api/topics/${topicEditId}` : `${API_URL}/api/topics`;
+      const method = topicEditId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ label: topicForm.label.trim(), duration_minutes: topicForm.duration_minutes }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTopicError(data.error || 'Save failed.'); return; }
+      await fetchTopics();
+      setTopicForm({ label: '', duration_minutes: 30 });
+      setTopicEditId(null);
+    } catch { setTopicError('Network error.'); }
+    finally { setTopicSaving(false); }
+  };
+
+  const handleTopicDelete = async (id: number) => {
+    const res = await fetch(`${API_URL}/api/topics/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) fetchTopics();
+  };
+
+  const openSpecPanel = async (profId: number, profName: string) => {
+    setSpecProfId(profId); setSpecProfName(profName); setSpecLoading(true); setSpecSelected([]);
+    const res = await fetch(`${API_URL}/api/admin/professors/${profId}/specializations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) { const d = await res.json(); setSpecSelected(d.map((t: Topic) => t.id)); }
+    setSpecLoading(false);
+  };
+
+  const handleSpecSave = async () => {
+    if (!specProfId) return;
+    setSpecSaving(true);
+    await fetch(`${API_URL}/api/admin/professors/${specProfId}/specializations`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ topic_ids: specSelected }),
+    });
+    setSpecSaving(false); setSpecProfId(null);
   };
 
   const fetchArchiveTerms = async () => {
@@ -985,6 +1060,7 @@ export default function AdminDashboard() {
     { key: 'history',       label: 'History' },
     { key: 'archive',       label: 'Term Archive' },
     { key: 'calendar',      label: 'Calendar' },
+    { key: 'topics',        label: 'Topics' },
   ];
 
   const inputCls = 'w-full px-3 py-2 rounded-lg text-white text-sm bg-[#0f0f0f] border border-white/10 focus:outline-none focus:border-[#0EA5E9]/50 placeholder-gray-600';
@@ -1592,6 +1668,14 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                          {u.role === 'professor' && (
+                            <button
+                              onClick={() => openSpecPanel(u.profile_id, u.full_name || u.email)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 ring-1 ring-violet-500/20' : 'bg-violet-50 text-violet-700 hover:bg-violet-100 ring-1 ring-violet-200'}`}>
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                              Specializations
+                            </button>
+                          )}
                           {!u.is_active ? (
                             <span className="text-xs text-gray-500 flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />Deactivated
@@ -2194,6 +2278,164 @@ export default function AdminDashboard() {
             )}
 
             {/* ── Home ── */}
+            {/* ── Topics & Specializations ── */}
+            {tab === 'topics' && (
+              <>
+                <div className="mb-6">
+                  <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Advising Topics</h1>
+                  <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>
+                    Manage the nature-of-advising options available to students. Each topic has an estimated consultation duration to prevent professor overloading.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Topic list */}
+                  <div className={`rounded-2xl border p-5 ${isDark ? 'border-white/5 bg-[#161616]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-widest mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Topics ({topics.length})
+                    </p>
+                    <div className="space-y-2 mb-5 max-h-[420px] overflow-y-auto pr-1">
+                      {topics.length === 0 && (
+                        <p className={`text-sm py-4 text-center ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>No topics yet.</p>
+                      )}
+                      {topics.map(t => (
+                        <div key={t.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${isDark ? 'bg-white/[0.04] hover:bg-white/[0.07]' : 'bg-gray-50 hover:bg-gray-100'} transition-colors`}>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{t.label}</p>
+                            <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{t.duration_minutes} min estimated</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => { setTopicEditId(t.id); setTopicForm({ label: t.label, duration_minutes: t.duration_minutes }); setTopicError(null); }}
+                              className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-sky-400 hover:bg-sky-500/10' : 'text-gray-500 hover:text-sky-600 hover:bg-sky-50'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
+                            <button
+                              onClick={() => handleTopicDelete(t.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-600 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add / Edit form */}
+                    <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {topicEditId ? 'Edit Topic' : 'Add Topic'}
+                      </p>
+                      <div className="space-y-2">
+                        <input
+                          value={topicForm.label}
+                          onChange={e => setTopicForm(f => ({ ...f, label: e.target.value }))}
+                          placeholder="Topic label"
+                          className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-gray-600 focus:border-sky-500/50' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-sky-400'}`}
+                        />
+                        <div className="flex items-center gap-2">
+                          <label className={`text-xs flex-shrink-0 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Duration (min):</label>
+                          <input
+                            type="number"
+                            min={5} max={480}
+                            value={topicForm.duration_minutes}
+                            onChange={e => setTopicForm(f => ({ ...f, duration_minutes: Number(e.target.value) }))}
+                            className={`w-20 px-3 py-2 rounded-lg text-sm border focus:outline-none ${isDark ? 'bg-white/[0.04] border-white/10 text-white focus:border-sky-500/50' : 'bg-white border-gray-300 text-gray-800 focus:border-sky-400'}`}
+                          />
+                        </div>
+                        {topicError && <p className="text-red-500 text-xs">{topicError}</p>}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleTopicSave}
+                            disabled={topicSaving}
+                            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${btnPrimary}`}>
+                            {topicSaving ? 'Saving…' : topicEditId ? 'Update' : 'Add'}
+                          </button>
+                          {topicEditId && (
+                            <button
+                              onClick={() => { setTopicEditId(null); setTopicForm({ label: '', duration_minutes: 30 }); setTopicError(null); }}
+                              className={`px-3 py-2 rounded-lg text-sm transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 bg-white/5' : 'text-gray-600 hover:text-gray-800 bg-gray-100'}`}>
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Professor specializations */}
+                  <div className={`rounded-2xl border p-5 ${isDark ? 'border-white/5 bg-[#161616]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-widest mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Professor Specializations</p>
+                    <p className={`text-xs mb-4 ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>Assign which advising topics each professor handles. Students will see this when booking.</p>
+                    <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                      {users.filter(u => u.role === 'professor' && u.is_active).map(u => (
+                        <button key={u.id}
+                          onClick={() => openSpecPanel(u.profile_id, u.full_name || u.email)}
+                          className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors ${isDark ? 'bg-white/[0.04] hover:bg-white/[0.07]' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                          <div>
+                            <p className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{u.full_name || u.email}</p>
+                            {u.department && <p className={`text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>{u.department}</p>}
+                          </div>
+                          <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                      ))}
+                      {users.filter(u => u.role === 'professor' && u.is_active).length === 0 && (
+                        <p className={`text-sm py-4 text-center ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>No active professors.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Specializations modal ── */}
+            {specProfId !== null && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSpecProfId(null)} />
+                <div className={`relative w-full max-w-md rounded-2xl p-6 shadow-2xl ${isDark ? 'bg-[#1a1a2e] border border-white/10' : 'bg-white border border-gray-200'}`}>
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Specializations</p>
+                      <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{specProfName}</p>
+                    </div>
+                    <button onClick={() => setSpecProfId(null)} className={`p-1.5 rounded-lg ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  {specLoading ? (
+                    <div className="flex justify-center py-8"><span className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : (
+                    <>
+                      <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Select the topics this professor is qualified to handle:</p>
+                      <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1 mb-4">
+                        {topics.map(t => (
+                          <label key={t.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors ${specSelected.includes(t.id) ? (isDark ? 'bg-violet-500/15 ring-1 ring-violet-500/30' : 'bg-violet-50 ring-1 ring-violet-200') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
+                            <input
+                              type="checkbox"
+                              checked={specSelected.includes(t.id)}
+                              onChange={() => setSpecSelected(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                              className="w-4 h-4 rounded accent-violet-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-medium truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</p>
+                              <p className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>{t.duration_minutes} min</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleSpecSave} disabled={specSaving} className={`flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 ${btnPrimary}`}>
+                          {specSaving ? 'Saving…' : 'Save'}
+                        </button>
+                        <button onClick={() => setSpecProfId(null)} className={`px-4 py-2 rounded-xl text-sm transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 bg-white/5' : 'text-gray-600 hover:text-gray-800 bg-gray-100'}`}>
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             {tab === 'home' && (() => {
               const bh = isDark ? 'text-white' : 'text-gray-900';
               const bs = isDark ? 'text-gray-500' : 'text-gray-500';
