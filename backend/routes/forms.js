@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db/db');
 const { authenticate } = require('../middleware/auth.middleware');
 const PDFDocument = require('pdfkit');
+const { PDFDocument: PDFLib, rgb, StandardFonts } = require('pdf-lib');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -219,6 +220,86 @@ function drawSlip(doc, startY, data) {
     );
 }
 
+// ── Template-based slip filler (pdf-lib) ─────────────────────────────────────
+
+async function fillSlipOnTemplate(templateBytes, data) {
+  const pdfDoc = await PDFLib.load(templateBytes);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const page = pdfDoc.getPages()[0];
+  const { height } = page.getSize();
+
+  let natureArray = [];
+  try {
+    const parsed = JSON.parse(data.nature_of_advising || '[]');
+    natureArray = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    natureArray = data.nature_of_advising ? [data.nature_of_advising] : [];
+  }
+  const specify = data.nature_of_advising_specify || '';
+
+  const dateStr = data.date
+    ? new Date(data.date).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  const py = [data.program, data.year_level].filter(Boolean).join(' / ');
+
+  // pdf-lib uses bottom-left origin; PDFKit uses top-left.
+  // Conversion: pdf-lib y = pageHeight - PDFKit_y
+  // For text baseline: subtract ~6pt (cap-height for 8pt Helvetica)
+  const ty = (pkY) => height - pkY - 6;
+  // For checkbox bottom-left: subtract full 8pt box height
+  const cby = (pkY) => height - pkY - 8;
+
+  const drawText = (str, x, pkY) => {
+    if (!str) return;
+    page.drawText(String(str), { x, y: ty(pkY), size: 8, font, color: rgb(0, 0, 0) });
+  };
+
+  const drawCheck = (pkY, x) => {
+    const by = cby(pkY);
+    page.drawLine({ start: { x: x + 1, y: by + 4 }, end: { x: x + 3, y: by + 1 }, thickness: 1.5, color: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: x + 3, y: by + 1 }, end: { x: x + 7, y: by + 7 }, thickness: 1.5, color: rgb(0, 0, 0) });
+  };
+
+  // Fill one copy of the form; called twice (top: startY=25, bottom: startY=415)
+  const fillCopy = (startY) => {
+    const lx = 28;
+    const W = 539;
+    const mid = lx + W / 2;   // ≈ 297.5
+    const siY = startY + 90;   // student info box top (startY + header 50 + subheader 40)
+    const natY = siY + 55;     // nature of advising box top
+    const rx = mid + 5;        // right column x
+
+    // Student info
+    drawText(data.student_name || '', lx + 90, siY + 7);
+    drawText(dateStr,                 mid + 33, siY + 7);
+    drawText(data.student_number || '', lx + 96, siY + 24);
+    drawText(py,                       lx + 83, siY + 41);
+
+    // Left nature-of-advising column
+    let ly = natY + 18;
+    LEFT_NATURE.forEach((opt, i) => {
+      if (natureArray.includes(opt)) drawCheck(ly, lx + 5);
+      ly += (i === 1 ? 22 : 15); // "Mentoring" label wraps and takes 22pt
+    });
+
+    // Right nature-of-advising column
+    let ry = natY + 18;
+    RIGHT_NATURE.forEach((opt, i) => {
+      if (natureArray.includes(opt)) {
+        drawCheck(ry, rx);
+        if (i === 4 && specify) drawText(specify, rx + 90, ry + 1); // Others specify
+      }
+      ry += 15;
+    });
+  };
+
+  fillCopy(25);   // top copy
+  fillCopy(415);  // bottom copy
+
+  return Buffer.from(await pdfDoc.save());
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 router.get('/blank-slip', authenticate, (req, res) => {
@@ -234,7 +315,7 @@ router.get('/blank-slip', authenticate, (req, res) => {
   }
 });
 
-// Generate pre-filled advising slip PDF
+// Generate pre-filled advising slip PDF (overlaid on the official template)
 router.get('/advising-slip/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -260,15 +341,13 @@ router.get('/advising-slip/:id', authenticate, async (req, res) => {
       }
     }
 
-    const doc = new PDFDocument({ margin: 0, size: 'A4', layout: 'portrait' });
+    const templatePath = path.join(__dirname, '../templates/FM-AS-11-02-Course-Program-Advising-Slip.pdf');
+    const templateBytes = fs.readFileSync(templatePath);
+    const pdfBytes = await fillSlipOnTemplate(templateBytes, data);
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=advising-slip-${data.student_number || id}.pdf`);
-    doc.pipe(res);
-
-    drawSlip(doc, 25, data);
-    drawSlip(doc, 415, data);
-
-    doc.end();
+    res.end(pdfBytes);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
