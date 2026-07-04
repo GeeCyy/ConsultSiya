@@ -2330,20 +2330,12 @@ export default function StudentDashboard() {
                       </div>
                     )}
 
-                    {(c.status === 'pending' || c.status === 'confirmed') && (
-                      <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-wrap items-center gap-2`}>
-                        <button onClick={() => handleCancel(c.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ring-1 ${isDark ? 'bg-red-500/10 text-red-400 ring-red-500/30 hover:bg-red-500/20 hover:ring-red-500/50' : 'bg-red-50 text-red-600 ring-red-200 hover:bg-red-100 hover:ring-red-300'}`}>
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-
-                    {/* ── Proof of Evidence ─────────────────────────────── */}
-                    {c.status !== 'cancelled' && (
-                      <div className={`mt-3 pt-3 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                        {c.proof_of_evidence ? (
-                          <div className="flex flex-wrap items-center gap-2">
+                    {/* ── Proof + Actions row ───────────────────────────── */}
+                    <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-wrap items-center justify-between gap-2`}>
+                      {/* Left: proof status or download receipt */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {c.status !== 'cancelled' && c.proof_of_evidence && (
+                          <>
                             <span className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2370,50 +2362,66 @@ export default function StudentDashboard() {
                               className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
                               Replace
                             </button>
-                          </div>
-                        ) : null}
+                          </>
+                        )}
+                        {c.status === 'completed' && (
+                          <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
+                            {downloadingReceipt === c.id
+                              ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                              : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
+                            Download Receipt
+                          </button>
+                        )}
+                      </div>
+                      {/* Right: cancel */}
+                      {(c.status === 'pending' || c.status === 'confirmed') && (
+                        <button onClick={() => handleCancel(c.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ring-1 ${isDark ? 'bg-red-500/10 text-red-400 ring-red-500/30 hover:bg-red-500/20 hover:ring-red-500/50' : 'bg-red-50 text-red-600 ring-red-200 hover:bg-red-100 hover:ring-red-300'}`}>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
 
-                        {/* Expandable proof submission panel */}
-                        {proofPanelId === c.id && (
-                          <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                            <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                              Proof of Evidence
-                            </p>
-                            <div className="flex gap-2">
-                              <input
-                                type="url"
-                                value={proofLinkValue}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setProofLinkValue(val);
-                                  if (val.trim() && !isValidProofLink(val.trim())) {
-                                    setProofLinkError('Invalid link. Please use a Google Drive or OneDrive link.');
-                                  } else {
-                                    setProofLinkError('');
-                                  }
-                                }}
-                                placeholder="https://drive.google.com/…"
-                                className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
-                                  proofLinkError
-                                    ? 'border border-red-500 outline-none ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                    : isDark
-                                      ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
-                                      : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
-                                }`}
-                              />
-                              <button
-                                onClick={() => handleProofLinkSubmit(c.id)}
-                                disabled={submittingProofId === c.id || !proofLinkValue.trim() || (!!proofLinkValue.trim() && !isValidProofLink(proofLinkValue.trim()))}
-                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                                {submittingProofId === c.id
-                                  ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                                  : 'Submit'}
-                              </button>
-                            </div>
-                            {proofLinkError && (
-                              <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>
-                            )}
-                          </div>
+                    {/* Expandable proof submission panel */}
+                    {c.status !== 'cancelled' && proofPanelId === c.id && (
+                      <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          Proof of Evidence
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            value={proofLinkValue}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setProofLinkValue(val);
+                              if (val.trim() && !isValidProofLink(val.trim())) {
+                                setProofLinkError('Invalid link. Please use a Google Drive or OneDrive link.');
+                              } else {
+                                setProofLinkError('');
+                              }
+                            }}
+                            placeholder="https://drive.google.com/…"
+                            className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
+                              proofLinkError
+                                ? 'border border-red-500 outline-none ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                : isDark
+                                  ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
+                                  : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
+                            }`}
+                          />
+                          <button
+                            onClick={() => handleProofLinkSubmit(c.id)}
+                            disabled={submittingProofId === c.id || !proofLinkValue.trim() || (!!proofLinkValue.trim() && !isValidProofLink(proofLinkValue.trim()))}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                            {submittingProofId === c.id
+                              ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                              : 'Submit'}
+                          </button>
+                        </div>
+                        {proofLinkError && (
+                          <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>
                         )}
                       </div>
                     )}
