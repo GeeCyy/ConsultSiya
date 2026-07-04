@@ -105,6 +105,7 @@ export default function RegisterPage() {
     special:   /[^A-Za-z0-9]/.test(form.password),
   };
   const passwordValid = Object.values(passwordChecks).every(Boolean);
+  const passwordSecure = passwordValid && !pwnedError;
 
   const handlePasswordBlur = async () => {
     const pwd = form.password;
@@ -377,16 +378,16 @@ export default function RegisterPage() {
                 </div>
                 {form.password.length > 0 && (
                   <div className={`mt-1.5 border-l-[3px] rounded-r-md px-3 py-2 ${
-                    passwordValid
+                    passwordSecure
                       ? isDark ? 'bg-green-950/30 border-green-500' : 'bg-green-50 border-green-500'
                       : isDark ? 'bg-red-950/30 border-red-500'     : 'bg-red-50 border-red-500'
                   }`}>
                     <p className={`text-[10px] font-semibold ${
-                      passwordValid
+                      passwordSecure
                         ? isDark ? 'text-green-400' : 'text-green-700'
                         : isDark ? 'text-red-400'   : 'text-red-700'
                     }`}>
-                      {passwordValid ? 'Password looks strong' : 'Password too weak'}
+                      {passwordSecure ? 'Password looks strong' : passwordValid && pwnedError ? 'Password compromised' : 'Password too weak'}
                     </p>
                     {!passwordValid && (
                       <p className={`text-[10px] mt-0.5 ${isDark ? 'text-red-300/80' : 'text-red-600'}`}>
@@ -399,10 +400,14 @@ export default function RegisterPage() {
                         ].filter(Boolean).join(', ')}
                       </p>
                     )}
+                    {passwordValid && pwnedError && (
+                      <p className={`text-[10px] mt-0.5 ${isDark ? 'text-red-300/80' : 'text-red-600'}`}>
+                        {pwnedError}
+                      </p>
+                    )}
                   </div>
                 )}
                 {checkingPwned && <p className={`text-[10px] mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Checking password safety…</p>}
-                {pwnedError && <p className="text-red-500 text-[10px] mt-1">{pwnedError}</p>}
               </div>
               <div className="space-y-1">
                 <Label className={labelCls}>Confirm</Label>
