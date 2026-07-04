@@ -2365,9 +2365,9 @@ export default function StudentDashboard() {
                           </>
                         )}
                         {c.status === 'completed' && (
-                          <button onClick={() => handleDownloadReceipt(c)} disabled={downloadingReceipt === c.id}
+                          <button onClick={() => handleDownloadSlip()} disabled={downloadingSlip === -1}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
-                            {downloadingReceipt === c.id
+                            {downloadingSlip === -1
                               ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
                               : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
                             Download Receipt
