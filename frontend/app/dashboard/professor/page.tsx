@@ -2673,7 +2673,7 @@ export default function ProfessorDashboard() {
                                 <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isMe ? (isDark ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'bg-amber-50 ring-1 ring-amber-300/60') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
                                   <span className="text-lg leading-none w-6 text-center flex-shrink-0">{medal}</span>
                                   <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>{item.label}</span>
-                                  {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-white'}`}>you</span>}
+                                  {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-amber-950'}`}>you</span>}
                                   <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-600') : tp}`}>{item.count}</span>
                                 </div>
                               );
