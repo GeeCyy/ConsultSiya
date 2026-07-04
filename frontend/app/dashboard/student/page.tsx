@@ -673,6 +673,7 @@ export default function StudentDashboard() {
   const [downloadingSlip, setDownloadingSlip]       = useState<number | null>(null);
   const [expandedRemarks, setExpandedRemarks]       = useState<Set<number>>(new Set());
   const [dayModal, setDayModal]                     = useState<{ date: string; label: string; dateObj: Date } | null>(null);
+  const [weekOverviewOpen, setWeekOverviewOpen]     = useState(false);
   const mainScrollRef = useRef<HTMLElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const uploadForId   = useRef<number | null>(null);
@@ -1354,6 +1355,101 @@ export default function StudentDashboard() {
         );
       })()}
 
+      {/* Weekly Overview modal */}
+      {weekOverviewOpen && (() => {
+        const CHART_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const weekMonday = new Date(now);
+        const _cdow = now.getDay();
+        weekMonday.setDate(now.getDate() + (_cdow === 0 ? -6 : 1 - _cdow));
+        weekMonday.setHours(0, 0, 0, 0);
+        const weekDays = CHART_DAYS.map((lbl, i) => {
+          const d = new Date(weekMonday);
+          d.setDate(weekMonday.getDate() + i);
+          const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const items = consultations
+            .filter(c => c.date.slice(0, 10) === ds && c.status !== 'cancelled')
+            .sort((a, b) => (a.time || a.time_start).localeCompare(b.time || b.time_start));
+          return { label: lbl, date: ds, dateObj: d, items, isToday: ds === todayStr };
+        });
+        const rangeLabel = `${weekMonday.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} – ${weekDays[6].dateObj.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`;
+        const statusColors: Record<string, string> = {
+          pending:     isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700',
+          confirmed:   isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700',
+          rescheduled: isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-700',
+          completed:   isDark ? 'bg-gray-500/15 text-gray-400' : 'bg-gray-100 text-gray-600',
+          missed:      isDark ? 'bg-red-500/15 text-red-400' : 'bg-red-50 text-red-600',
+        };
+        return (
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setWeekOverviewOpen(false)}>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div
+              className={`relative z-10 w-full sm:max-w-xl flex flex-col shadow-2xl rounded-t-2xl sm:rounded-2xl border-t sm:border max-h-[88vh] sm:max-h-[80vh] ${isDark ? 'border-white/10 bg-[#1e1f22]' : 'border-gray-200 bg-white'}`}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Drag handle */}
+              <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-white/20' : 'bg-gray-300'}`} />
+              </div>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                <div>
+                  <h2 className={`text-base sm:text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Weekly Overview</h2>
+                  <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{rangeLabel}</p>
+                </div>
+                <button onClick={() => setWeekOverviewOpen(false)} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/8' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              {/* Body */}
+              <div className="overflow-y-auto flex-1 px-3 sm:px-5 py-3 sm:py-4 space-y-4">
+                {weekDays.map(day => (
+                  <div key={day.date}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className={`text-[10px] font-bold uppercase tracking-widest ${day.isToday ? (isDark ? 'text-sky-400' : 'text-sky-600') : (isDark ? 'text-gray-500' : 'text-gray-400')}`}>
+                        {day.label}, {day.dateObj.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                      </p>
+                      {day.isToday && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-600'}`}>Today</span>
+                      )}
+                    </div>
+                    {day.items.length > 0 ? (
+                      <div className={`rounded-xl overflow-hidden border divide-y ${isDark ? 'border-white/[0.08] divide-white/[0.05]' : 'border-gray-100 divide-gray-100'}`}>
+                        {day.items.map(c => (
+                          <div key={c.id} className={`flex items-center gap-3 px-3 sm:px-4 py-3 ${isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'} transition-colors`}>
+                            <span className={`text-xs font-mono tabular-nums w-14 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                              {formatTime12((c.time || c.time_start)?.slice(0, 5) ?? '')}
+                            </span>
+                            <div className={`w-px h-4 flex-shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{c.professor_name}</p>
+                              <p className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{parseNature(c.nature_of_advising).join(', ') || '—'}</p>
+                            </div>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${statusColors[c.status] ?? (isDark ? 'bg-gray-500/15 text-gray-400' : 'bg-gray-100 text-gray-500')}`}>
+                              {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={`text-xs pl-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>No consultations</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Footer */}
+              <div className={`px-4 sm:px-6 py-3 sm:py-4 border-t flex-shrink-0 ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                <button
+                  onClick={() => { setWeekOverviewOpen(false); handleTabChange('my'); }}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-sky-500 hover:bg-sky-600 text-white transition-colors"
+                >
+                  View My Consultations →
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
         <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
@@ -1520,7 +1616,7 @@ export default function StudentDashboard() {
                       <h3 className={`text-xl font-bold ${tp}`}>Weekly Overview</h3>
                       <p className={`text-sm ${tm} mt-0.5`}>Your consultations this week</p>
                     </div>
-                    <button onClick={() => handleTabChange('my')} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
+                    <button onClick={() => setWeekOverviewOpen(true)} className="text-xs text-sky-400 hover:text-sky-300 font-medium transition-colors flex-shrink-0">
                       View all →
                     </button>
                   </div>
@@ -1684,7 +1780,7 @@ export default function StudentDashboard() {
                               <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isMe ? (isDark ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'bg-amber-50 ring-1 ring-amber-300/60') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
                                 <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
                                 <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>{item.label}</span>
-                                {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-white'}`}>you</span>}
+                                {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-amber-950'}`}>you</span>}
                                 <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-600') : tp}`}>{item.count}</span>
                               </div>
                             );
@@ -1915,7 +2011,7 @@ export default function StudentDashboard() {
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
                       {displayedProfessors.map(prof => {
                         const slotsSorted = [...prof.slots].sort((a, b) => {
                           if (a.date && b.date) return a.date.localeCompare(b.date);
@@ -1929,8 +2025,8 @@ export default function StudentDashboard() {
                         const alreadyBooked = bookedProfIds.has(prof.professor_id);
 
                         return (
-                          <div key={prof.professor_id} className={`rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
-                            <div className="p-4">
+                          <div key={prof.professor_id} className={`h-full rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
+                            <div className="h-full p-4 flex flex-col">
                               {/* Prof header */}
                               <div className="flex items-start gap-3">
                                 <button type="button" onClick={() => setProfileCard({ id: prof.professor_id, role: 'professor' })}
@@ -2022,7 +2118,7 @@ export default function StudentDashboard() {
                               )}
 
                               {/* Actions */}
-                              <div className="mt-3 flex items-center justify-between gap-2">
+                              <div className="mt-auto pt-3 flex items-center justify-between gap-2">
                                 <button type="button"
                                   onClick={() => setBookExpandedId(isExpanded ? null : prof.professor_id)}
                                   className={`flex items-center gap-1 text-xs font-medium transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}>

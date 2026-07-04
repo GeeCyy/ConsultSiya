@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Megaphone } from 'lucide-react';
 import { ToastContainer, useToast } from '@/components/Toast';
 import DashboardNavbar, { type NavItem } from '@/components/DashboardNavbar';
+import ChatbotWidget from '@/components/ChatbotWidget';
 
 const NATURE_OPTIONS = [
   'Thesis/Design Subject concerns',
@@ -1052,6 +1053,7 @@ export default function BookProfPage() {
 
       </div>
     </div>
+    <ChatbotWidget token={token} role="student" />
     <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   );

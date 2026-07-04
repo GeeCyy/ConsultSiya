@@ -475,7 +475,7 @@ export default function DashboardNavbar({
                   <div className={`px-4 py-2.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
                     <button
                       onClick={() => { onTabChange('consultations'); setNotifOpen(false); }}
-                      className="text-[11px] text-[#CC0000] hover:underline"
+                      className={`text-[11px] hover:underline ${isDark ? 'text-red-400' : 'text-[#CC0000]'}`}
                     >
                       View all consultations →
                     </button>
