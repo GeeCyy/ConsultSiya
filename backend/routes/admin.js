@@ -589,4 +589,66 @@ router.get('/fix-proof/:consultationId', authenticate, authorize('admin'), async
   }
 });
 
+// ── Professor specializations ─────────────────────────────────────────────────
+
+// GET /api/admin/professors/:id/specializations
+router.get('/professors/:id/specializations', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT t.id, t.label, t.duration_minutes
+       FROM professor_specializations ps
+       JOIN topics t ON t.id = ps.topic_id
+       WHERE ps.professor_id = $1
+       ORDER BY t.display_order ASC, t.id ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/professors/:id/specializations — replace all specializations for a professor
+router.put('/professors/:id/specializations', authenticate, authorize('admin'), async (req, res) => {
+  const { topic_ids } = req.body;
+  if (!Array.isArray(topic_ids)) return res.status(400).json({ error: 'topic_ids must be an array.' });
+  const professorId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM professor_specializations WHERE professor_id = $1', [professorId]);
+    if (topic_ids.length > 0) {
+      const placeholders = topic_ids.map((_, i) => `($1, $${i + 2})`).join(', ');
+      await client.query(
+        `INSERT INTO professor_specializations (professor_id, topic_id) VALUES ${placeholders}`,
+        [professorId, ...topic_ids]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/admin/professors/:id/specializations-public — for student booking pages (no admin required)
+router.get('/professors/:id/specializations-public', authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT t.id, t.label
+       FROM professor_specializations ps
+       JOIN topics t ON t.id = ps.topic_id
+       WHERE ps.professor_id = $1 AND t.is_active = true
+       ORDER BY t.display_order ASC, t.id ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -55,6 +55,7 @@ app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
+app.use('/api/topics', require('./routes/topics'));
 
 // ── Health checks ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -174,6 +175,52 @@ app.listen(PORT, '0.0.0.0', () => {
   pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS version VARCHAR(20)`)
     .then(() => console.log('[startup] announcements.version column ready'))
     .catch(err => console.error('[startup] announcements.version migration failed:', err.message));
+
+  // Topics table — stores advising categories with per-topic estimated duration
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS topics (
+      id               SERIAL PRIMARY KEY,
+      label            TEXT NOT NULL UNIQUE,
+      duration_minutes INTEGER NOT NULL DEFAULT 30,
+      is_active        BOOLEAN NOT NULL DEFAULT true,
+      display_order    INTEGER NOT NULL DEFAULT 0,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    );
+    INSERT INTO topics (label, duration_minutes, display_order) VALUES
+      ('Thesis/Design Subject concerns',                              60, 1),
+      ('Mentoring/Clarification on the Topic of the Subjects Enrolled', 30, 2),
+      ('Requirements in Courses Enrolled',                            30, 3),
+      ('Concerns about Electives/Tracks in the Curriculum',          30, 4),
+      ('Concerns on Internship/OJT Matters',                         30, 5),
+      ('Concerns regarding Placement/Employment Opportunities',       30, 6),
+      ('Concerns regarding Personal/Family, etc.',                    30, 7),
+      ('Others (Please Specify)',                                     30, 8)
+    ON CONFLICT (label) DO NOTHING;
+  `)
+    .then(() => console.log('[startup] topics table ready'))
+    .catch(err => console.error('[startup] topics migration failed:', err.message));
+
+  // Professor specializations — many-to-many: professors ↔ topics
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS professor_specializations (
+      professor_id INTEGER REFERENCES professors(id) ON DELETE CASCADE,
+      topic_id     INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+      PRIMARY KEY (professor_id, topic_id)
+    )
+  `)
+    .then(() => console.log('[startup] professor_specializations table ready'))
+    .catch(err => console.error('[startup] professor_specializations migration failed:', err.message));
+
+  // Digital advising slip fields on consultations
+  pool.query(`
+    ALTER TABLE consultations ADD COLUMN IF NOT EXISTS slip_outcome     VARCHAR(20)
+      CHECK (slip_outcome IN ('resolved','follow_up'));
+    ALTER TABLE consultations ADD COLUMN IF NOT EXISTS slip_referred_to  TEXT;
+    ALTER TABLE consultations ADD COLUMN IF NOT EXISTS slip_prof_notes   TEXT;
+    ALTER TABLE consultations ADD COLUMN IF NOT EXISTS slip_finalized_at TIMESTAMPTZ;
+  `)
+    .then(() => console.log('[startup] consultations slip columns ready'))
+    .catch(err => console.error('[startup] consultations slip migration failed:', err.message));
 
   pool.query(`ALTER TABLE announcements ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL`)
     .then(() => console.log('[startup] announcements.created_by column ready'))
