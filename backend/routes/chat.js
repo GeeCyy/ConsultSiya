@@ -223,6 +223,45 @@ Rules:
 
 Always be concise, friendly, and specific to ConsultSiya. If unsure, suggest contacting the SOIT admin.`;
 
+// Keywords that suggest the user is asking which professor handles a concern/topic
+const PROF_REC_KEYWORDS = [
+  'who handles', 'who is responsible', 'who can help', 'who should i',
+  'best for', 'responsible for', 'specializes in', 'professor for', 'prof for',
+  'who to consult', 'who do i consult', 'who do i go to', 'who can i ask',
+  'handles thesis', 'handles ojt', 'handles internship', 'handles elective',
+  'handles requirement', 'handles personal', 'handles placement',
+  'responsible for thesis', 'responsible for ojt',
+];
+
+async function buildProfSpecContext(latestMsg) {
+  if (!PROF_REC_KEYWORDS.some(k => latestMsg.includes(k))) return '';
+
+  const rows = await pool.query(
+    `SELECT p.full_name, p.id AS professor_id,
+            array_agg(t.label ORDER BY t.display_order) FILTER (WHERE t.id IS NOT NULL) AS topics
+     FROM professors p
+     JOIN users u ON p.user_id = u.id
+     LEFT JOIN professor_specializations ps ON ps.professor_id = p.id
+     LEFT JOIN topics t ON t.id = ps.topic_id AND t.is_active = true
+     WHERE u.is_approved = true
+     GROUP BY p.id, p.full_name
+     ORDER BY p.full_name`
+  );
+
+  if (rows.rows.length === 0) return '';
+
+  const lines = rows.rows.map(r => {
+    const topics = r.topics && r.topics.length > 0
+      ? r.topics.join('; ')
+      : 'No specializations assigned';
+    return `• ${r.full_name} [profId=${r.professor_id}]: ${topics}`;
+  });
+
+  return '\n\nPROFESSOR SPECIALIZATIONS DATA (live from the database — use ONLY this to answer who handles what):\n' +
+    lines.join('\n') +
+    '\n\nIMPORTANT: When this data is present, you MUST only recommend professors whose entry above lists the relevant concern type. Never recommend a professor not in this list, and never invent specializations not shown here. If no professor is listed with a matching topic, say so explicitly and suggest the student contact the SOIT admin.';
+}
+
 // Keywords that suggest the user is asking about schedules or availability
 const SCHEDULE_KEYWORDS = [
   'schedule', 'available', 'availability', 'slot', 'when', 'free', 'open', 'time',
@@ -449,17 +488,23 @@ router.post(
         (latestMsg.includes('available') || latestMsg.includes('who can i consult'))
       ) || latestMsg.includes('available professor') || latestMsg.includes('professors available');
 
+      // "Who handles thesis / who is responsible for OJT / who specializes in ..."
+      const isProfRecQuestion = PROF_REC_KEYWORDS.some(k => latestMsg.includes(k));
+
       let dbContext = '';
 
       // Route to the right context builder:
-      // - Prof availability questions get the new per-period slot data
+      // - Prof recommendation questions get specialization data (highest priority)
+      // - Prof availability questions get the per-period slot data
       // - Summary/today personal questions get consultation records
       // - All others get the general slot search
-      const scheduleContext = isProfAvailQuestion
+      const profSpecContext = isProfRecQuestion ? await buildProfSpecContext(latestMsg) : '';
+
+      const scheduleContext = (!isProfRecQuestion && isProfAvailQuestion)
         ? await buildProfAvailContext(latestMsg)
-        : (isSummaryQuestion || isTodayQuestion)
-          ? ''
-          : await buildScheduleContext(latestMsg);
+        : (!isProfRecQuestion && !isSummaryQuestion && !isTodayQuestion)
+          ? await buildScheduleContext(latestMsg)
+          : '';
 
       // ── Today's consultation details ─────────────────────────────────────────
       if (isTodayQuestion && !isProfAvailQuestion && req.user.role === 'student') {
@@ -613,7 +658,7 @@ router.post(
         },
         body: JSON.stringify({
           model: GROQ_MODEL,
-          messages: [{ role: 'system', content: roleInstruction + FAQ_SYSTEM_PROMPT + scheduleContext + dbContext }, ...messages],
+          messages: [{ role: 'system', content: roleInstruction + FAQ_SYSTEM_PROMPT + profSpecContext + scheduleContext + dbContext }, ...messages],
           max_tokens: 1024,
           temperature: 0,
         }),
