@@ -95,6 +95,7 @@ type Schedule = {
   professor_id: number;
   professor_name: string;
   department: string;
+  specializations?: string[];
   day: string;
   time_start: string;
   time_end: string;
@@ -1915,7 +1916,7 @@ export default function StudentDashboard() {
 
               const profMap = new Map<number, {
                 professor_id: number; professor_name: string; department: string;
-                professor_avatar?: string | null; slots: Schedule[];
+                specializations: string[]; professor_avatar?: string | null; slots: Schedule[];
               }>();
               for (const s of schedules) {
                 if (!isSlotFuture(s)) continue;
@@ -1924,6 +1925,7 @@ export default function StudentDashboard() {
                     professor_id: s.professor_id,
                     professor_name: s.professor_name,
                     department: s.department,
+                    specializations: s.specializations ?? [],
                     professor_avatar: s.professor_avatar,
                     slots: [],
                   });
@@ -2065,7 +2067,25 @@ export default function StudentDashboard() {
                                       {prof.professor_name}
                                     </button>
                                   </div>
-                                  <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department}</p>
+                                  {prof.specializations.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                      {prof.specializations.slice(0, 2).map(spec => {
+                                        const short = spec.replace(/^Concerns?\s+(about|on|regarding)\s+/i, '').replace(/\s+concerns?$/i, '').replace(/Mentoring\/Clarification on the Topic of the Subjects Enrolled/i, 'Mentoring').replace(/Thesis\/Design Subject/i, 'Thesis').split(/[,/]/)[0].trim();
+                                        return (
+                                          <span key={spec} className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${isDark ? 'bg-violet-500/15 text-violet-300' : 'bg-violet-50 text-violet-700'}`}>
+                                            {short}
+                                          </span>
+                                        );
+                                      })}
+                                      {prof.specializations.length > 2 && (
+                                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>
+                                          +{prof.specializations.length - 2}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department || 'No department set'}</p>
+                                  )}
                                   <span className="inline-flex items-center gap-1 text-xs text-emerald-500 mt-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                     {prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''} open
