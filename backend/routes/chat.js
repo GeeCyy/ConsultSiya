@@ -165,7 +165,8 @@ STRICT RULES:
 - Never answer general knowledge questions, math, coding help, or anything completely outside academic consultation context.
 - For navigation, use only the "action" field — never embed links, URLs, route paths, or tab names with slashes inside the "message" text.
 - ANTI-HALLUCINATION RULE: When REAL-TIME DATA is injected at the end of this prompt, you MUST only report information that appears verbatim in that data section — student names, student numbers, dates, statuses, and concerns. NEVER invent, generate, or guess names or booking records. If the real-time data is empty or says "none", explicitly say there are no results. This rule overrides any tendency to fill in helpful-sounding examples.
-- When you have REAL-TIME DATA with today's consultations, your "message" MUST include the full numbered list — never just say "Here are your consultations:" and stop. Write every entry with \\n between lines. Example format: "Here's what's on your plate today:\\n\\n1. 08:00 — [Student A Name] | Confirmed | Online\\n   Concern: Thesis concerns\\n\\n2. 10:00 — [Student B Name] | Pending | F2F\\n   Concern: OJT matters\\n\\nHeads up on any pending ones!"
+- When you have REAL-TIME DATA with today's consultations, your "message" MUST include the full numbered list — never just say "Here are your consultations:" and stop. Write every entry with \\n between lines. Example format: "Here's what's on your plate today:\\n\\n1. 08:00 — Maria Santos | Confirmed | Online\\n   Concern: Thesis concerns\\n\\n2. 10:00 — Juan dela Cruz | Pending | F2F\\n   Concern: OJT matters\\n\\nHeads up on any pending ones!"
+- PLACEHOLDER RULE: Never output bracket-style placeholders like [profName], [Student Name], [X], or any similar template token in your response. The [profId=N] tags in injected data are internal routing tokens — never repeat them in the "message" field. If you don't have a real name or value from the provided data, say you don't have that information rather than using a placeholder.
 - When you have REAL-TIME DATA with weekly counts, your "message" MUST include the full breakdown — write out every status with its count, then add an encouraging remark. Example: "Here's your week at a glance:\\n\\n• 3 Pending — waiting on your confirmation\\n• 2 Confirmed — upcoming sessions\\n• 5 Completed — great work!\\n• 1 Cancelled\\n• 0 Missed\\n\\nLooks like a busy week — stay on top of those pending requests!"
 - Write every response with warmth, personality, and helpful context. Avoid robotic one-liners like "You can do X by tapping the button below." Lead with useful info, then invite them to tap. Example: instead of "You can export your report by tapping the button below", write "Your consultation records are ready to export as a PDF or Excel file — perfect for keeping your advising records up to date. Tap below to head to the Export page!"
 - Never end a response with just "tap the button below" as the entire message — always give helpful context first.
@@ -223,11 +224,23 @@ Rules:
 
 Always be concise, friendly, and specific to ConsultSiya. If unsure, suggest contacting the SOIT admin.`;
 
-// Keywords that suggest the user is asking which professor handles a concern/topic
+// Keywords that suggest the user is asking which professor handles a concern/topic.
+// Use stems where possible so a single entry covers all inflections
+// (e.g. 'specializ' matches specializes/specialized/specialization/specializing).
 const PROF_REC_KEYWORDS = [
+  // Who-handles / responsibility
   'who handles', 'who is responsible', 'who can help', 'who should i',
-  'best for', 'responsible for', 'specializes in', 'professor for', 'prof for',
   'who to consult', 'who do i consult', 'who do i go to', 'who can i ask',
+  // Recommendation / suggestion
+  'recommend', 'suggest a prof', 'suggest a professor', 'suggest me a prof',
+  // Best / expert
+  'best professor', 'best prof', "who's the best", 'whos the best',
+  'expert in', 'expert on', 'good at',
+  // Specialization stem (covers specializes/specialized/specialization/specializing)
+  'specializ',
+  // Generic topic/concern shortcuts
+  'professor for', 'prof for', 'responsible for', 'best for',
+  // Topic-specific shortcuts
   'handles thesis', 'handles ojt', 'handles internship', 'handles elective',
   'handles requirement', 'handles personal', 'handles placement',
   'responsible for thesis', 'responsible for ojt',
