@@ -764,7 +764,7 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!authReady || !token) return;
-    fetchData();
+    fetchData().catch(() => setLoading(false));
   }, [authReady]);
 
   // Subscribe to professor session status changes via SSE
@@ -811,6 +811,7 @@ export default function StudentDashboard() {
   }, [authReady, token]);
 
   const fetchData = async () => {
+    try {
     const [sched, consult, prof, ann, cal, termData, notifSettings, topicsData] = await Promise.all([
       api.get('/api/schedules', token!),
       api.get('/api/consultations', token!),
@@ -901,8 +902,12 @@ export default function StudentDashboard() {
       window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name } }));
     }
     setMyTopics(Array.isArray(topicsData) ? topicsData : []);
+  } catch (err) {
+    console.error('fetchData error:', err);
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   const handleCancel = (id: number) => {
     openConfirm(
