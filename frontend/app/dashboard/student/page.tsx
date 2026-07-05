@@ -8,7 +8,6 @@ import UserProfileCard from '@/components/UserProfileCard';
 import DashboardNavbar from '@/components/DashboardNavbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
 import NavigationTour from '@/components/NavigationTour';
-import { type LeaderboardItem } from '@/components/LeaderboardCard';
 import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import CustomSelect from '@/components/CustomSelect';
@@ -704,9 +703,6 @@ export default function StudentDashboard() {
   });
 
   // Leaderboards
-  const [lbStudents, setLbStudents] = useState<LeaderboardItem[]>([]);
-  const [lbProfs, setLbProfs]       = useState<LeaderboardItem[]>([]);
-  const [lbView, setLbView]         = useState<'rankings' | 'consulted'>('rankings');
   const [myTopics, setMyTopics]     = useState<{ label: string; count: number }[]>([]);
 
   // Theme — mounted guard prevents server/client mismatch
@@ -815,15 +811,13 @@ export default function StudentDashboard() {
   }, [authReady, token]);
 
   const fetchData = async () => {
-    const [sched, consult, prof, ann, cal, termData, lbS, lbP, notifSettings, topicsData] = await Promise.all([
+    const [sched, consult, prof, ann, cal, termData, notifSettings, topicsData] = await Promise.all([
       api.get('/api/schedules', token!),
       api.get('/api/consultations', token!),
       api.get('/api/auth/profile', token!),
       fetch(`${API_URL}/api/announcements`).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(`${API_URL}/api/calendar`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(`${API_URL}/api/settings/term`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
-      api.get('/api/leaderboard/students', token!),
-      api.get('/api/leaderboard/professors', token!),
       fetch(`${API_URL}/api/settings/notifications`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
       api.get('/api/consultations/my-topics', token!),
     ]);
@@ -906,8 +900,6 @@ export default function StudentDashboard() {
       localStorage.setItem('consulta-name', name);
       window.dispatchEvent(new CustomEvent('consulta-name-change', { detail: { name } }));
     }
-    setLbStudents(Array.isArray(lbS) ? lbS.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
-    setLbProfs(Array.isArray(lbP) ? lbP.map((r: any) => ({ rank: r.rank, label: r.name, count: r.count })) : []);
     setMyTopics(Array.isArray(topicsData) ? topicsData : []);
     setLoading(false);
   };
@@ -1750,61 +1742,12 @@ export default function StudentDashboard() {
                 className={`p-4 rounded-2xl flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
                 style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
               >
-                <div className="flex-shrink-0 flex gap-1.5 mb-3">
-                  {(['rankings', 'consulted'] as const).map(v => (
-                    <button key={v} onClick={() => setLbView(v)}
-                      className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-all border ${
-                        lbView === v
-                          ? isDark ? 'bg-sky-500/15 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-300'
-                          : isDark ? 'bg-transparent text-gray-400 border-white/15 hover:text-gray-300 hover:border-white/25' : 'bg-transparent text-gray-500 border-gray-300 hover:text-gray-700 hover:border-gray-400'
-                      }`}>
-                      {v === 'rankings' ? 'Rankings' : 'Top Topics'}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1.5 mb-3">
+                  <span className="text-sm leading-none">🔥</span>
+                  <p className={`text-xs font-bold uppercase tracking-wider ${tm}`}>Top Topics</p>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400/30">
-                  {lbView === 'rankings' && (
-                    <div className="space-y-4">
-                      <div>
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-amber-100 border border-amber-300'}`}>
-                          <span className="text-base leading-none">🏆</span>
-                          <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>Top Professors</p>
-                        </div>
-                        <div className="space-y-1.5">
-                          {lbProfs.slice(0, 3).map((item, i) => (
-                            <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'}`}>
-                              <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                              <span className={`flex-1 text-base truncate font-semibold min-w-0 ${ts}`}>{item.label}</span>
-                              <span className={`text-base font-bold tabular-nums flex-shrink-0 ${tp}`}>{item.count}</span>
-                            </div>
-                          ))}
-                          {lbProfs.length === 0 && <p className={`text-sm ${tm} py-1 px-2`}>No data.</p>}
-                        </div>
-                      </div>
-                      <div className={`border-t ${isDark ? 'border-white/20' : 'border-gray-300'}`} />
-                      <div>
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-indigo-500/20 border border-indigo-500/30' : 'bg-indigo-100 border border-indigo-300'}`}>
-                          <span className="text-base leading-none">🎓</span>
-                          <p className={`text-sm font-bold uppercase tracking-widest ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Top Students</p>
-                        </div>
-                        <div className="space-y-1.5">
-                          {lbStudents.slice(0, 3).map((item, i) => {
-                            const isMe = item.label === profile.full_name;
-                            return (
-                              <div key={item.rank} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${isMe ? (isDark ? 'bg-amber-500/20 ring-1 ring-amber-500/30' : 'bg-amber-50 ring-1 ring-amber-300/60') : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50')}`}>
-                                <span className="text-lg leading-none w-6 text-center flex-shrink-0">{['🥇','🥈','🥉'][i]}</span>
-                                <span className={`flex-1 text-base truncate font-semibold min-w-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-700') : ts}`}>{item.label}</span>
-                                {isMe && <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 leading-none ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400 text-amber-950'}`}>you</span>}
-                                <span className={`text-base font-bold tabular-nums flex-shrink-0 ${isMe ? (isDark ? 'text-amber-300' : 'text-amber-600') : tp}`}>{item.count}</span>
-                              </div>
-                            );
-                          })}
-                          {lbStudents.length === 0 && <p className={`text-sm ${tm} py-1 px-2`}>No data.</p>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {lbView === 'consulted' && (() => {
+                  {(() => {
                     const RANK_CFG = [
                       { medal: '🥇', border: 'border-amber-400', rowBg: isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50', fill: 'from-amber-400 to-yellow-300', track: isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60' },
                       { medal: '🥈', border: 'border-slate-400',  rowBg: isDark ? 'bg-slate-400/[0.10]'  : 'bg-slate-50',  fill: 'from-slate-400 to-slate-300',  track: isDark ? 'bg-white/[0.07]' : 'bg-slate-200/60'  },
@@ -1812,61 +1755,31 @@ export default function StudentDashboard() {
                     ];
                     const top3 = mostConsultedTopics.slice(0, 3);
                     const topCount = top3[0]?.count || 1;
+                    if (top3.length === 0) return <p className={`text-xs ${tm} py-1`}>No consultation data yet.</p>;
                     return (
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-3">
-                          <span className="text-xs leading-none">🔥</span>
-                          <p className={`text-[10px] font-bold uppercase tracking-wider ${tm}`}>Trending across all students</p>
-                        </div>
-                        {top3.length === 0 ? (
-                          <p className={`text-xs ${tm} py-1`}>No consultation data yet.</p>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {top3.map((t, i) => {
-                              const cfg = RANK_CFG[i];
-                              const pct = Math.max(8, Math.round((t.count / topCount) * 100));
-                              return (
-                                <div key={t.label} className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
-                                  <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
-                                      <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
-                                      <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
-                                    </div>
-                                    <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
-                                      <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`} style={{ width: `${pct}%` }} />
-                                    </div>
-                                  </div>
+                      <div className="space-y-1.5">
+                        {top3.map((t, i) => {
+                          const cfg = RANK_CFG[i];
+                          const pct = Math.max(8, Math.round((t.count / topCount) * 100));
+                          return (
+                            <div key={t.label} className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
+                              <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
+                                  <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
+                                  <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                                <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
+                                  <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}
                 </div>
-                {/* Top Topics preview — pinned to bottom of rankings card */}
-                {lbView === 'rankings' && mostConsultedTopics.length > 0 && (
-                  <div className={`flex-shrink-0 mt-4 pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
-                    <p className={`text-[9px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>🔥 Top Topics</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {mostConsultedTopics.slice(0, 3).map(t => (
-                        <button key={t.label} onClick={() => setLbView('consulted')}
-                          className={`text-sm font-semibold px-2.5 py-1 rounded-full transition-colors ${isDark ? 'bg-white/[0.06] text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {lbView === 'rankings' && mostConsultedTopics.length === 0 && allConsultsCompleted > 0 && (
-                  <div className={`flex-shrink-0 mt-4 pt-3 border-t ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}>
-                    <p className={`text-xs font-semibold ${tm}`}>
-                      🎯 {completionPct}% completion rate all time
-                    </p>
-                  </div>
-                )}
               </div>
 
             </div>{/* /bento grid */}
