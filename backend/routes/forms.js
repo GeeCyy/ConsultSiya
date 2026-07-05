@@ -242,25 +242,25 @@ async function fillSlipOnTemplate(templateBytes, data) {
     : '';
   const py = [data.program, data.year_level].filter(Boolean).join(' / ');
 
-  // Direct pdf-lib y coordinates calibrated against the actual template.
-  // pdf-lib origin is bottom-left (y increases upward).
-  // TOP copy baseline values; bottom copy = top copy - 335.
-  const TOP = {
-    nameY:  612,  // "Student's Name: ___" text baseline
-    dateY:  612,  // "Date: ___" same line (value goes AFTER the printed "Date:" label)
-    numY:   598,  // "Student Number: ___"
-    progY:  583,  // "Program/Year: ___"
-    // Left nature column checkbox y (bottom-left of printed 8pt square)
-    leftCb:  [558, 544, 527],           // Thesis, Mentoring, Requirements
-    // Right nature column checkbox y
-    rightCb: [558, 544, 534, 527, 516], // Electives, Internship, Placement, Personal, Others
-  };
-  const COPY_OFFSET = 335; // bottom copy is 335pt below top copy
+  // Coordinates measured from the template PDF content stream (pdf-lib: y=0 at bottom, increases upward).
+  // Text field y values placed 2pt above the underline y from the content stream.
+  // Checkbox x/y from exact box bottom-left corners extracted from the content stream.
+  // Copy offset measured as difference between top-copy and bottom-copy checkbox y values.
 
-  const lx   = 36;          // form left x
-  const mid  = 297.5;       // page horizontal midpoint
-  const cbLx = lx + 76;     // left-column checkbox x  ≈ 112
-  const cbRx = mid + 40;    // right-column checkbox x ≈ 337
+  // Student info text positions
+  const nameX = 122, dateX = 398, nameY = 609; // Student's Name / Date row
+  const numX  = 130,              numY  = 599; // Student Number row
+  const progX = 117,              progY = 589; // Program/Year row
+
+  // Checkbox x positions (left edge of the 10.5×9.5pt printed box)
+  const cbLx = 74;   // left column boxes at x=74.3–74.5
+  const cbRx = 299;  // right column boxes at x=299.5–299.6
+
+  // Checkbox y positions (bottom-left y of each printed box)
+  const leftCbY  = [553, 542, 524];           // Thesis, Mentoring, Requirements
+  const rightCbY = [554, 543, 533, 523, 513]; // Electives, Internship, Placement, Personal, Others
+
+  const COPY_OFFSET = 339; // measured: top-copy box y minus bottom-copy box y = 339.06
 
   const drawStr = (str, x, y) => {
     if (!str) return;
@@ -273,22 +273,25 @@ async function fillSlipOnTemplate(templateBytes, data) {
   };
 
   const fillCopy = (dy) => {
-    // Student info — date x uses mid+100 to land AFTER the printed "Date:" label (~x=375)
-    drawStr(data.student_name || '', lx + 84,   TOP.nameY + dy);
-    drawStr(dateStr,                 mid + 100,  TOP.dateY + dy);
-    drawStr(data.student_number || '', lx + 90,  TOP.numY  + dy);
-    drawStr(py,                        lx + 77,  TOP.progY + dy);
+    drawStr(data.student_name || '', nameX, nameY + dy);
+    drawStr(dateStr,                 dateX, nameY + dy);
+    drawStr(data.student_number || '', numX, numY  + dy);
+    drawStr(py,                       progX, progY + dy);
 
-    // Left nature column
     LEFT_NATURE.forEach((opt, i) => {
-      if (natureArray.includes(opt)) drawTick(cbLx, TOP.leftCb[i] + dy);
+      if (natureArray.includes(opt)) drawTick(cbLx, leftCbY[i] + dy);
     });
 
-    // Right nature column
     RIGHT_NATURE.forEach((opt, i) => {
       if (natureArray.includes(opt)) {
-        drawTick(cbRx, TOP.rightCb[i] + dy);
-        if (i === 4 && specify) drawStr(specify, cbRx + 50, TOP.rightCb[i] + 2 + dy);
+        drawTick(cbRx, rightCbY[i] + dy);
+        if (i === 4 && specify) {
+          // "Others: (Please Specify) N/A" — N/A is the preprinted default starting at ~cbRx+94.
+          // Erase from there to the right edge of the column, then write the actual specify text.
+          const sx = cbRx + 94, sy = rightCbY[4] + 2 + dy;
+          page.drawRectangle({ x: sx - 1, y: sy - 2, width: 170, height: 11, color: rgb(1, 1, 1) });
+          drawStr(specify, sx, sy);
+        }
       }
     });
   };
