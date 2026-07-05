@@ -227,7 +227,6 @@ async function fillSlipOnTemplate(templateBytes, data) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
   const page = pdfDoc.getPages()[0];
-  const { height } = page.getSize();
 
   let natureArray = [];
   try {
@@ -243,59 +242,59 @@ async function fillSlipOnTemplate(templateBytes, data) {
     : '';
   const py = [data.program, data.year_level].filter(Boolean).join(' / ');
 
-  // pdf-lib uses bottom-left origin; PDFKit uses top-left.
-  // Conversion: pdf-lib y = pageHeight - PDFKit_y
-  // For text baseline: subtract ~6pt (cap-height for 8pt Helvetica)
-  const ty = (pkY) => height - pkY - 6;
-  // For checkbox bottom-left: subtract full 8pt box height
-  const cby = (pkY) => height - pkY - 8;
+  // Direct pdf-lib y coordinates calibrated against the actual template.
+  // pdf-lib origin is bottom-left (y increases upward).
+  // TOP copy baseline values; bottom copy = top copy - 335.
+  const TOP = {
+    nameY:  612,  // "Student's Name: ___" text baseline
+    dateY:  612,  // "Date: ___" same line
+    numY:   598,  // "Student Number: ___"
+    progY:  583,  // "Program/Year: ___"
+    // Left nature column checkbox y (bottom of 8pt square)
+    leftCb:  [550, 536, 519],        // Thesis, Mentoring, Requirements
+    // Right nature column checkbox y
+    rightCb: [550, 536, 526, 519, 508], // Electives, Internship, Placement, Personal, Others
+  };
+  const COPY_OFFSET = 335; // bottom copy is 335pt below top copy
 
-  const drawText = (str, x, pkY) => {
+  const lx  = 36;          // form left x (measured from calibration)
+  const mid  = 297.5;       // page horizontal midpoint
+  const cbLx = lx + 76;    // left-column checkbox x  ≈ 112
+  const cbRx = mid + 40;   // right-column checkbox x ≈ 337
+
+  const drawStr = (str, x, y) => {
     if (!str) return;
-    page.drawText(String(str), { x, y: ty(pkY), size: 8, font, color: rgb(0, 0, 0) });
+    page.drawText(String(str), { x, y, size: 8, font, color: rgb(0, 0, 0) });
   };
 
-  const drawCheck = (pkY, x) => {
-    const by = cby(pkY);
-    page.drawLine({ start: { x: x + 1, y: by + 4 }, end: { x: x + 3, y: by + 1 }, thickness: 1.5, color: rgb(0, 0, 0) });
-    page.drawLine({ start: { x: x + 3, y: by + 1 }, end: { x: x + 7, y: by + 7 }, thickness: 1.5, color: rgb(0, 0, 0) });
+  const drawTick = (x, y) => {
+    page.drawLine({ start: { x: x + 1, y: y + 4 }, end: { x: x + 3, y: y + 1 }, thickness: 1.5, color: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: x + 3, y: y + 1 }, end: { x: x + 7, y: y + 7 }, thickness: 1.5, color: rgb(0, 0, 0) });
   };
 
-  // Fill one copy of the form; called twice (top: startY=25, bottom: startY=415)
-  const fillCopy = (startY) => {
-    const lx = 28;
-    const W = 539;
-    const mid = lx + W / 2;   // ≈ 297.5
-    const siY = startY + 90;   // student info box top (startY + header 50 + subheader 40)
-    const natY = siY + 55;     // nature of advising box top
-    const rx = mid + 5;        // right column x
-
+  const fillCopy = (dy) => {
     // Student info
-    drawText(data.student_name || '', lx + 90, siY + 7);
-    drawText(dateStr,                 mid + 33, siY + 7);
-    drawText(data.student_number || '', lx + 96, siY + 24);
-    drawText(py,                       lx + 83, siY + 41);
+    drawStr(data.student_name || '', lx + 84,  TOP.nameY + dy);
+    drawStr(dateStr,                 mid + 33,  TOP.dateY + dy);
+    drawStr(data.student_number || '', lx + 90, TOP.numY  + dy);
+    drawStr(py,                        lx + 77, TOP.progY + dy);
 
-    // Left nature-of-advising column
-    let ly = natY + 18;
+    // Left nature column
     LEFT_NATURE.forEach((opt, i) => {
-      if (natureArray.includes(opt)) drawCheck(ly, lx + 5);
-      ly += (i === 1 ? 22 : 15); // "Mentoring" label wraps and takes 22pt
+      if (natureArray.includes(opt)) drawTick(cbLx, TOP.leftCb[i] + dy);
     });
 
-    // Right nature-of-advising column
-    let ry = natY + 18;
+    // Right nature column
     RIGHT_NATURE.forEach((opt, i) => {
       if (natureArray.includes(opt)) {
-        drawCheck(ry, rx);
-        if (i === 4 && specify) drawText(specify, rx + 90, ry + 1); // Others specify
+        drawTick(cbRx, TOP.rightCb[i] + dy);
+        if (i === 4 && specify) drawStr(specify, cbRx + 50, TOP.rightCb[i] + 2 + dy);
       }
-      ry += 15;
     });
   };
 
-  fillCopy(25);   // top copy
-  fillCopy(415);  // bottom copy
+  fillCopy(0);             // top copy
+  fillCopy(-COPY_OFFSET);  // bottom copy
 
   return Buffer.from(await pdfDoc.save());
 }
