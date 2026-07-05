@@ -1746,7 +1746,10 @@ export default function StudentDashboard() {
 
               </div>{/* /center column wrapper */}
 
-              {/* ── Col 3: Top Topics card ── */}
+              {/* ── Col 3: Right column ── */}
+              <div className="flex flex-col gap-4">
+
+              {/* Top Topics card */}
               <div
                 className={`p-5 rounded-2xl flex flex-col gap-4 ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : 'shadow-sm'}`}
                 style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.03)' }}
@@ -1799,6 +1802,83 @@ export default function StudentDashboard() {
                   })()}
                 </div>
               </div>
+
+              {/* Quick Actions card */}
+              <div
+                className={`p-5 rounded-2xl flex flex-col gap-3 ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : 'shadow-sm'}`}
+                style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.03)' }}
+              >
+                {/* Header */}
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-violet-500/15' : 'bg-violet-50'}`}>
+                    <svg className="w-4 h-4 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${tp}`}>Quick Actions</p>
+                    <p className={`text-[10px] font-medium ${ts}`}>Shortcuts to common tasks</p>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                {([
+                  {
+                    label: 'Book a Consultation',
+                    sub: 'Find an available professor',
+                    color: 'text-sky-600 dark:text-sky-400',
+                    iconBg: isDark ? 'bg-sky-500/15' : 'bg-sky-50',
+                    border: isDark ? 'border-white/[0.06] hover:border-sky-500/30' : 'border-gray-100 hover:border-sky-200',
+                    hoverBg: isDark ? 'hover:bg-sky-500/[0.07]' : 'hover:bg-sky-50/60',
+                    icon: <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />,
+                    iconColor: 'text-sky-500',
+                    onClick: () => handleTabChange('book'),
+                  },
+                  {
+                    label: 'View History',
+                    sub: 'Past consultations & records',
+                    color: 'text-emerald-600 dark:text-emerald-400',
+                    iconBg: isDark ? 'bg-emerald-500/15' : 'bg-emerald-50',
+                    border: isDark ? 'border-white/[0.06] hover:border-emerald-500/30' : 'border-gray-100 hover:border-emerald-200',
+                    hoverBg: isDark ? 'hover:bg-emerald-500/[0.07]' : 'hover:bg-emerald-50/60',
+                    icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />,
+                    iconColor: 'text-emerald-500',
+                    onClick: () => handleTabChange('history'),
+                  },
+                  {
+                    label: 'Download Blank Slip',
+                    sub: 'Get the advising form template',
+                    color: 'text-amber-600 dark:text-amber-400',
+                    iconBg: isDark ? 'bg-amber-500/15' : 'bg-amber-50',
+                    border: isDark ? 'border-white/[0.06] hover:border-amber-500/30' : 'border-gray-100 hover:border-amber-200',
+                    hoverBg: isDark ? 'hover:bg-amber-500/[0.07]' : 'hover:bg-amber-50/60',
+                    icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />,
+                    iconColor: 'text-amber-500',
+                    onClick: async () => {
+                      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = 'advising-slip.pdf'; a.click();
+                      URL.revokeObjectURL(url);
+                    },
+                  },
+                ] as const).map(a => (
+                  <button
+                    key={a.label}
+                    onClick={a.onClick}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left ${a.border} ${a.hoverBg}`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${a.iconBg}`}>
+                      <svg className={`w-4 h-4 ${a.iconColor}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>{a.icon}</svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{a.label}</p>
+                      <p className={`text-[10px] font-medium ${ts} truncate`}>{a.sub}</p>
+                    </div>
+                    <svg className={`w-3.5 h-3.5 ml-auto flex-shrink-0 ${ts}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                  </button>
+                ))}
+              </div>
+
+              </div>{/* /right column */}
 
             </div>{/* /bento grid */}
 
