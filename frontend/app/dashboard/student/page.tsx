@@ -2083,8 +2083,8 @@ export default function StudentDashboard() {
                                         </span>
                                       )}
                                     </div>
-                                  ) : (
-                                    <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department || 'No department set'}</p>
+                                  ) : prof.department && prof.department.toLowerCase() !== 'others' ? (
+                                    <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department}</p>
                                   )}
                                   <span className="inline-flex items-center gap-1 text-xs text-emerald-500 mt-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
