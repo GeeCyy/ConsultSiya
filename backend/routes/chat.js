@@ -250,29 +250,31 @@ async function buildProfSpecContext(latestMsg) {
   if (!PROF_REC_KEYWORDS.some(k => latestMsg.includes(k))) return '';
 
   const rows = await pool.query(
-    `SELECT p.full_name, p.id AS professor_id,
+    `SELECT p.full_name, p.id AS professor_id, p.department,
             array_agg(t.label ORDER BY t.display_order) FILTER (WHERE t.id IS NOT NULL) AS topics
      FROM professors p
      JOIN users u ON p.user_id = u.id
      LEFT JOIN professor_specializations ps ON ps.professor_id = p.id
      LEFT JOIN topics t ON t.id = ps.topic_id AND t.is_active = true
      WHERE u.is_approved = true
-     GROUP BY p.id, p.full_name
+     GROUP BY p.id, p.full_name, p.department
      ORDER BY p.full_name`
   );
 
   if (rows.rows.length === 0) return '';
 
   const lines = rows.rows.map(r => {
+    // Prefer admin-assigned specialization topics; fall back to department when none are set
     const topics = r.topics && r.topics.length > 0
       ? r.topics.join('; ')
-      : 'No specializations assigned';
+      : (r.department && r.department.toLowerCase() !== 'others' ? r.department : null);
+    if (!topics) return `• ${r.full_name} [profId=${r.professor_id}]: No specializations assigned`;
     return `• ${r.full_name} [profId=${r.professor_id}]: ${topics}`;
   });
 
   return '\n\nPROFESSOR SPECIALIZATIONS DATA (live from the database — use ONLY this to answer who handles what):\n' +
     lines.join('\n') +
-    '\n\nIMPORTANT: When this data is present, you MUST only recommend professors whose entry above lists the relevant concern type. Never recommend a professor not in this list, and never invent specializations not shown here. If no professor is listed with a matching topic, say so explicitly and suggest the student contact the SOIT admin.';
+    '\n\nIMPORTANT: When this data is present, you MUST only recommend professors whose entry above lists the relevant expertise or concern type. Use reasonable semantic matching (e.g. "programming" matches a professor listed as "Programming"). Never recommend a professor not in this list, and never invent specializations not shown here. If no professor has a matching area, say so explicitly and suggest the student contact the SOIT admin.';
 }
 
 // Keywords that suggest the user is asking about schedules or availability
