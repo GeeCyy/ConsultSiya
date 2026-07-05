@@ -85,7 +85,14 @@ router.get('/', authenticate, async (req, res) => {
       `SELECT s.id, s.day, s.time_start, s.time_end, s.is_available, s.location, s.date::text AS date,
               s.time_ranges, s.announcement, s.mode,
               p.id AS professor_id, p.full_name AS professor_name, p.department,
-              u.avatar AS professor_avatar
+              u.avatar AS professor_avatar,
+              COALESCE(
+                (SELECT array_agg(t.label ORDER BY t.display_order)
+                 FROM professor_specializations ps
+                 JOIN topics t ON t.id = ps.topic_id AND t.is_active = true
+                 WHERE ps.professor_id = p.id),
+                ARRAY[]::text[]
+              ) AS specializations
        FROM schedules s
        JOIN professors p ON s.professor_id = p.id
        JOIN users u ON p.user_id = u.id
