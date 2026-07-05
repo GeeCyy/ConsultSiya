@@ -260,7 +260,13 @@ async function fillSlipOnTemplate(templateBytes, data) {
   const leftCbY  = [553, 542, 524];           // Thesis, Mentoring, Requirements
   const rightCbY = [554, 543, 533, 523, 513]; // Electives, Internship, Placement, Personal, Others
 
-  const COPY_OFFSET = 339; // measured: top-copy box y minus bottom-copy box y = 339.06
+  // The two copies have different vertical spacings in the template:
+  // - Checkboxes:   top-y minus bottom-y = 339.07  (from content stream box coords)
+  // - Text fields:  top-y minus bottom-y = 334.49  (from content stream underline coords)
+  // Using a single offset for both would place text 4.5pt below the bottom-copy underlines,
+  // causing a strikethrough effect.  Use separate offsets to keep text above the line.
+  const COPY_OFFSET = 339;    // checkbox copy offset
+  const TEXT_OFFSET = 334.5;  // text-field copy offset (606.58 - 272.09 = 334.49)
 
   const drawStr = (str, x, y) => {
     if (!str) return;
@@ -272,23 +278,25 @@ async function fillSlipOnTemplate(templateBytes, data) {
     page.drawLine({ start: { x: x + 3, y: y + 1 }, end: { x: x + 7, y: y + 7 }, thickness: 1.5, color: rgb(0, 0, 0) });
   };
 
-  const fillCopy = (dy) => {
-    drawStr(data.student_name || '', nameX, nameY + dy);
-    drawStr(dateStr,                 dateX, nameY + dy);
-    drawStr(data.student_number || '', numX, numY  + dy);
-    drawStr(py,                       progX, progY + dy);
+  // textDy: offset for student-info text fields
+  // cbDy:   offset for Nature-of-Advising checkboxes (and the specify text that sits in that row)
+  const fillCopy = (textDy, cbDy) => {
+    drawStr(data.student_name || '', nameX, nameY + textDy);
+    drawStr(dateStr,                 dateX, nameY + textDy);
+    drawStr(data.student_number || '', numX, numY  + textDy);
+    drawStr(py,                       progX, progY + textDy);
 
     LEFT_NATURE.forEach((opt, i) => {
-      if (natureArray.includes(opt)) drawTick(cbLx, leftCbY[i] + dy);
+      if (natureArray.includes(opt)) drawTick(cbLx, leftCbY[i] + cbDy);
     });
 
     RIGHT_NATURE.forEach((opt, i) => {
       if (natureArray.includes(opt)) {
-        drawTick(cbRx, rightCbY[i] + dy);
+        drawTick(cbRx, rightCbY[i] + cbDy);
         if (i === 4 && specify) {
           // "Others: (Please Specify) N/A" — N/A is the preprinted default starting at ~cbRx+94.
           // Erase from there to the right edge of the column, then write the actual specify text.
-          const sx = cbRx + 94, sy = rightCbY[4] + 2 + dy;
+          const sx = cbRx + 94, sy = rightCbY[4] + 2 + cbDy;
           page.drawRectangle({ x: sx - 1, y: sy - 2, width: 170, height: 11, color: rgb(1, 1, 1) });
           drawStr(specify, sx, sy);
         }
@@ -296,8 +304,8 @@ async function fillSlipOnTemplate(templateBytes, data) {
     });
   };
 
-  fillCopy(0);             // top copy
-  fillCopy(-COPY_OFFSET);  // bottom copy
+  fillCopy(0,           0);            // top copy
+  fillCopy(-TEXT_OFFSET, -COPY_OFFSET); // bottom copy
 
   return Buffer.from(await pdfDoc.save());
 }
