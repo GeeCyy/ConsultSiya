@@ -247,20 +247,20 @@ async function fillSlipOnTemplate(templateBytes, data) {
   // TOP copy baseline values; bottom copy = top copy - 335.
   const TOP = {
     nameY:  612,  // "Student's Name: ___" text baseline
-    dateY:  612,  // "Date: ___" same line
+    dateY:  612,  // "Date: ___" same line (value goes AFTER the printed "Date:" label)
     numY:   598,  // "Student Number: ___"
     progY:  583,  // "Program/Year: ___"
-    // Left nature column checkbox y (bottom of 8pt square)
-    leftCb:  [550, 536, 519],        // Thesis, Mentoring, Requirements
+    // Left nature column checkbox y (bottom-left of printed 8pt square)
+    leftCb:  [558, 544, 527],           // Thesis, Mentoring, Requirements
     // Right nature column checkbox y
-    rightCb: [550, 536, 526, 519, 508], // Electives, Internship, Placement, Personal, Others
+    rightCb: [558, 544, 534, 527, 516], // Electives, Internship, Placement, Personal, Others
   };
   const COPY_OFFSET = 335; // bottom copy is 335pt below top copy
 
-  const lx  = 36;          // form left x (measured from calibration)
+  const lx   = 36;          // form left x
   const mid  = 297.5;       // page horizontal midpoint
-  const cbLx = lx + 76;    // left-column checkbox x  ≈ 112
-  const cbRx = mid + 40;   // right-column checkbox x ≈ 337
+  const cbLx = lx + 76;     // left-column checkbox x  ≈ 112
+  const cbRx = mid + 40;    // right-column checkbox x ≈ 337
 
   const drawStr = (str, x, y) => {
     if (!str) return;
@@ -273,11 +273,11 @@ async function fillSlipOnTemplate(templateBytes, data) {
   };
 
   const fillCopy = (dy) => {
-    // Student info
-    drawStr(data.student_name || '', lx + 84,  TOP.nameY + dy);
-    drawStr(dateStr,                 mid + 33,  TOP.dateY + dy);
-    drawStr(data.student_number || '', lx + 90, TOP.numY  + dy);
-    drawStr(py,                        lx + 77, TOP.progY + dy);
+    // Student info — date x uses mid+100 to land AFTER the printed "Date:" label (~x=375)
+    drawStr(data.student_name || '', lx + 84,   TOP.nameY + dy);
+    drawStr(dateStr,                 mid + 100,  TOP.dateY + dy);
+    drawStr(data.student_number || '', lx + 90,  TOP.numY  + dy);
+    drawStr(py,                        lx + 77,  TOP.progY + dy);
 
     // Left nature column
     LEFT_NATURE.forEach((opt, i) => {
