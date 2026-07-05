@@ -2131,6 +2131,60 @@ export default function StudentDashboard() {
                                 </div>
                               )}
 
+                              {/* Proof submission for pending consultations without proof */}
+                              {(() => {
+                                const needsProof = consultations.find(c =>
+                                  c.professor_id === prof.professor_id &&
+                                  ['pending', 'confirmed'].includes(c.status) &&
+                                  !c.proof_of_evidence
+                                );
+                                if (!needsProof) return null;
+                                const isOpen = proofPanelId === needsProof.id;
+                                return (
+                                  <div className={`mt-3 rounded-xl border p-3 ${isDark ? 'bg-violet-500/5 border-violet-500/20' : 'bg-violet-50 border-violet-200'}`}>
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                      <p className={`text-xs font-semibold flex items-center gap-1.5 ${isDark ? 'text-violet-400' : 'text-violet-700'}`}>
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                        Submit Proof of Evidence
+                                      </p>
+                                      <button
+                                        onClick={() => { setProofPanelId(isOpen ? null : needsProof.id); setProofLinkValue(''); setProofLinkError(''); }}
+                                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${isDark ? 'bg-violet-500/15 text-violet-400 hover:bg-violet-500/25' : 'bg-violet-100 text-violet-700 hover:bg-violet-200'}`}>
+                                        {isOpen ? 'Cancel' : 'Add Link'}
+                                      </button>
+                                    </div>
+                                    {isOpen && (
+                                      <div className="space-y-1.5">
+                                        <div className="flex gap-2">
+                                          <input type="url" value={proofLinkValue}
+                                            onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
+                                            placeholder="https://drive.google.com/…"
+                                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs outline-none border transition-all ${
+                                              proofLinkError
+                                                ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                                : isDark
+                                                  ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
+                                                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
+                                            }`}
+                                          />
+                                          <button onClick={() => handleProofLinkSubmit(needsProof.id)}
+                                            disabled={submittingProofId === needsProof.id || !proofLinkValue.trim() || !!proofLinkError}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center">
+                                            {submittingProofId === needsProof.id
+                                              ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                                              : 'Submit'}
+                                          </button>
+                                        </div>
+                                        {proofLinkError && <p className="text-red-500 text-[10px]">{proofLinkError}</p>}
+                                        <p className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
                               {/* Actions */}
                               <div className="mt-auto pt-3 flex items-center justify-between gap-2">
                                 <button type="button"

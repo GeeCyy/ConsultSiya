@@ -494,10 +494,6 @@ export default function BookProfPage() {
     if (selectedSlot.mode === 'BOTH' && !bookForm.preferredMode) {
       setBookError('Please select your preferred consultation mode.'); return;
     }
-    if (!bookProofLink.trim()) { setBookError('Please submit your proof of evidence link.'); return; }
-    if (!isValidProofLink(bookProofLink.trim())) {
-      setBookError('Proof of evidence must be a Google Drive or OneDrive link.'); return;
-    }
     setIsBooking(true);
     try {
       if (rescheduleId) {
@@ -755,28 +751,6 @@ export default function BookProfPage() {
               </div>
             </div>
 
-            {/* Proof of Evidence */}
-            <div className={`rounded-2xl border p-5 ${card}`}>
-              <h3 className={`text-sm font-bold mb-1 ${tp}`}>Submit Evidence</h3>
-              <p className={`text-xs mb-3 ${ts}`}>Paste a Google Drive or OneDrive link to your proof of evidence.</p>
-              <input
-                type="url"
-                value={bookProofLink}
-                onChange={e => {
-                  const v = e.target.value;
-                  setBookProofLink(v);
-                  setBookProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : '');
-                }}
-                placeholder="https://drive.google.com/…"
-                className={`w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 transition-colors ${
-                  bookProofLinkError
-                    ? 'border-red-500 ' + (isDark ? 'bg-[#1a1a1a] text-white' : 'bg-gray-100 text-gray-900')
-                    : inputCls
-                }`}
-              />
-              {bookProofLinkError && <p className="text-red-500 text-[10px] mt-1">{bookProofLinkError}</p>}
-              <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
-            </div>
           </div>
 
           {/* Right: Mode + Date + Time + Submit */}
