@@ -1524,22 +1524,26 @@ export default function StudentDashboard() {
                 </p>
               </div>
 
-              {/* Stats strip — single segmented card (matches the admin dashboard) */}
+              {/* Stats strip */}
               <div
-                className={`grid grid-cols-2 sm:flex sm:items-center gap-x-5 gap-y-3 sm:gap-5 px-5 sm:px-7 py-4 sm:py-3.5 flex-shrink-0 rounded-2xl sm:rounded-full ${isDark ? 'bg-white/[0.06] border border-white/10 shadow-md shadow-black/40' : ''}`}
-                style={!isDark ? { background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: '9999px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' } : undefined}
+                className={`flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-3`}
               >
-                  {([
-                    { value: allConsultsTotal,     label: 'Total Requests', numColor: '#0EA5E9', darkNumColor: '#7DD3FC' },
-                    { value: confirmedCount,       label: 'Confirmed',      numColor: '#7C3AED', darkNumColor: '#C4B5FD' },
-                    { value: allConsultsCompleted, label: 'Completed',      numColor: '#059669', darkNumColor: '#6EE7B7' },
-                    { value: allConsultsPending,   label: 'Pending',        numColor: '#EA580C', darkNumColor: '#FDBA74' },
-                  ] as const).map((s, i, arr) => (
-                    <div key={s.label} className={`flex flex-col items-center ${i < arr.length - 1 ? `sm:pr-5 sm:border-r ${isDark ? 'sm:border-white/20' : 'sm:border-gray-300'}` : ''}`}>
-                      <span className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkNumColor : s.numColor }}>{s.value}</span>
-                      <span className={`text-[11px] font-medium mt-1 ${ts}`}>{s.label}</span>
+                {([
+                  { value: allConsultsTotal,     label: 'Total Requests', color: '#0EA5E9', darkColor: '#38BDF8', bg: isDark ? 'bg-sky-500/10 border-sky-500/20'     : 'bg-sky-50 border-sky-200',     icon: <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9z" /> },
+                  { value: confirmedCount,       label: 'Confirmed',      color: '#7C3AED', darkColor: '#A78BFA', bg: isDark ? 'bg-violet-500/10 border-violet-500/20' : 'bg-violet-50 border-violet-200', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /> },
+                  { value: allConsultsCompleted, label: 'Completed',      color: '#059669', darkColor: '#34D399', bg: isDark ? 'bg-emerald-500/10 border-emerald-500/20': 'bg-emerald-50 border-emerald-200', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /> },
+                  { value: allConsultsPending,   label: 'Pending',        color: '#D97706', darkColor: '#FCD34D', bg: isDark ? 'bg-amber-500/10 border-amber-500/20'   : 'bg-amber-50 border-amber-200',   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /> },
+                ] as const).map(s => (
+                  <div key={s.label} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${s.bg} ${isDark ? '' : 'shadow-sm'}`}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${isDark ? s.darkColor : s.color}18` }}>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: isDark ? s.darkColor : s.color }}>{s.icon}</svg>
                     </div>
-                  ))}
+                    <div>
+                      <p className="text-2xl font-extrabold leading-none" style={{ color: isDark ? s.darkColor : s.color }}>{s.value}</p>
+                      <p className={`text-[11px] font-medium mt-0.5 ${ts}`}>{s.label}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1742,47 +1746,56 @@ export default function StudentDashboard() {
 
               </div>{/* /center column wrapper */}
 
-              {/* ── Col 3: Rankings card ── */}
+              {/* ── Col 3: Top Topics card ── */}
               <div
-                className={`p-4 rounded-2xl flex flex-col ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : ''}`}
-                style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)' }}
+                className={`p-5 rounded-2xl flex flex-col gap-4 ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : 'shadow-sm'}`}
+                style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.03)' }}
               >
-                <div className="flex items-center gap-1.5 mb-3">
-                  <span className="text-sm leading-none">🔥</span>
-                  <p className={`text-xs font-bold uppercase tracking-wider ${tm}`}>Top Topics</p>
+                {/* Header */}
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-orange-500/15' : 'bg-orange-50'}`}>
+                    <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12.017 24c6.624 0 11.99-5.367 11.99-11.987C24.007 5.367 18.641 0 12.017 0z"/></svg>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${tp}`}>Top Topics</p>
+                    <p className={`text-[10px] font-medium ${ts}`}>Trending across all consultations</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400/30">
+
+                {/* Topic rows */}
+                <div className="flex-1 space-y-3">
                   {(() => {
                     const RANK_CFG = [
-                      { medal: '🥇', border: 'border-amber-400', rowBg: isDark ? 'bg-amber-400/[0.10]' : 'bg-amber-50', fill: 'from-amber-400 to-yellow-300', track: isDark ? 'bg-white/[0.07]' : 'bg-amber-200/60' },
-                      { medal: '🥈', border: 'border-slate-400',  rowBg: isDark ? 'bg-slate-400/[0.10]'  : 'bg-slate-50',  fill: 'from-slate-400 to-slate-300',  track: isDark ? 'bg-white/[0.07]' : 'bg-slate-200/60'  },
-                      { medal: '🥉', border: 'border-orange-400', rowBg: isDark ? 'bg-orange-400/[0.10]' : 'bg-orange-50', fill: 'from-orange-500 to-amber-400', track: isDark ? 'bg-white/[0.07]' : 'bg-orange-200/60' },
+                      { rank: '1st', accentColor: '#F59E0B', gradFrom: '#F59E0B', gradTo: '#FCD34D', bg: isDark ? 'bg-amber-500/8'  : 'bg-amber-50/80',  border: isDark ? 'border-amber-500/20' : 'border-amber-200',  text: isDark ? 'text-amber-300' : 'text-amber-700',  badge: isDark ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-700' },
+                      { rank: '2nd', accentColor: '#94A3B8', gradFrom: '#94A3B8', gradTo: '#CBD5E1', bg: isDark ? 'bg-slate-500/8'  : 'bg-slate-50/80',  border: isDark ? 'border-slate-500/20' : 'border-slate-200',  text: isDark ? 'text-slate-300' : 'text-slate-600',  badge: isDark ? 'bg-slate-500/20 text-slate-300' : 'bg-slate-100 text-slate-600' },
+                      { rank: '3rd', accentColor: '#CD7C3A', gradFrom: '#CD7C3A', gradTo: '#FDBA74', bg: isDark ? 'bg-orange-500/8' : 'bg-orange-50/80', border: isDark ? 'border-orange-500/20': 'border-orange-200', text: isDark ? 'text-orange-300': 'text-orange-700', badge: isDark ? 'bg-orange-500/20 text-orange-300': 'bg-orange-100 text-orange-700' },
                     ];
                     const top3 = mostConsultedTopics.slice(0, 3);
                     const topCount = top3[0]?.count || 1;
-                    if (top3.length === 0) return <p className={`text-xs ${tm} py-1`}>No consultation data yet.</p>;
-                    return (
-                      <div className="space-y-1.5">
-                        {top3.map((t, i) => {
-                          const cfg = RANK_CFG[i];
-                          const pct = Math.max(8, Math.round((t.count / topCount) * 100));
-                          return (
-                            <div key={t.label} className={`rounded-lg border-l-[3px] overflow-hidden cursor-default transition-colors ${cfg.border} ${isDark ? 'hover:brightness-110' : 'hover:brightness-95'}`}>
-                              <div className={`px-2 py-1.5 ${cfg.rowBg}`}>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-sm leading-none w-4 text-center flex-shrink-0">{cfg.medal}</span>
-                                  <span className={`flex-1 text-[11px] font-semibold truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
-                                  <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.count}</span>
-                                </div>
-                                <div className={`mt-1.5 ml-5 h-1 rounded-full overflow-hidden ${cfg.track}`}>
-                                  <div className={`h-full rounded-full bg-gradient-to-r ${cfg.fill} transition-all duration-500`} style={{ width: `${pct}%` }} />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                    if (top3.length === 0) return (
+                      <div className={`flex flex-col items-center justify-center py-6 gap-2 rounded-xl ${isDark ? 'bg-white/[0.03]' : 'bg-gray-50'}`}>
+                        <svg className="w-7 h-7 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5" /></svg>
+                        <p className={`text-xs font-medium ${ts}`}>No data yet</p>
                       </div>
                     );
+                    return top3.map((t, i) => {
+                      const cfg = RANK_CFG[i];
+                      const pct = Math.max(6, Math.round((t.count / topCount) * 100));
+                      return (
+                        <div key={t.label} className={`rounded-xl border p-3 ${cfg.bg} ${cfg.border}`}>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-start gap-2 min-w-0">
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0 mt-0.5 ${cfg.badge}`}>{cfg.rank}</span>
+                              <span className={`text-xs font-semibold leading-snug ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{t.label}</span>
+                            </div>
+                            <span className={`text-lg font-black tabular-nums flex-shrink-0 leading-none ${cfg.text}`}>{t.count}</span>
+                          </div>
+                          <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-white/[0.08]' : 'bg-black/[0.06]'}`}>
+                            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${cfg.gradFrom}, ${cfg.gradTo})` }} />
+                          </div>
+                        </div>
+                      );
+                    });
                   })()}
                 </div>
               </div>
