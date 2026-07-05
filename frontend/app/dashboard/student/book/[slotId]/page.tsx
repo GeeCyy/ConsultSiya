@@ -546,10 +546,10 @@ export default function BookSlotPage() {
                   const isSpecialized = profSpecializations.length === 0 || profSpecializations.some(s => s.id === t.id);
                   return (
                     <label key={t.id}
-                      className={`flex items-start gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
                         checked ? 'bg-[#0EA5E9]/10 ring-1 ring-[#0EA5E9]/30' : isDark ? 'bg-white/[0.03] hover:bg-white/[0.06]' : 'bg-gray-50 hover:bg-gray-100'
                       } ${!isSpecialized && !checked ? 'opacity-50' : ''}`}>
-                      <span className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
+                      <span className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
                         checked ? 'border-[#0EA5E9] bg-[#0EA5E9]' : isDark ? 'border-gray-600' : 'border-gray-300'
                       }`}>
                         {checked && (
@@ -558,28 +558,58 @@ export default function BookSlotPage() {
                           </svg>
                         )}
                       </span>
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm leading-snug ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
-                        <span className={`block text-[10px] mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{t.duration_minutes} min</span>
-                      </div>
+                      <span className={`flex-1 text-sm leading-snug ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{t.label}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 tabular-nums transition-colors ${
+                        checked
+                          ? isDark ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-700'
+                          : isDark ? 'bg-white/[0.08] text-gray-400' : 'bg-gray-200 text-gray-500'
+                      }`}>{t.duration_minutes}m</span>
                       <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleNature(t.label)} />
                     </label>
                   );
                 })}
               </div>
 
-              {/* Estimated duration */}
+              {/* Time budget */}
               {bookForm.nature_of_advising.length > 0 && (() => {
                 const totalMin = bookForm.nature_of_advising.reduce((sum, label) => {
                   const t = topicItems.find(x => x.label === label);
                   return sum + (t?.duration_minutes ?? 30);
                 }, 0);
+                const slotCap = (() => {
+                  if (!slot) return 60;
+                  const ranges = slot.time_ranges?.length
+                    ? slot.time_ranges
+                    : [{ time_start: slot.time_start, time_end: slot.time_end }];
+                  return ranges.reduce((s, r) => {
+                    const [h1, m1] = r.time_start.slice(0, 5).split(':').map(Number);
+                    const [h2, m2] = r.time_end.slice(0, 5).split(':').map(Number);
+                    return s + (h2 * 60 + m2) - (h1 * 60 + m1);
+                  }, 0) || 60;
+                })();
+                const pct = Math.min(100, Math.round((totalMin / slotCap) * 100));
+                const isOver = totalMin > slotCap;
+                const isNear = pct >= 80 && !isOver;
+                const color = isOver
+                  ? { bar: '#EF4444', bg: isDark ? 'bg-red-500/10 border-red-500/25' : 'bg-red-50 border-red-200', text: isDark ? 'text-red-300' : 'text-red-700', track: isDark ? 'bg-white/10' : 'bg-red-200/50' }
+                  : isNear
+                  ? { bar: '#F59E0B', bg: isDark ? 'bg-amber-500/10 border-amber-500/25' : 'bg-amber-50 border-amber-200', text: isDark ? 'text-amber-300' : 'text-amber-700', track: isDark ? 'bg-white/10' : 'bg-amber-200/50' }
+                  : { bar: '#0EA5E9', bg: isDark ? 'bg-sky-500/10 border-sky-500/20' : 'bg-sky-50 border-sky-200', text: isDark ? 'text-sky-300' : 'text-sky-700', track: isDark ? 'bg-white/10' : 'bg-sky-200/50' };
                 return (
-                  <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl ${isDark ? 'bg-sky-500/10 border border-sky-500/20' : 'bg-sky-50 border border-sky-200'}`}>
-                    <svg className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <p className={`text-xs font-medium ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>
-                      Estimated consultation time: <span className="font-bold">{totalMin} min</span>
-                    </p>
+                  <div className={`mt-3 px-3 py-2.5 rounded-xl border ${color.bg}`}>
+                    <div className={`flex items-center justify-between mb-1.5 ${color.text}`}>
+                      <div className="flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="text-xs font-semibold">
+                          {isOver ? 'Exceeds slot time' : isNear ? 'Approaching limit' : 'Estimated time'}
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold tabular-nums">{totalMin} / {slotCap} min</span>
+                    </div>
+                    <div className={`h-1.5 rounded-full overflow-hidden ${color.track}`}>
+                      <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: color.bar }} />
+                    </div>
+                    {isOver && <p className={`text-[10px] font-medium mt-1.5 ${color.text}`}>Consider removing some topics to fit within the available slot time.</p>}
                   </div>
                 );
               })()}
