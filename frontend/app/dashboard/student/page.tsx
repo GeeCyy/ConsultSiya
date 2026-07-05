@@ -2085,7 +2085,7 @@ export default function StudentDashboard() {
                                     </div>
                                   ) : prof.department && prof.department.toLowerCase() !== 'others' ? (
                                     <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department}</p>
-                                  )}
+                                  ) : null}
                                   <span className="inline-flex items-center gap-1 text-xs text-emerald-500 mt-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                     {prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''} open
