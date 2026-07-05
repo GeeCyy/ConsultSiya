@@ -1749,7 +1749,7 @@ export default function StudentDashboard() {
               {/* ── Col 3: Right column ── */}
               <div className="flex flex-col gap-4">
 
-              {/* Top Topics card */}
+              {/* Popular Topics card */}
               <div
                 className={`p-5 rounded-2xl flex flex-col gap-4 ${isDark ? 'border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.60),0_4px_12px_rgba(0,0,0,0.40)]' : 'shadow-sm'}`}
                 style={isDark ? { background: 'rgba(30,31,34,0.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: '16px' } : { background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.03)' }}
@@ -1760,7 +1760,7 @@ export default function StudentDashboard() {
                     <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" clipRule="evenodd" d="M12.963 2.286a.75.75 0 0 0-1.071-.136 9.742 9.742 0 0 0-3.539 6.177A7.547 7.547 0 0 1 6.648 6.61a.75.75 0 0 0-1.152-.082A9 9 0 1 0 15.68 4.534a7.46 7.46 0 0 1-2.717-2.248ZM15.75 14.25a3.75 3.75 0 1 1-7.313-1.172c.628.465 1.35.81 2.133 1a5.99 5.99 0 0 1 1.925-3.545 3.75 3.75 0 0 1 3.255 3.717Z" /></svg>
                   </div>
                   <div>
-                    <p className={`text-sm font-bold ${tp}`}>Top Topics</p>
+                    <p className={`text-sm font-bold ${tp}`}>Popular Topics</p>
                     <p className={`text-[10px] font-medium ${ts}`}>Trending across all consultations</p>
                   </div>
                 </div>
