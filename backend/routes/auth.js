@@ -246,7 +246,13 @@ router.get('/profile', authenticate, async (req, res) => {
         avatar = r.rows[0]?.avatar ?? null;
       } catch { /* column not yet ready */ }
 
-      return res.json({ role, ...result.rows[0], phone, avatar });
+      let saved_signature = null;
+      try {
+        const r = await pool.query(`SELECT saved_signature FROM students WHERE user_id = $1`, [id]);
+        saved_signature = r.rows[0]?.saved_signature ?? null;
+      } catch { /* column not yet ready */ }
+
+      return res.json({ role, ...result.rows[0], phone, avatar, saved_signature });
     }
     if (role === 'professor') {
       const result = await pool.query(
@@ -350,6 +356,24 @@ router.patch(
     }
   }
 );
+
+// ── PUT /api/auth/signature — save/update a student's reusable signature ────
+router.put('/signature', authenticate, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ error: 'Only students can save a signature.' });
+
+  const { signature } = req.body;
+  const value = (typeof signature === 'string' && signature.startsWith('data:image/png;base64,') && signature.length <= 300_000)
+    ? signature
+    : null;
+
+  try {
+    await pool.query(`UPDATE students SET saved_signature = $1 WHERE user_id = $2`, [value, req.user.id]);
+    res.json({ message: 'Signature saved.' });
+  } catch (err) {
+    console.error('[Signature PUT]', err.message);
+    res.status(500).json({ error: 'Failed to save signature.' });
+  }
+});
 
 // ── POST /api/auth/forgot-password ───────────────────────────────────────────
 router.post(

@@ -278,6 +278,49 @@ async function fillSlipOnTemplate(templateBytes, data) {
     page.drawLine({ start: { x: x + 3, y: y + 1 }, end: { x: x + 7, y: y + 7 }, thickness: 1.5, color: rgb(0, 0, 0) });
   };
 
+  // Signature line — measured separately from the content stream (underline y-coords),
+  // because this section's top/bottom copy spacing (348.89) matches neither COPY_OFFSET
+  // nor TEXT_OFFSET above; the two copies aren't uniformly spaced across every section.
+  // maxW is capped at 210 (not the full width to the underline's end) because the
+  // "Referred to" column's text ("Other Office: (Please Specify)" etc.) starts at
+  // x≈273.6 — staying under that keeps the whole box clear of it, which in turn frees
+  // up the actual available height: nothing else prints between "For Follow-up" and
+  // each underline in this x-range (~29pt clear on top copy, ~39pt on bottom).
+  // lineCenterX is the midpoint of the *actual printed underline* (54–213.3 top,
+  // 63–222.3 bottom — each only ~159pt wide) — centering must use this, not the
+  // midpoint of maxW, since maxW deliberately extends past the visible line into
+  // blank space to claim extra height; centering on maxW would look off-line.
+  const SIG_BOX = {
+    top:    { x: 55, y: 458,   maxW: 210, maxH: 25, lineCenterX: 133.7 },
+    bottom: { x: 64, y: 109.5, maxW: 210, maxH: 25, lineCenterX: 142.7 },
+  };
+
+  let sigImage = null;
+  if (data.signature_data && data.signature_data.startsWith('data:image/png;base64,')) {
+    try {
+      sigImage = await pdfDoc.embedPng(Buffer.from(data.signature_data.split(',')[1], 'base64'));
+    } catch {
+      sigImage = null; // corrupt payload — fall back to the text stamp below
+    }
+  }
+  const stampText = sigImage ? null : (
+    `${data.student_name || ''}${data.student_number ? ` (${data.student_number})` : ''}`
+  );
+
+  const drawSignature = (box) => {
+    if (sigImage) {
+      // Only ever scale down — an odd aspect ratio just ends up smaller, never stretched.
+      const scale = Math.min(box.maxW / sigImage.width, box.maxH / sigImage.height, 1);
+      const w = sigImage.width * scale;
+      page.drawImage(sigImage, { x: box.lineCenterX - w / 2, y: box.y, width: w, height: sigImage.height * scale });
+    } else {
+      // Text sits 1.5pt higher than the image anchor — its descender would otherwise
+      // dip through the underline, whereas ink resting right on the line looks natural.
+      const textW = font.widthOfTextAtSize(stampText, 8);
+      page.drawText(stampText, { x: box.lineCenterX - textW / 2, y: box.y + 1.5, size: 8, font, color: rgb(0.1, 0.1, 0.1), maxWidth: box.maxW });
+    }
+  };
+
   // textDy: offset for student-info text fields
   // cbDy:   offset for Nature-of-Advising checkboxes (and the specify text that sits in that row)
   const fillCopy = (textDy, cbDy) => {
@@ -305,7 +348,9 @@ async function fillSlipOnTemplate(templateBytes, data) {
   };
 
   fillCopy(0,           0);            // top copy
+  drawSignature(SIG_BOX.top);
   fillCopy(-TEXT_OFFSET, -COPY_OFFSET); // bottom copy
+  drawSignature(SIG_BOX.bottom);
 
   return Buffer.from(await pdfDoc.save());
 }
@@ -332,6 +377,7 @@ router.get('/advising-slip/:id', authenticate, async (req, res) => {
 
     const result = await pool.query(
       `SELECT c.id, c.date, c.nature_of_advising, c.nature_of_advising_specify, c.student_id,
+              c.professor_id, c.signature_data, c.created_at,
               s.full_name AS student_name, s.student_number, s.program, s.year_level,
               p.full_name AS professor_name
        FROM consultations c
@@ -347,6 +393,11 @@ router.get('/advising-slip/:id', authenticate, async (req, res) => {
     if (req.user.role === 'student') {
       const student = await pool.query('SELECT id FROM students WHERE user_id = $1', [req.user.id]);
       if (!student.rows[0] || student.rows[0].id !== data.student_id) {
+        return res.status(403).json({ error: 'Access denied.' });
+      }
+    } else if (req.user.role === 'professor') {
+      const professor = await pool.query('SELECT id FROM professors WHERE user_id = $1', [req.user.id]);
+      if (!professor.rows[0] || professor.rows[0].id !== data.professor_id) {
         return res.status(403).json({ error: 'Access denied.' });
       }
     }

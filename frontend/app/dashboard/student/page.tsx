@@ -655,8 +655,10 @@ export default function StudentDashboard() {
   // Book tab filters
   const [bookSearch, setBookSearch]       = useState('');
   const [bookDeptFilter, setBookDeptFilter] = useState<'all' | 'IT' | 'CS' | 'Other'>('all');
+  const [bookTopicFilter, setBookTopicFilter] = useState<string>('all');
   const [bookSortBy, setBookSortBy]       = useState<'slots' | 'date'>('slots');
   const [bookExpandedId, setBookExpandedId] = useState<number | null>(null);
+  const [topics, setTopics] = useState<{ id: number; label: string }[]>([]);
 
   // Data
   const [schedules, setSchedules]         = useState<Schedule[]>([]);
@@ -813,7 +815,7 @@ export default function StudentDashboard() {
 
   const fetchData = async () => {
     try {
-    const [sched, consult, prof, ann, cal, termData, notifSettings, topicsData] = await Promise.all([
+    const [sched, consult, prof, ann, cal, termData, notifSettings, topicsData, allTopics] = await Promise.all([
       api.get('/api/schedules', token!),
       api.get('/api/consultations', token!),
       api.get('/api/auth/profile', token!),
@@ -822,7 +824,9 @@ export default function StudentDashboard() {
       fetch(`${API_URL}/api/settings/term`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_URL}/api/settings/notifications`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.ok ? r.json() : null).catch(() => null),
       api.get('/api/consultations/my-topics', token!),
+      fetch(`${API_URL}/api/topics`).then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
+    setTopics(Array.isArray(allTopics) ? allTopics : []);
     const todayN = new Date();
     const today = `${todayN.getFullYear()}-${String(todayN.getMonth()+1).padStart(2,'0')}-${String(todayN.getDate()).padStart(2,'0')}`;
     setSchedules((Array.isArray(sched) ? sched : []).filter(s => !s.date || s.date >= today));
@@ -1956,12 +1960,21 @@ export default function StudentDashboard() {
                 ...(hasOther ? [{ key: 'Other', label: 'Other'           }] : []),
               ] as { key: string; label: string }[];
 
+              // Only offer topics that at least one currently-listed professor actually specializes in —
+              // an option nobody handles would just filter the list down to nothing.
+              const assignedTopicLabels = new Set(allProfessors.flatMap(p => p.specializations));
+              const topicOptions = [
+                { value: 'all', label: 'Any concern' },
+                ...topics.filter(t => assignedTopicLabels.has(t.label)).map(t => ({ value: t.label, label: t.label })),
+              ];
+
               // Filter + sort
               const q = bookSearch.trim().toLowerCase();
               const filtered = allProfessors.filter(p => {
-                const matchQ    = !q || p.professor_name.toLowerCase().includes(q) || p.department.toLowerCase().includes(q);
-                const matchDept = bookDeptFilter === 'all' || deptCat(p.department) === bookDeptFilter;
-                return matchQ && matchDept;
+                const matchQ     = !q || p.professor_name.toLowerCase().includes(q) || p.department.toLowerCase().includes(q);
+                const matchDept  = bookDeptFilter === 'all' || deptCat(p.department) === bookDeptFilter;
+                const matchTopic = bookTopicFilter === 'all' || p.specializations.includes(bookTopicFilter);
+                return matchQ && matchDept && matchTopic;
               });
               const displayedProfessors = [...filtered].sort((a, b) => {
                 if (bookSortBy === 'slots') return b.slots.length - a.slots.length;
@@ -1993,6 +2006,15 @@ export default function StudentDashboard() {
                         </button>
                       )}
                     </div>
+                    {topicOptions.length > 1 && (
+                      <CustomSelect
+                        value={bookTopicFilter}
+                        onChange={v => setBookTopicFilter(v)}
+                        isDark={isDark}
+                        className="py-2 px-3 text-sm"
+                        options={topicOptions}
+                      />
+                    )}
                     <CustomSelect
                       value={bookSortBy}
                       onChange={v => setBookSortBy(v as typeof bookSortBy)}
@@ -2034,7 +2056,7 @@ export default function StudentDashboard() {
                   ) : displayedProfessors.length === 0 ? (
                     <div className={`flex flex-col items-center justify-center py-14 rounded-2xl gap-1.5 ${card}`}>
                       <p className={`font-medium text-sm ${ts}`}>No professors match your search</p>
-                      <button onClick={() => { setBookSearch(''); setBookDeptFilter('all'); }}
+                      <button onClick={() => { setBookSearch(''); setBookDeptFilter('all'); setBookTopicFilter('all'); }}
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
@@ -2161,60 +2183,6 @@ export default function StudentDashboard() {
                                   })}
                                 </div>
                               )}
-
-                              {/* Proof submission for pending consultations without proof */}
-                              {(() => {
-                                const needsProof = consultations.find(c =>
-                                  c.professor_id === prof.professor_id &&
-                                  ['pending', 'confirmed'].includes(c.status) &&
-                                  !c.proof_of_evidence
-                                );
-                                if (!needsProof) return null;
-                                const isOpen = proofPanelId === needsProof.id;
-                                return (
-                                  <div className={`mt-3 rounded-xl border p-3 ${isDark ? 'bg-violet-500/5 border-violet-500/20' : 'bg-violet-50 border-violet-200'}`}>
-                                    <div className="flex items-center justify-between gap-2 mb-2">
-                                      <p className={`text-xs font-semibold flex items-center gap-1.5 ${isDark ? 'text-violet-400' : 'text-violet-700'}`}>
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                        </svg>
-                                        Submit Proof of Evidence
-                                      </p>
-                                      <button
-                                        onClick={() => { setProofPanelId(isOpen ? null : needsProof.id); setProofLinkValue(''); setProofLinkError(''); }}
-                                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${isDark ? 'bg-violet-500/15 text-violet-400 hover:bg-violet-500/25' : 'bg-violet-100 text-violet-700 hover:bg-violet-200'}`}>
-                                        {isOpen ? 'Cancel' : 'Add Link'}
-                                      </button>
-                                    </div>
-                                    {isOpen && (
-                                      <div className="space-y-1.5">
-                                        <div className="flex gap-2">
-                                          <input type="url" value={proofLinkValue}
-                                            onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
-                                            placeholder="https://drive.google.com/…"
-                                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs outline-none border transition-all ${
-                                              proofLinkError
-                                                ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                                : isDark
-                                                  ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
-                                                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
-                                            }`}
-                                          />
-                                          <button onClick={() => handleProofLinkSubmit(needsProof.id)}
-                                            disabled={submittingProofId === needsProof.id || !proofLinkValue.trim() || !!proofLinkError}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center">
-                                            {submittingProofId === needsProof.id
-                                              ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                                              : 'Submit'}
-                                          </button>
-                                        </div>
-                                        {proofLinkError && <p className="text-red-500 text-[10px]">{proofLinkError}</p>}
-                                        <p className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
 
                               {/* Actions */}
                               <div className="mt-auto pt-3 flex items-center justify-between gap-2">
@@ -2694,6 +2662,16 @@ export default function StudentDashboard() {
                     <p className={`text-xs leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{viewSlipData.slip_prof_notes}</p>
                   </div>
                 )}
+                <p className={`text-[11px] text-center ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                  Need to submit a physically signed copy instead?{' '}
+                  <button
+                    onClick={() => triggerUpload(viewSlipId)}
+                    disabled={uploadingId === viewSlipId}
+                    className={`underline font-medium disabled:opacity-50 ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-700'}`}
+                  >
+                    {uploadingId === viewSlipId ? 'Uploading…' : 'Upload a scan'}
+                  </button>
+                </p>
                 <button onClick={() => setViewSlipId(null)} className={`w-full py-2.5 rounded-xl text-sm font-medium mt-2 transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                   Close
                 </button>
