@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS students (
   program VARCHAR(100),
   year_level INTEGER,
   phone VARCHAR(50),
-  email VARCHAR(255)
+  email VARCHAR(255),
+  saved_signature TEXT
 );
 
 CREATE TABLE IF NOT EXISTS professors (
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS consultations (
   uploaded_form_path VARCHAR(255),
   meeting_link TEXT,
   notes TEXT,
+  signature_data TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 

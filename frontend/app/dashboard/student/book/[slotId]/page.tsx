@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { ToastContainer, useToast } from '@/components/Toast';
+import SignaturePad from '@/components/SignaturePad';
+import { downloadBlob } from '@/lib/downloadFile';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -176,6 +178,7 @@ export default function BookSlotPage() {
     mode: 'F2F',
     date: '',
     time: '',
+    signature: null as string | null,
   });
   const [bookError, setBookError]   = useState('');
   const [isBooking, setIsBooking]   = useState(false);
@@ -203,21 +206,14 @@ export default function BookSlotPage() {
   const [downloadingSlip, setDownloadingSlip] = useState(false);
   const [topicItems, setTopicItems] = useState<TopicItem[]>([]);
   const [profSpecializations, setProfSpecializations] = useState<TopicItem[]>([]);
+  const [savedSignature, setSavedSignature] = useState<string | null>(null);
+  const [rememberSignature, setRememberSignature] = useState(true);
 
   const handleDownloadFilledSlip = async (consultationId: number) => {
     setDownloadingSlip(true);
     try {
-      const res = await fetch(`${API_URL}/api/forms/advising-slip/${consultationId}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { toast.error('Booking confirmed, but slip download failed.'); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `advising-slip-${consultationId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const ok = await downloadBlob(`${API_URL}/api/forms/advising-slip/${consultationId}`, token!, `advising-slip-${consultationId}.pdf`);
+      if (!ok) toast.error('Booking confirmed, but slip download failed.');
     } finally { setDownloadingSlip(false); }
   };
 
@@ -247,6 +243,19 @@ export default function BookSlotPage() {
     setToken(tok);
     setAuthReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!authReady || !token) return;
+    api.get('/api/auth/profile', token).then((data: unknown) => {
+      if (data && typeof data === 'object') {
+        const d = data as { saved_signature?: string | null };
+        if (d.saved_signature) {
+          setSavedSignature(d.saved_signature);
+          setBookForm(f => (f.signature ? f : { ...f, signature: d.saved_signature! }));
+        }
+      }
+    }).catch(() => {});
+  }, [authReady, token]);
 
   // Fetch topics from API
   useEffect(() => {
@@ -396,8 +405,12 @@ export default function BookSlotPage() {
         nature_of_advising_specify: bookForm.nature_of_advising_specify || undefined,
         notes: bookForm.notes.trim() || undefined,
         mode: bookForm.mode,
+        signature: bookForm.signature || undefined,
       }, token!);
       if (data.error) { setBookError(data.error); return; }
+      if (rememberSignature && bookForm.signature && bookForm.signature !== savedSignature) {
+        api.put('/api/auth/signature', { signature: bookForm.signature }, token!).catch(() => {});
+      }
       toast.success('Booking confirmed! Downloading your advising slip…');
       if (data.id) await handleDownloadFilledSlip(data.id);
       router.push('/dashboard/student?view=my');
@@ -644,6 +657,33 @@ export default function BookSlotPage() {
                   {bookForm.notes.length}/500
                 </span>
               </div>
+            </div>
+
+            {/* Signature */}
+            <div className={`rounded-2xl border p-5 ${card}`}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className={`text-sm font-bold ${tp}`}>Signature</h3>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
+              </div>
+              <p className={`text-xs mb-3 ${ts}`}>
+                Draw your signature to embed it on your advising slip. Skip this and we&apos;ll auto-stamp your name and student number instead.
+              </p>
+              <SignaturePad
+                value={bookForm.signature}
+                onChange={sig => setBookForm(f => ({ ...f, signature: sig }))}
+                isDark={isDark}
+              />
+              {bookForm.signature && (
+                <label className={`flex items-center gap-2 mt-2.5 text-xs cursor-pointer ${ts}`}>
+                  <input
+                    type="checkbox"
+                    checked={rememberSignature}
+                    onChange={e => setRememberSignature(e.target.checked)}
+                    className="accent-[#0EA5E9]"
+                  />
+                  Remember my signature for next time
+                </label>
+              )}
             </div>
           </div>
 

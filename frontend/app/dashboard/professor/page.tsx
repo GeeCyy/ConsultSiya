@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { downloadBlob } from '@/lib/downloadFile';
 import * as XLSX from 'xlsx';
 import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
@@ -922,6 +923,7 @@ export default function ProfessorDashboard() {
   const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string; announcement?: string; meeting_link?: string; mode?: string } & typeof editSched | null>(null);
 
   const [downloadingForm, setDownloadingForm]   = useState<number | null>(null);
+  const [downloadingSlip, setDownloadingSlip]   = useState<number | null>(null);
   const [viewingProof, setViewingProof]         = useState<number | null>(null);
   const [togglingSession, setTogglingSession]   = useState<number | null>(null);
   // Digital slip state
@@ -1414,6 +1416,19 @@ export default function ProfessorDashboard() {
       URL.revokeObjectURL(url);
     } finally {
       setDownloadingForm(null);
+    }
+  };
+
+  // The advising slip is filled (and signed, if the student drew or saved a signature)
+  // automatically as soon as the booking is made — no separate submission step needed,
+  // so this is always available rather than gated behind an upload/proof step.
+  const handleDownloadAdvisingSlip = async (id: number) => {
+    setDownloadingSlip(id);
+    try {
+      const ok = await downloadBlob(`${API_URL}/api/forms/advising-slip/${id}`, token!, `advising-slip-${id}.pdf`);
+      if (!ok) toast.error('Download failed.');
+    } finally {
+      setDownloadingSlip(null);
     }
   };
 
@@ -3185,6 +3200,18 @@ export default function ProfessorDashboard() {
 
                         <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
+                            {/* Advising slip — filled (and signed, if provided) automatically at
+                                booking time, so it's always available here, no student action needed */}
+                            <button
+                              onClick={() => handleDownloadAdvisingSlip(c.id)}
+                              disabled={downloadingSlip === c.id}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                              {downloadingSlip === c.id
+                                ? <span className="w-3 h-3 border border-sky-400 border-t-transparent rounded-full animate-spin" />
+                                : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                              }
+                              Advising Slip
+                            </button>
                             {/* Fill / View Digital Slip */}
                             {(c.status === 'confirmed' || c.status === 'completed') && (
                               <button
@@ -3206,7 +3233,7 @@ export default function ProfessorDashboard() {
                                 Student Form
                               </button>
                             )}
-                            {c.proof_of_evidence ? (
+                            {c.proof_of_evidence && (
                               c.proof_type === 'link' ? (
                                 <a
                                   href={c.proof_of_evidence}
@@ -3231,13 +3258,6 @@ export default function ProfessorDashboard() {
                                   View Proof
                                 </button>
                               )
-                            ) : (
-                              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-500/10 text-gray-500 ring-1 ring-gray-500/20 cursor-not-allowed select-none">
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
-                                </svg>
-                                No Proof Submitted
-                              </span>
                             )}
                           </div>
 

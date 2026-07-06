@@ -146,7 +146,14 @@ router.post('/mark-missed', authenticate, async (req, res) => {
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, preferred_mode, notes } = req.body;
+  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, preferred_mode, notes, signature } = req.body;
+
+  // Only accept a well-formed, size-capped PNG data URL — anything else silently
+  // falls back to the auto-generated text stamp on the advising slip rather than
+  // failing the booking.
+  const signatureValue = (typeof signature === 'string' && signature.startsWith('data:image/png;base64,') && signature.length <= 300_000)
+    ? signature
+    : null;
 
   try {
     const studentResult = await pool.query(
@@ -250,9 +257,9 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       try {
         result = await client.query(
           `INSERT INTO consultations
-           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes, preferred_mode)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null, preferredModeValue]
+           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes, preferred_mode, signature_data)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null, preferredModeValue, signatureValue]
         );
         await client.query('RELEASE SAVEPOINT before_insert');
       } catch (colErr) {

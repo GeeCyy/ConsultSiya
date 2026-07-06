@@ -83,12 +83,13 @@ router.post(
       const concern = detectConcern(message);
 
       if (concern) {
-        // Try DB responsibility mapping first
+        // Only professors actually assigned this concern's specialization topic
         const mapped = await pool.query(
-          `SELECT p.full_name, p.department FROM professor_responsibilities pr
-           JOIN professors p ON pr.professor_id = p.id
+          `SELECT p.full_name, p.department FROM professors p
            JOIN users u ON p.user_id = u.id
-           WHERE pr.concern_type = $1 AND u.is_approved = true
+           JOIN professor_specializations ps ON ps.professor_id = p.id
+           JOIN topics t ON t.id = ps.topic_id AND t.is_active = true
+           WHERE t.label = $1 AND u.is_approved = true
            ORDER BY p.full_name`,
           [concern]
         );
@@ -100,20 +101,8 @@ router.post(
           });
         }
 
-        // Fallback: show all professors available for that concern type
-        const allProfs = await pool.query(
-          `SELECT p.full_name, p.department FROM professors p
-           JOIN users u ON p.user_id = u.id
-           WHERE u.is_approved = true ORDER BY p.full_name`
-        );
-
-        if (allProfs.rows.length === 0) {
-          return res.json({ reply: 'No professors are currently available. Please check back later.' });
-        }
-
-        const list = allProfs.rows.map(r => `• **${r.full_name}** — ${r.department || 'N/A'}`).join('\n');
         return res.json({
-          reply: `For concerns about **${concern}**, you may consult any of the following professors:\n${list}\n\nBook a slot from your dashboard.`,
+          reply: `No professor is currently assigned to **${concern}**. Please contact the SOIT admin, or check "Show me all professors" to browse everyone.`,
         });
       }
 
@@ -249,6 +238,37 @@ const PROF_REC_KEYWORDS = [
 async function buildProfSpecContext(latestMsg) {
   if (!PROF_REC_KEYWORDS.some(k => latestMsg.includes(k))) return '';
 
+  // If the message maps to one of the system's canonical concern types (same
+  // mapping the plain /api/chat endpoint uses), filter at the DB level so the
+  // model only ever sees professors actually assigned to that concern — it
+  // can't recommend an irrelevant professor if one is never in its context.
+  const concern = detectConcern(latestMsg);
+
+  if (concern) {
+    const matched = await pool.query(
+      `SELECT p.full_name, p.id AS professor_id
+       FROM professors p
+       JOIN users u ON p.user_id = u.id
+       JOIN professor_specializations ps ON ps.professor_id = p.id
+       JOIN topics t ON t.id = ps.topic_id AND t.is_active = true
+       WHERE u.is_approved = true AND t.label = $1
+       ORDER BY p.full_name`,
+      [concern]
+    );
+
+    if (matched.rows.length === 0) {
+      return `\n\nPROFESSOR SPECIALIZATIONS DATA (live from the database): No professor is currently assigned to handle "${concern}". Tell the student plainly that no one is assigned to this yet and suggest contacting the SOIT admin — do NOT invent or guess a name.`;
+    }
+
+    const lines = matched.rows.map(r => `• ${r.full_name} [profId=${r.professor_id}]: ${concern}`);
+    return `\n\nPROFESSOR SPECIALIZATIONS DATA (live from the database — these are the ONLY professors relevant to "${concern}"):\n` +
+      lines.join('\n') +
+      `\n\nIMPORTANT: Only recommend professors from this list — they are the professors actually assigned to handle "${concern}". Never recommend or invent any professor not listed here.`;
+  }
+
+  // No canonical concern matched (e.g. a free-form specialization like "who's
+  // good at databases") — fall back to the full roster and let the model do
+  // semantic matching against each professor's listed topics.
   const rows = await pool.query(
     `SELECT p.full_name, p.id AS professor_id, p.department,
             array_agg(t.label ORDER BY t.display_order) FILTER (WHERE t.id IS NOT NULL) AS topics
