@@ -1247,7 +1247,21 @@ router.get('/:id/proof', authenticate, async (req, res) => {
     }
 
     if (c.proof_of_evidence.startsWith('https://')) {
-      return res.redirect(cloudinary.toDeliverableUrl(c.proof_of_evidence));
+      const deliveryUrl = cloudinary.toDeliverableUrl(c.proof_of_evidence);
+      let upstream;
+      try {
+        upstream = await fetch(deliveryUrl);
+      } catch (fetchErr) {
+        console.error(`[proof:${id}] Cloudinary fetch error:`, fetchErr.message);
+        return res.status(502).json({ error: 'Could not reach file storage.' });
+      }
+      if (!upstream.ok) {
+        const body = await upstream.text().catch(() => '');
+        console.error(`[proof:${id}] Cloudinary delivery ${upstream.status} for ${deliveryUrl}: ${body.slice(0, 500)}`);
+        return res.status(502).json({ error: `File storage returned ${upstream.status}.` });
+      }
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+      return res.send(Buffer.from(await upstream.arrayBuffer()));
     }
     const filePath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
