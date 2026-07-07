@@ -8,7 +8,7 @@ import { ToastContainer, useToast } from '@/components/Toast';
 import DashboardNavbar, { type NavItem } from '@/components/DashboardNavbar';
 import ChatbotWidget from '@/components/ChatbotWidget';
 import SignaturePad from '@/components/SignaturePad';
-import { downloadBlob } from '@/lib/downloadFile';
+import DocPreviewModal from '@/components/DocPreviewModal';
 
 const NATURE_OPTIONS_FALLBACK = [
   'Thesis/Design Subject concerns',
@@ -250,10 +250,6 @@ export default function BookProfPage() {
   const preferredTimeRef = useRef<HTMLDivElement>(null);
   const proofFileRef = useRef<HTMLInputElement>(null);
 
-  // Proof of evidence — inline booking form
-  const [bookProofLink, setBookProofLink] = useState('');
-  const [bookProofLinkError, setBookProofLinkError] = useState('');
-
   // Proof of evidence state
   const { toasts, toast, removeToast } = useToast();
   const [myConsults, setMyConsults] = useState<MyConsult[]>([]);
@@ -264,7 +260,10 @@ export default function BookProfPage() {
   const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
   const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
   const [viewingFile, setViewingFile] = useState<number | null>(null);
-  const [downloadingSlip, setDownloadingSlip] = useState(false);
+  const [slipPreview, setSlipPreview] = useState<{ id: number } | null>(null);
+  const [formMode, setFormMode] = useState<'auto' | 'manual'>('auto');
+  const [bookProofLink, setBookProofLink] = useState('');
+  const [bookProofLinkError, setBookProofLinkError] = useState('');
   const [profileName, setProfileName] = useState('');
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
@@ -272,14 +271,6 @@ export default function BookProfPage() {
   const [rescheduleRemarks, setRescheduleRemarks] = useState<string | null>(null);
   const [topicItems, setTopicItems] = useState<TopicItem[]>([]);
   const [profSpecializations, setProfSpecializations] = useState<TopicItem[]>([]);
-
-  const handleDownloadFilledSlip = async (consultationId: number) => {
-    setDownloadingSlip(true);
-    try {
-      const ok = await downloadBlob(`${API_URL}/api/forms/advising-slip/${consultationId}`, token!, `advising-slip-${consultationId}.pdf`);
-      if (!ok) toast.error('Booking confirmed, but slip download failed.');
-    } finally { setDownloadingSlip(false); }
-  };
 
   useEffect(() => {
     setMounted(true);
@@ -494,8 +485,8 @@ export default function BookProfPage() {
     if (selectedSlot.mode === 'BOTH' && !bookForm.preferredMode) {
       setBookError('Please select your preferred consultation mode.'); return;
     }
-    if (bookProofLink.trim() && !isValidProofLink(bookProofLink.trim())) {
-      setBookError('Proof of evidence must be a Google Drive or OneDrive link.'); return;
+    if (formMode === 'manual' && bookProofLink.trim() && !isValidProofLink(bookProofLink.trim())) {
+      setBookError('Proof link must be a Google Drive or OneDrive link.'); return;
     }
     setIsBooking(true);
     try {
@@ -509,6 +500,7 @@ export default function BookProfPage() {
         if (data.error) { setBookError(data.error); return; }
         router.push('/dashboard/student?view=my');
       } else {
+        const proofRequired = formMode === 'manual';
         const data = await api.post('/api/consultations', {
           professor_id: selectedSlot.professor_id,
           schedule_id: selectedSlot.id,
@@ -520,16 +512,17 @@ export default function BookProfPage() {
           preferred_mode: bookForm.mode === 'BOTH' ? (bookForm.preferredMode || undefined) : undefined,
           notes: bookForm.notes.trim() || undefined,
           signature: bookForm.signature || undefined,
+          proof_required: proofRequired,
         }, token!);
         if (data.error) { setBookError(data.error); return; }
-        if (data.id && bookProofLink.trim()) {
+        if (data.id && proofRequired && bookProofLink.trim()) {
           await api.post(`/api/consultations/${data.id}/proof`, { link: bookProofLink.trim() }, token!).catch(() => {});
         }
         if (rememberSignature && bookForm.signature && bookForm.signature !== savedSignature) {
           api.put('/api/auth/signature', { signature: bookForm.signature }, token!).catch(() => {});
         }
-        toast.success('Booking confirmed! Downloading your advising slip…');
-        if (data.id) await handleDownloadFilledSlip(data.id);
+        toast.success('Booking confirmed!');
+        if (data.id) setSlipPreview({ id: data.id });
         router.push('/dashboard/student?view=my');
       }
     } finally {
@@ -620,7 +613,7 @@ export default function BookProfPage() {
         {/* Page title */}
         <div className="mb-6">
           <h1 className={`text-2xl sm:text-3xl font-bold ${tp}`}>{rescheduleId ? 'Select New Schedule' : 'Book a Consultation'}</h1>
-          <p className={`text-sm mt-1 ${ts}`}>{rescheduleId ? 'Choose a new date and time for your rescheduled consultation.' : 'Fill in the details below to request a consultation session. Your advising slip will be downloaded automatically upon confirmation.'}</p>
+          <p className={`text-sm mt-1 ${ts}`}>{rescheduleId ? 'Choose a new date and time for your rescheduled consultation.' : 'Fill in the details below to request a consultation session. Your advising slip will be available to preview and download upon confirmation.'}</p>
         </div>
 
         {/* Professor header card */}
@@ -665,7 +658,10 @@ export default function BookProfPage() {
           {/* Left: Nature of Advising + Notes (hidden in reschedule mode) */}
           <div className={`space-y-4 ${rescheduleId ? 'hidden lg:hidden' : ''}`}>
             <div className={`rounded-2xl border p-5 ${card}`}>
-              <h3 className={`text-sm font-bold mb-0.5 ${tp}`}>Nature of Advising</h3>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                <h3 className={`text-sm font-bold ${tp}`}>Nature of Advising</h3>
+              </div>
               <p className={`text-xs mb-2 ${ts}`}>Select all that apply</p>
 
               {/* Professor specializations */}
@@ -759,7 +755,10 @@ export default function BookProfPage() {
             {/* Notes */}
             <div className={`rounded-2xl border p-5 ${card}`}>
               <div className="flex items-center justify-between mb-1">
-                <h3 className={`text-sm font-bold ${tp}`}>Additional Notes</h3>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+                  <h3 className={`text-sm font-bold ${tp}`}>Additional Notes</h3>
+                </div>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
               </div>
               <p className={`text-xs mb-3 ${ts}`}>Describe your concern so your adviser can prepare in advance.</p>
@@ -778,56 +777,93 @@ export default function BookProfPage() {
               </div>
             </div>
 
-            {/* Signature */}
+            {/* Signature + Form Submission */}
             <div className={`rounded-2xl border p-5 ${card}`}>
               <div className="flex items-center justify-between mb-1">
-                <h3 className={`text-sm font-bold ${tp}`}>Signature</h3>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+                  <h3 className={`text-sm font-bold ${tp}`}>Advising Slip</h3>
+                </div>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
               </div>
-              <p className={`text-xs mb-3 ${ts}`}>
-                Draw your signature to embed it on your advising slip. Skip this and we&apos;ll auto-stamp your name and student number instead.
-              </p>
-              <SignaturePad
-                value={bookForm.signature}
-                onChange={sig => setBookForm(f => ({ ...f, signature: sig }))}
-                isDark={isDark}
-              />
-              {bookForm.signature && (
-                <label className={`flex items-center gap-2 mt-2.5 text-xs cursor-pointer ${ts}`}>
-                  <input
-                    type="checkbox"
-                    checked={rememberSignature}
-                    onChange={e => setRememberSignature(e.target.checked)}
-                    className="accent-[#0EA5E9]"
-                  />
-                  Remember my signature for next time
-                </label>
-              )}
-            </div>
+              <p className={`text-xs mb-3 ${ts}`}>Choose how to handle your advising slip for this consultation.</p>
 
-            {/* Proof of Evidence */}
-            <div className={`rounded-2xl border p-5 ${card}`}>
-              <div className="flex items-center justify-between mb-1">
-                <h3 className={`text-sm font-bold ${tp}`}>Proof of Evidence</h3>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
+              {/* Choice always shown first */}
+              <div className="space-y-2 mb-4">
+                {(['auto', 'manual'] as const).map(m => (
+                  <label key={m} className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="formMode-prof"
+                      checked={formMode === m}
+                      onChange={() => { setFormMode(m); if (m === 'manual') setBookForm(f => ({ ...f, signature: '' })); }}
+                      className="accent-[#0EA5E9] mt-0.5 flex-shrink-0"
+                    />
+                    <div>
+                      <span className={`text-xs font-medium ${tp}`}>
+                        {m === 'auto' ? 'Use automatic form' : "I'll fill and submit the form myself"}
+                      </span>
+                      <p className={`text-[11px] mt-0.5 ${ts}`}>
+                        {m === 'auto'
+                          ? 'Draw your signature below, or skip and we\'ll stamp your name and student number automatically.'
+                          : 'Download the blank form, fill it out, upload to Google Drive, and paste the link here.'}
+                      </p>
+                    </div>
+                  </label>
+                ))}
               </div>
-              <p className={`text-xs mb-3 ${ts}`}>
-                Attach a Google Drive, Google Docs, or OneDrive link now if you already have supporting documents. You can also submit this later from My Consultations.
-              </p>
-              <input
-                type="url"
-                value={bookProofLink}
-                onChange={e => {
-                  const v = e.target.value;
-                  setBookProofLink(v);
-                  setBookProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : '');
-                }}
-                placeholder="https://drive.google.com/…"
-                className={`w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 transition-colors ${
-                  bookProofLinkError ? '!border-red-500' : ''
-                } ${inputCls}`}
-              />
-              {bookProofLinkError && <p className="text-red-500 text-[10px] mt-1.5">{bookProofLinkError}</p>}
+
+              {/* Auto: show signature pad */}
+              {formMode === 'auto' && (
+                <>
+                  <p className={`text-[11px] mb-2 ${ts}`}>Signature <span className={`${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional — leave blank to use auto-stamp)</span></p>
+                  <SignaturePad
+                    value={bookForm.signature}
+                    onChange={sig => setBookForm(f => ({ ...f, signature: sig }))}
+                    isDark={isDark}
+                  />
+                  {bookForm.signature && (
+                    <label className={`flex items-center gap-2 mt-2.5 text-xs cursor-pointer ${ts}`}>
+                      <input type="checkbox" checked={rememberSignature} onChange={e => setRememberSignature(e.target.checked)} className="accent-[#0EA5E9]" />
+                      Remember my signature for next time
+                    </label>
+                  )}
+                </>
+              )}
+
+              {/* Manual: show download + link */}
+              {formMode === 'manual' && (
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
+                      if (!res.ok) return;
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                    className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Download Blank Form Template
+                  </button>
+                  <p className={`text-[11px] ${ts}`}>Fill it out, upload to Google Drive, then paste the link below <span className={`${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional — you can also submit later from My Consultations)</span>:</p>
+                  <input
+                    type="url"
+                    value={bookProofLink}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setBookProofLink(v);
+                      setBookProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : '');
+                    }}
+                    placeholder="https://drive.google.com/…"
+                    className={`w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 transition-colors ${bookProofLinkError ? '!border-red-500' : ''} ${inputCls}`}
+                  />
+                  {bookProofLinkError && <p className="text-red-500 text-[10px]">{bookProofLinkError}</p>}
+                </div>
+              )}
             </div>
 
           </div>
@@ -837,7 +873,10 @@ export default function BookProfPage() {
 
             {/* Mode */}
             <div className={`rounded-2xl border p-5 ${card}`}>
-              <h3 className={`text-sm font-bold mb-3 ${tp}`}>Consultation Mode</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">4</span>
+                <h3 className={`text-sm font-bold ${tp}`}>Consultation Mode</h3>
+              </div>
               {(() => {
                 const slotMode = selectedSlot?.mode;
                 const allModes = [
@@ -927,7 +966,10 @@ export default function BookProfPage() {
             {/* Date picker — professor-wide calendar */}
             <div className={`rounded-2xl border p-5 ${card}`}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className={`text-sm font-bold ${tp}`}>Select Date</h3>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">5</span>
+                  <h3 className={`text-sm font-bold ${tp}`}>Select Date</h3>
+                </div>
                 <span className={`text-xs ${ts}`}>Available days highlighted</span>
               </div>
               <ProfBookingCalendar
@@ -1002,7 +1044,10 @@ export default function BookProfPage() {
             {/* Time picker */}
             <div ref={preferredTimeRef} className={`rounded-2xl border p-5 ${card}`}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className={`text-sm font-bold ${tp}`}>Preferred Start Time</h3>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">6</span>
+                  <h3 className={`text-sm font-bold ${tp}`}>Preferred Start Time</h3>
+                </div>
                 {!bookForm.date && <span className={`text-xs italic ${ts}`}>Select a date first</span>}
               </div>
               {!bookForm.date ? (
@@ -1157,6 +1202,16 @@ export default function BookProfPage() {
     </div>
     <ChatbotWidget token={token} role="student" />
     <ToastContainer toasts={toasts} onRemove={removeToast} />
+    {slipPreview && (
+      <DocPreviewModal
+        isOpen={!!slipPreview}
+        onClose={() => setSlipPreview(null)}
+        title={`Advising Slip #${slipPreview.id}`}
+        fetchUrl={`${API_URL}/api/forms/advising-slip/${slipPreview.id}`}
+        token={token ?? ''}
+        filename={`advising-slip-${slipPreview.id}.pdf`}
+      />
+    )}
     </>
   );
 }

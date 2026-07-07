@@ -59,30 +59,39 @@ router.post('/users', authenticate, authorize('admin'), async (req, res) => {
   if (!email || !full_name || !full_name.trim()) {
     return res.status(400).json({ error: 'Email and full name are required.' });
   }
+  // Validate role-specific fields before touching the database
+  if (role === 'student' && (!student_number || !/^\d{10}$/.test(student_number))) {
+    return res.status(400).json({ error: 'Student number must be exactly 10 digits.' });
+  }
+  const client = await pool.connect();
   try {
     const password_hash = await bcrypt.hash(password || 'Welcome@123', 10);
-    const userResult = await pool.query(
+    await client.query('BEGIN');
+    const userResult = await client.query(
       `INSERT INTO users (email, password_hash, role, is_approved) VALUES ($1, $2, $3, true) RETURNING id`,
       [email, password_hash, role]
     );
     const userId = userResult.rows[0].id;
     if (role === 'student') {
-      if (!student_number || !/^\d{10}$/.test(student_number)) return res.status(400).json({ error: 'Student number must be exactly 10 digits.' });
-      await pool.query(
+      await client.query(
         `INSERT INTO students (user_id, full_name, student_number, program, year_level) VALUES ($1, $2, $3, $4, $5)`,
         [userId, full_name, student_number, program || null, year_level ? parseInt(year_level) : null]
       );
     } else {
-      await pool.query(
+      await client.query(
         `INSERT INTO professors (user_id, full_name, department) VALUES ($1, $2, $3)`,
         [userId, full_name, department || null]
       );
     }
+    await client.query('COMMIT');
     res.status(201).json({ message: 'Account created successfully.' });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     if (err.code === '23505') return res.status(400).json({ error: 'Email or student number already registered.' });
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

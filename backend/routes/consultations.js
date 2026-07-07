@@ -146,7 +146,7 @@ router.post('/mark-missed', authenticate, async (req, res) => {
 
 // Student books a consultation
 router.post('/', authenticate, authorize('student'), async (req, res) => {
-  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, preferred_mode, notes, signature } = req.body;
+  const { professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, preferred_mode, notes, signature, proof_required } = req.body;
 
   // Only accept a well-formed, size-capped PNG data URL — anything else silently
   // falls back to the auto-generated text stamp on the advising slip rather than
@@ -257,21 +257,34 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
       try {
         result = await client.query(
           `INSERT INTO consultations
-           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes, preferred_mode, signature_data)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null, preferredModeValue, signatureValue]
+           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes, preferred_mode, signature_data, proof_required)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null, preferredModeValue, signatureValue, proof_required === true]
         );
         await client.query('RELEASE SAVEPOINT before_insert');
       } catch (colErr) {
         // Roll back the failed statement so the transaction stays healthy
         await client.query('ROLLBACK TO SAVEPOINT before_insert');
         if (colErr.code !== '42703') throw colErr; // re-raise anything that isn't "column does not exist"
-        result = await client.query(
-          `INSERT INTO consultations
-           (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-          [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null]
-        );
+        // preferred_mode column missing — retry without it but keep signature_data
+        await client.query('SAVEPOINT before_insert_fallback');
+        try {
+          result = await client.query(
+            `INSERT INTO consultations
+             (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes, signature_data)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+            [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null, signatureValue]
+          );
+          await client.query('RELEASE SAVEPOINT before_insert_fallback');
+        } catch {
+          await client.query('ROLLBACK TO SAVEPOINT before_insert_fallback');
+          result = await client.query(
+            `INSERT INTO consultations
+             (student_id, professor_id, schedule_id, date, time, nature_of_advising, nature_of_advising_specify, mode, meeting_link, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [student_id, professor_id, schedule_id, date, time || null, natureValue, nature_of_advising_specify || null, mode, null, notes || null]
+          );
+        }
       }
 
       await client.query('COMMIT');
@@ -405,6 +418,7 @@ router.get('/', authenticate, async (req, res) => {
            ORDER BY id DESC LIMIT 1
          ) cd ON true
          WHERE c.professor_id = $1 AND c.status != 'cancelled'
+           AND NOT (c.proof_required = true AND (c.proof_of_evidence IS NULL OR c.proof_of_evidence = ''))
          ORDER BY c.date DESC`,
         [prof.rows[0].id]
       );

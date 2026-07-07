@@ -110,6 +110,30 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] users.password_reset_expires column ready'))
     .catch(err => console.error('[startup] users.password_reset_expires migration failed:', err.message));
 
+  pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true`)
+    .then(() => console.log('[startup] users.is_active column ready'))
+    .catch(err => console.error('[startup] users.is_active migration failed:', err.message));
+
+  pool.query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS date DATE`)
+    .then(() => console.log('[startup] schedules.date column ready'))
+    .catch(err => console.error('[startup] schedules.date migration failed:', err.message));
+
+  pool.query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS time_ranges JSONB`)
+    .then(() => console.log('[startup] schedules.time_ranges column ready'))
+    .catch(err => console.error('[startup] schedules.time_ranges migration failed:', err.message));
+
+  pool.query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS announcement TEXT`)
+    .then(() => console.log('[startup] schedules.announcement column ready'))
+    .catch(err => console.error('[startup] schedules.announcement migration failed:', err.message));
+
+  pool.query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS meeting_link TEXT`)
+    .then(() => console.log('[startup] schedules.meeting_link column ready'))
+    .catch(err => console.error('[startup] schedules.meeting_link migration failed:', err.message));
+
+  pool.query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS mode VARCHAR(10)`)
+    .then(() => console.log('[startup] schedules.mode column ready'))
+    .catch(err => console.error('[startup] schedules.mode migration failed:', err.message));
+
   pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`)
     .then(() => console.log('[startup] students.phone column ready'))
     .catch(err => console.error('[startup] students.phone migration failed:', err.message));
@@ -333,6 +357,30 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(r => r.rowCount > 0 && console.log(`[startup] migrated ${r.rowCount} professor department(s) to Others`))
     .catch(err => console.error('[startup] professor department migration failed:', err.message));
 
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS time TIME`)
+    .then(() => console.log('[startup] consultations.time column ready'))
+    .catch(err => console.error('[startup] consultations.time migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS mode VARCHAR(10)`)
+    .then(() => console.log('[startup] consultations.mode column ready'))
+    .catch(err => console.error('[startup] consultations.mode migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS meeting_link TEXT`)
+    .then(() => console.log('[startup] consultations.meeting_link column ready'))
+    .catch(err => console.error('[startup] consultations.meeting_link migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS nature_of_advising TEXT`)
+    .then(() => console.log('[startup] consultations.nature_of_advising column ready'))
+    .catch(err => console.error('[startup] consultations.nature_of_advising migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS nature_of_advising_specify TEXT`)
+    .then(() => console.log('[startup] consultations.nature_of_advising_specify column ready'))
+    .catch(err => console.error('[startup] consultations.nature_of_advising_specify migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS uploaded_form_path VARCHAR(255)`)
+    .then(() => console.log('[startup] consultations.uploaded_form_path column ready'))
+    .catch(err => console.error('[startup] consultations.uploaded_form_path migration failed:', err.message));
+
   pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS proof_of_evidence TEXT`)
     .then(() => console.log('[startup] consultations.proof_of_evidence column ready'))
     .catch(err => console.error('[startup] consultations.proof_of_evidence migration failed:', err.message));
@@ -352,6 +400,14 @@ app.listen(PORT, '0.0.0.0', () => {
   pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS signature_data TEXT`)
     .then(() => console.log('[startup] consultations.signature_data column ready'))
     .catch(err => console.error('[startup] consultations.signature_data migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS preferred_mode VARCHAR(3)`)
+    .then(() => console.log('[startup] consultations.preferred_mode column ready'))
+    .catch(err => console.error('[startup] consultations.preferred_mode migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS proof_required BOOLEAN NOT NULL DEFAULT false`)
+    .then(() => console.log('[startup] consultations.proof_required column ready'))
+    .catch(err => console.error('[startup] consultations.proof_required migration failed:', err.message));
 
   pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS saved_signature TEXT`)
     .then(() => console.log('[startup] students.saved_signature column ready'))

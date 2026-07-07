@@ -238,10 +238,13 @@ export default function NavigationTour({
   const [visible, setVisible] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
 
-  // Show on first visit
+  // Show only if never permanently dismissed AND not already skipped this session
   useEffect(() => {
     try {
-      if (!localStorage.getItem(doneKey)) setVisible(true);
+      const sessionKey = `${doneKey}-session`;
+      if (!localStorage.getItem(doneKey) && !sessionStorage.getItem(sessionKey)) {
+        setVisible(true);
+      }
     } catch { /**/ }
   }, [doneKey]);
 
@@ -306,7 +309,10 @@ export default function NavigationTour({
     };
   }, [isChatbotStep]);
 
-  const skipForNow = () => setVisible(false);
+  const skipForNow = () => {
+    try { sessionStorage.setItem(`${doneKey}-session`, '1'); } catch { /**/ }
+    setVisible(false);
+  };
 
   const dismissForever = () => {
     try { localStorage.setItem(doneKey, '1'); } catch { /**/ }

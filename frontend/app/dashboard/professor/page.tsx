@@ -379,6 +379,109 @@ function ScheduleDatePicker({
   );
 }
 
+function MultiScheduleDatePicker({
+  selected,
+  onToggle,
+  disabledDates,
+  isDark = true,
+}: {
+  selected: string[];
+  onToggle: (dateStr: string, dayName: string) => void;
+  disabledDates: string[];
+  isDark?: boolean;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [mounted, setMounted] = useState(false);
+
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+
+  const prevMonth = () => {
+    if (isCurrentMonth) return;
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const calBg      = isDark ? '#1e1e1e'              : '#f5f5f5';
+  const calBorder  = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+  const monthText  = isDark ? 'text-white'            : 'text-gray-800';
+  const navBtn     = isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-800 hover:bg-black/8';
+  const dayHeader  = isDark ? 'text-gray-600'         : 'text-gray-400';
+  const dayNormal  = isDark ? 'text-gray-300 hover:bg-white/10' : 'text-gray-700 hover:bg-black/8';
+  const dayDisabled= isDark ? 'text-gray-700'         : 'text-gray-300';
+  const dayToday   = isDark ? 'text-white ring-1 ring-inset ring-[#0EA5E9]/40 hover:bg-white/10' : 'text-gray-900 ring-1 ring-inset ring-[#0EA5E9]/40 hover:bg-black/8';
+
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="rounded-xl p-3 min-h-[220px]" style={{ backgroundColor: calBg, border: `1px solid ${calBorder}` }} />;
+
+  return (
+    <div className="rounded-xl p-3 select-none" style={{ backgroundColor: calBg, border: `1px solid ${calBorder}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <button type="button" onClick={prevMonth} disabled={isCurrentMonth}
+          className={`w-7 h-7 flex items-center justify-center rounded-lg disabled:opacity-20 disabled:cursor-not-allowed transition-colors ${navBtn}`}>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <span className={`text-sm font-medium ${monthText}`}>{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button type="button" onClick={nextMonth}
+          className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${navBtn}`}>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+      <div className="grid grid-cols-7 mb-1">
+        {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+          <div key={d} className={`text-center text-[10px] font-medium py-1 ${dayHeader}`}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const date = new Date(viewYear, viewMonth, day);
+          const dow = date.getDay();
+          const dayName = DAY_NAMES[dow];
+          const isPast = date < today;
+          const isSunday = dow === 0;
+          const hasSlot = disabledDates.includes(dateStr);
+          const isDisabled = isPast || isSunday || hasSlot;
+          const isSelected = selected.includes(dateStr);
+          const isToday = date.getTime() === today.getTime();
+          return (
+            <button
+              key={dateStr}
+              type="button"
+              disabled={isDisabled}
+              onClick={() => onToggle(dateStr, dayName)}
+              className={[
+                'relative rounded-lg text-xs py-1.5 font-medium transition-colors w-full',
+                isSelected ? 'bg-[#0EA5E9] text-white' :
+                isDisabled ? `${dayDisabled} cursor-not-allowed` :
+                isToday ? dayToday :
+                dayNormal,
+              ].join(' ')}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <p className={`text-[10px] text-center mt-2.5 font-medium ${selected.length > 0 ? 'text-sky-400' : isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+        {selected.length > 0 ? `${selected.length} date${selected.length > 1 ? 's' : ''} selected — click to toggle` : 'Click dates to select'}
+      </p>
+    </div>
+  );
+}
+
 function TimePicker({ value, onChange, dark = true, forceUp = false }: { value: string; onChange: (v: string) => void; dark?: boolean; forceUp?: boolean }) {
   const parse = (v: string) => {
     if (!v) return { h: '', m: '00', ampm: 'AM' as 'AM' | 'PM' };
@@ -903,7 +1006,7 @@ export default function ProfessorDashboard() {
 
   // Add schedule
   const [newSched, setNewSched] = useState({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] as TimeRange[] });
-  const [newSchedDate, setNewSchedDate] = useState('');
+  const [newSchedDates, setNewSchedDates] = useState<string[]>([]);
   const [newSchedMode, setNewSchedMode] = useState<'F2F' | 'Online'>('F2F');
   const [newSchedAnnouncement, setNewSchedAnnouncement] = useState('');
   const [newSchedMeetingLink, setNewSchedMeetingLink] = useState('');
@@ -1478,7 +1581,7 @@ export default function ProfessorDashboard() {
   // Schedule add — show confirmation dialog first
   const handleRequestAddSchedule = () => {
     setSchedError('');
-    if (!newSchedDate) { setSchedError('Please select a date.'); return; }
+    if (newSchedDates.length === 0) { setSchedError('Please select at least one date.'); return; }
     if (newSchedMode === 'F2F' && !newSched.location.trim()) { setSchedError('Location is required for Face-to-Face slots.'); return; }
     if (newSched.time_ranges.length === 0) { setSchedError('At least one time range is required.'); return; }
     for (const r of newSched.time_ranges) {
@@ -1487,11 +1590,13 @@ export default function ProfessorDashboard() {
     }
     const nowManila = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Manila', hour12: false });
     const [todayStr, currentTimeStr] = nowManila.split(', ');
-    if (newSchedDate === todayStr) {
-      const allPast = newSched.time_ranges.every(r => r.time_end && r.time_end.slice(0, 5) <= currentTimeStr.slice(0, 5));
-      if (allPast) {
-        setSchedError('Cannot add a slot with a time that has already passed.');
-        return;
+    for (const d of newSchedDates) {
+      if (d === todayStr) {
+        const allPast = newSched.time_ranges.every(r => r.time_end && r.time_end.slice(0, 5) <= currentTimeStr.slice(0, 5));
+        if (allPast) {
+          setSchedError('Cannot add a slot for today with a time that has already passed.');
+          return;
+        }
       }
     }
     const resolvedMode = newSchedMode === 'Online' ? 'OL' : 'FF';
@@ -1505,11 +1610,15 @@ export default function ProfessorDashboard() {
     setShowConfirmSched(false);
     const announcement = newSchedAnnouncement.trim() || undefined;
     const meeting_link = newSchedMode === 'Online' ? (newSchedMeetingLink.trim() || undefined) : undefined;
-    const payload = { ...pendingSched, date: newSchedDate, announcement, meeting_link };
-    const data = await api.post('/api/schedules', payload, token!);
-    if (data.error) { setSchedError(data.error); return; }
+    const DAY_NAMES_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    for (const date of newSchedDates) {
+      const dayName = DAY_NAMES_FULL[new Date(date + 'T12:00:00').getDay()];
+      const payload = { ...pendingSched, date, day: dayName, announcement, meeting_link };
+      const data = await api.post('/api/schedules', payload, token!);
+      if (data.error) { setSchedError(data.error); return; }
+    }
     setNewSched({ day: 'Monday', location: '', time_ranges: [{ time_start: '', time_end: '' }] });
-    setNewSchedDate('');
+    setNewSchedDates([]);
     setNewSchedMeetingLink('');
     setNewSchedMode('F2F');
     setNewSchedAnnouncement('');
@@ -2283,7 +2392,18 @@ export default function ProfessorDashboard() {
           <div className={`rounded-2xl p-6 w-full max-w-sm border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
             <h2 className={`font-bold text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Confirm New Schedule</h2>
             <div className="space-y-2 mb-5">
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Date:</span> {newSchedDate ? new Date(newSchedDate + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : pendingSched.day}</p>
+              <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Date{newSchedDates.length > 1 ? 's' : ''}:</span>
+                {newSchedDates.length === 1 ? (
+                  <span> {new Date(newSchedDates[0] + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                ) : (
+                  <ul className="mt-1.5 space-y-0.5 pl-4 list-disc">
+                    {newSchedDates.map(d => (
+                      <li key={d}>{new Date(d + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               {pendingSched.time_ranges.map((r, i) => (
                 <p key={i} className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}><span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Range {i + 1}:</span> {to12h(r.time_start)} – {to12h(r.time_end)}</p>
               ))}
@@ -2292,7 +2412,9 @@ export default function ProfessorDashboard() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setShowConfirmSched(false)} className={`flex-1 py-2 text-sm ${btnSecondary}`}>Cancel</button>
-              <button onClick={handleConfirmAddSchedule} className={`flex-1 py-2 text-sm ${btnPrimary}`}>Save Schedule</button>
+              <button onClick={handleConfirmAddSchedule} className={`flex-1 py-2 text-sm ${btnPrimary}`}>
+                {newSchedDates.length > 1 ? `Save ${newSchedDates.length} Slots` : 'Save Schedule'}
+              </button>
             </div>
           </div>
         </div>
@@ -3551,15 +3673,34 @@ export default function ProfessorDashboard() {
               <div className={`p-5 ${card}`} style={isDark ? undefined : glassStyle}>
                 <p className={`text-sm font-semibold mb-4 ${tp}`}>Add New Slot</p>
 
-                {/* Date */}
+                {/* Dates (multi-select) */}
                 <div className="mb-3">
-                  <Label className="text-gray-500 text-xs mb-1.5 block">Date</Label>
-                  <ScheduleDatePicker
-                    selected={newSchedDate}
-                    onSelect={(dateStr, dayName) => { setNewSchedDate(dateStr); setNewSched(s => ({ ...s, day: dayName })); }}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label className="text-gray-500 text-xs">Dates</Label>
+                    {newSchedDates.length > 0 && (
+                      <button type="button" onClick={() => setNewSchedDates([])} className={`text-xs transition-colors ${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-700'}`}>
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  <MultiScheduleDatePicker
+                    selected={newSchedDates}
+                    onToggle={(dateStr) => setNewSchedDates(prev =>
+                      prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr].sort()
+                    )}
                     disabledDates={schedules.map(s => s.date).filter((d): d is string => !!d)}
                     isDark={isDark}
                   />
+                  {newSchedDates.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {newSchedDates.map(d => (
+                        <span key={d} className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${isDark ? 'bg-sky-500/15 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>
+                          {new Date(d + 'T12:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          <button type="button" onClick={() => setNewSchedDates(prev => prev.filter(x => x !== d))} className="hover:opacity-70 leading-none ml-0.5">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Mode toggle */}
