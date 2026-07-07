@@ -2527,9 +2527,19 @@ export default function StudentDashboard() {
                             </button>
                           </>
                         )}
+                        {['pending', 'confirmed'].includes(c.status) && !c.proof_of_evidence && (
+                          <button
+                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            {proofPanelId === c.id ? 'Cancel' : 'Submit Proof'}
+                          </button>
+                        )}
                         {c.status === 'completed' && (
                           <>
-                            <button onClick={() => openViewSlip(c.id)}
+                            <button onClick={() => openViewSlip(c.id)}>
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                               View Slip
