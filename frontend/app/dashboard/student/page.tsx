@@ -657,9 +657,13 @@ export default function StudentDashboard() {
   // Book tab filters
   const [bookSearch, setBookSearch]       = useState('');
   const [bookDeptFilter, setBookDeptFilter] = useState<'all' | 'IT' | 'CS' | 'Other'>('all');
+  const deptFilterInitialized = useRef(false);
   const [bookTopicFilter, setBookTopicFilter] = useState<string>('all');
   const [bookSortBy, setBookSortBy]       = useState<'slots' | 'date'>('slots');
-  const [bookExpandedId, setBookExpandedId] = useState<number | null>(null);
+  const [slotModalProf, setSlotModalProf] = useState<{
+    professor_id: number; professor_name: string; department: string;
+    specializations: string[]; professor_avatar?: string | null; slots: Schedule[];
+  } | null>(null);
   const [topics, setTopics] = useState<{ id: number; label: string }[]>([]);
 
   // Data
@@ -771,6 +775,34 @@ export default function StudentDashboard() {
     if (!authReady || !token) return;
     fetchData().catch(() => setLoading(false));
   }, [authReady]);
+
+  // Auto-set dept filter once based on student's program
+  useEffect(() => {
+    if (deptFilterInitialized.current || !profile.program) return;
+    deptFilterInitialized.current = true;
+    const prog = profile.program.toLowerCase();
+    if (prog.includes('information technology') || /\bit\b/.test(prog)) setBookDeptFilter('IT');
+    else if (prog.includes('computer science') || /\bcs\b/.test(prog)) setBookDeptFilter('CS');
+  }, [profile.program]);
+
+  // Poll consultations + schedules every 30 s for real-time feel
+  useEffect(() => {
+    if (!authReady || !token) return;
+    const id = setInterval(() => {
+      Promise.all([
+        api.get('/api/consultations', token!),
+        api.get('/api/schedules', token!),
+      ]).then(([consult, sched]) => {
+        if (Array.isArray(consult)) setConsultations(consult);
+        if (Array.isArray(sched)) {
+          const todayN = new Date();
+          const today = `${todayN.getFullYear()}-${String(todayN.getMonth()+1).padStart(2,'0')}-${String(todayN.getDate()).padStart(2,'0')}`;
+          setSchedules(sched.filter((s: Schedule) => !s.date || s.date >= today));
+        }
+      }).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [authReady, token]);
 
   // Subscribe to professor session status changes via SSE
   useEffect(() => {
@@ -2045,7 +2077,7 @@ export default function StudentDashboard() {
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
                       {displayedProfessors.map(prof => {
                         const slotsSorted = [...prof.slots].sort((a, b) => {
                           if (a.date && b.date) return a.date.localeCompare(b.date);
@@ -2055,7 +2087,6 @@ export default function StudentDashboard() {
                         // Past slots are already excluded at the grouping stage
                         // (isSlotFuture), so the sorted list is safe to render directly.
                         const slotsForChips = slotsSorted;
-                        const isExpanded    = bookExpandedId === prof.professor_id;
                         const alreadyBooked = bookedProfIds.has(prof.professor_id);
 
                         return (
@@ -2102,7 +2133,7 @@ export default function StudentDashboard() {
 
                               {/* Date chips */}
                               <div className="flex flex-wrap gap-1.5 mt-3">
-                                {slotsForChips.slice(0, isExpanded ? undefined : 3).map(s => {
+                                {slotsForChips.slice(0, 3).map(s => {
                                   const dateObj  = s.date ? new Date(s.date + 'T12:00:00') : null;
                                   const dayAbbr  = dateObj ? dateObj.toLocaleDateString('en-PH', { weekday: 'short' }) : s.day.slice(0, 3);
                                   const dateShort = dateObj ? dateObj.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '';
@@ -2119,7 +2150,7 @@ export default function StudentDashboard() {
                                     </span>
                                   );
                                 })}
-                                {!isExpanded && slotsForChips.length > 3 && (
+                                {slotsForChips.length > 3 && (
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>
                                     +{slotsForChips.length - 3} more
                                   </span>
@@ -2146,39 +2177,13 @@ export default function StudentDashboard() {
                                 );
                               })()}
 
-                              {/* Slot detail panel */}
-                              {isExpanded && (
-                                <div className={`mt-3 rounded-xl overflow-hidden divide-y ${isDark ? 'bg-[#1a1f35] border border-white/5 divide-white/5' : 'bg-gray-50 border border-gray-200 divide-gray-100'}`}>
-                                  {slotsSorted.map(s => {
-                                    const dateObj = s.date ? new Date(s.date + 'T12:00:00') : null;
-                                    const dateLabel = dateObj
-                                      ? dateObj.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })
-                                      : s.day;
-                                    const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
-                                      .map(r => `${formatTime12(r.time_start.slice(0, 5))}–${formatTime12(r.time_end.slice(0, 5))}`).join(' · ');
-                                    return (
-                                      <div key={s.id} className="px-3 py-2">
-                                        <div className="min-w-0">
-                                          <p className={`text-xs font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{dateLabel}</p>
-                                          <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{times}</p>
-                                          {s.location && <p className={`text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{s.location}</p>}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
                               {/* Actions */}
                               <div className="mt-auto pt-3 flex items-center justify-between gap-2">
                                 <button type="button"
-                                  onClick={() => setBookExpandedId(isExpanded ? null : prof.professor_id)}
+                                  onClick={() => setSlotModalProf(prof)}
                                   className={`flex items-center gap-1 text-xs font-medium transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}>
-                                  {isExpanded ? (
-                                    <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>Hide slots</>
-                                  ) : (
-                                    <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>Preview slots</>
-                                  )}
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                  Preview slots
                                 </button>
                                 <button onClick={() => router.push(`/dashboard/student/book/prof/${prof.professor_id}`)}
                                   className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0EA5E9] text-white hover:bg-[#0284C7] transition-colors shadow-sm shadow-sky-500/20">
@@ -2490,6 +2495,7 @@ export default function StudentDashboard() {
                     <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-wrap items-center justify-between gap-2`}>
                       {/* Left: proof status or download receipt */}
                       <div className="flex flex-wrap items-center gap-2">
+                        {/* ── Proof submitted: show view + replace ───────── */}
                         {c.status !== 'cancelled' && c.proof_of_evidence && (
                           <>
                             <span className={`flex items-center gap-1.5 text-xs font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
@@ -2499,60 +2505,84 @@ export default function StudentDashboard() {
                               Proof Submitted
                             </span>
                             {c.proof_type === 'link' ? (
-                              <a href={c.proof_of_evidence} target="_blank" rel="noopener noreferrer"
-                                className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
-                                View Link →
-                              </a>
+                              <>
+                                <a href={c.proof_of_evidence} target="_blank" rel="noopener noreferrer"
+                                  className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                  View Link →
+                                </a>
+                                {['pending', 'confirmed'].includes(c.status) && (
+                                  <button
+                                    onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
+                                    className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
+                                    Replace
+                                  </button>
+                                )}
+                              </>
                             ) : (
-                              <button
-                                onClick={() => handleViewFile(c.id)}
-                                disabled={viewingFile === c.id}
-                                className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
-                                {viewingFile === c.id
-                                  ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                  : 'View File →'}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleViewFile(c.id)}
+                                  disabled={viewingFile === c.id}
+                                  className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                                  {viewingFile === c.id
+                                    ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                    : 'View File →'}
+                                </button>
+                                {['pending', 'confirmed'].includes(c.status) && (
+                                  <button
+                                    onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
+                                    className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
+                                    Replace
+                                  </button>
+                                )}
+                              </>
                             )}
+                          </>
+                        )}
+
+                        {/* ── Auto slip: View Slip + Replace option ─────── */}
+                        {['pending', 'confirmed'].includes(c.status) && !c.proof_required && !c.proof_of_evidence && (
+                          <>
                             <button
-                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
+                              onClick={() => setPreviewModal({ fetchUrl: `${API_URL}/api/forms/advising-slip/${c.id}`, title: `Advising Slip #${c.id}`, filename: `advising-slip-${c.id}.pdf` })}
+                              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              View Slip
+                            </button>
+                            <button
+                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
                               className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
-                              Replace
+                              {proofPanelId === c.id ? 'Cancel' : 'Replace Slip'}
                             </button>
                           </>
                         )}
-                        {['pending', 'confirmed'].includes(c.status) && !c.proof_required && (
-                          <button
-                            onClick={() => setPreviewModal({ fetchUrl: `${API_URL}/api/forms/advising-slip/${c.id}`, title: `Advising Slip #${c.id}`, filename: `advising-slip-${c.id}.pdf` })}
-                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            View Slip
-                          </button>
-                        )}
+
+                        {/* ── Manual: Download template + Submit Proof ──── */}
                         {['pending', 'confirmed'].includes(c.status) && c.proof_required && !c.proof_of_evidence && (
-                          <button
-                            onClick={async () => {
-                              const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-                              if (!res.ok) return;
-                              const blob = await res.blob();
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
-                              document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                              URL.revokeObjectURL(url);
-                            }}
-                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-amber-500/10 text-amber-400 ring-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Download Template
-                          </button>
-                        )}
-                        {['pending', 'confirmed'].includes(c.status) && !c.proof_of_evidence && (
-                          <button
-                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
-                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            {proofPanelId === c.id ? 'Cancel' : 'Submit Proof'}
-                          </button>
+                          <>
+                            <button
+                              onClick={async () => {
+                                const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
+                                if (!res.ok) return;
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              }}
+                              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-amber-500/10 text-amber-400 ring-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              Download Template
+                            </button>
+                            <button
+                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
+                              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                              </svg>
+                              {proofPanelId === c.id ? 'Cancel' : 'Submit Proof'}
+                            </button>
+                          </>
                         )}
                         {c.status === 'completed' && (
                           <>
@@ -2582,42 +2612,73 @@ export default function StudentDashboard() {
                     {/* Expandable proof submission panel */}
                     {c.status !== 'cancelled' && proofPanelId === c.id && (
                       <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                        <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                          Proof of Evidence
-                        </p>
-                        <div className="flex gap-2">
-                          <input
-                            type="url"
-                            value={proofLinkValue}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setProofLinkValue(val);
-                              if (val.trim() && !isValidProofLink(val.trim())) {
-                                setProofLinkError('Invalid link. Please use a Google Drive or OneDrive link.');
-                              } else {
-                                setProofLinkError('');
-                              }
-                            }}
-                            placeholder="https://drive.google.com/…"
-                            className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
-                              proofLinkError
-                                ? 'border border-red-500 outline-none ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                : isDark
-                                  ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
-                                  : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
-                            }`}
-                          />
-                          <button
-                            onClick={() => handleProofLinkSubmit(c.id)}
-                            disabled={submittingProofId === c.id || !proofLinkValue.trim() || (!!proofLinkValue.trim() && !isValidProofLink(proofLinkValue.trim()))}
-                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                            {submittingProofId === c.id
-                              ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                              : 'Submit'}
-                          </button>
-                        </div>
-                        {proofLinkError && (
-                          <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>
+                        {!c.proof_required ? (
+                          /* Replace Slip mode — auto booking, student wants to submit manual proof */
+                          <>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Replace with Manual Submission</p>
+                            <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Download the blank form, fill it out, then upload the PDF below.</p>
+                            <button
+                              onClick={async () => {
+                                const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
+                                if (!res.ok) return;
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              }}
+                              className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ring-1 transition-colors mb-3 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              Download Blank Form Template
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => { uploadForId.current = c.id; proofFileRef.current?.click(); }}
+                                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg ring-1 transition-colors ${isDark ? 'bg-white/[0.04] text-gray-300 ring-white/10 hover:bg-white/[0.08]' : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'}`}>
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                {proofSelectedFile ? proofSelectedFile.name.slice(0, 24) + (proofSelectedFile.name.length > 24 ? '…' : '') : 'Choose PDF File'}
+                              </button>
+                              {proofSelectedFile && (
+                                <button
+                                  onClick={() => handleProofSubmitFile(c.id)}
+                                  disabled={submittingProofId === c.id}
+                                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                                  {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Upload'}
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          /* Submit Proof mode — manual booking, link submission */
+                          <>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Proof of Evidence</p>
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                value={proofLinkValue}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setProofLinkValue(val);
+                                  setProofLinkError(val.trim() && !isValidProofLink(val.trim()) ? 'Invalid link. Please use a Google Drive or OneDrive link.' : '');
+                                }}
+                                placeholder="https://drive.google.com/…"
+                                className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
+                                  proofLinkError
+                                    ? 'border border-red-500 outline-none ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
+                                    : isDark
+                                      ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
+                                      : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
+                                }`}
+                              />
+                              <button
+                                onClick={() => handleProofLinkSubmit(c.id)}
+                                disabled={submittingProofId === c.id || !proofLinkValue.trim() || (!!proofLinkValue.trim() && !isValidProofLink(proofLinkValue.trim()))}
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
+                                {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
+                              </button>
+                            </div>
+                            {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
+                          </>
                         )}
                       </div>
                     )}
@@ -2706,6 +2767,79 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
+
+      {/* Slot preview modal */}
+      {slotModalProf && (() => {
+        const mp = slotModalProf;
+        const sorted = [...mp.slots].sort((a, b) => {
+          const DAY_ORDER = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+          if (a.date && b.date) return a.date.localeCompare(b.date);
+          if (a.date) return -1; if (b.date) return 1;
+          return DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
+        });
+        return (
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center sm:p-4"
+            onClick={() => setSlotModalProf(null)}>
+            <div className={`w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh] ${isDark ? 'bg-[#1a1f35] border border-white/10' : 'bg-white border border-gray-200'}`}
+              onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className={`px-4 py-3 flex items-center gap-3 border-b ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                <button type="button" onClick={() => setProfileCard({ id: mp.professor_id, role: 'professor' })}
+                  className="flex-shrink-0 hover:opacity-75 transition-opacity rounded-full focus:outline-none">
+                  <Avatar name={mp.professor_name} avatarUrl={mp.professor_avatar} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-bold text-sm truncate ${tp}`}>{mp.professor_name}</p>
+                  <p className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                    {mp.slots.length} slot{mp.slots.length !== 1 ? 's' : ''} available
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSlotModalProf(null)}
+                  className={`flex-shrink-0 p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {/* Slot list */}
+              <div className={`overflow-y-auto divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
+                {sorted.map(s => {
+                  const dateObj = s.date ? new Date(s.date + 'T12:00:00') : null;
+                  const dateLabel = dateObj
+                    ? dateObj.toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric' })
+                    : s.day;
+                  const times = (s.time_ranges?.length ? s.time_ranges : [{ time_start: s.time_start, time_end: s.time_end }])
+                    .map(r => `${formatTime12(r.time_start.slice(0, 5))} – ${formatTime12(r.time_end.slice(0, 5))}`).join(' · ');
+                  return (
+                    <div key={s.id} className="px-4 py-3 flex items-start gap-3">
+                      <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? 'bg-sky-500/15' : 'bg-sky-50'}`}>
+                        <svg className={`w-4 h-4 ${isDark ? 'text-sky-400' : 'text-sky-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{dateLabel}</p>
+                        <p className={`text-xs mt-0.5 font-medium ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>{times}</p>
+                        {s.location && <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{s.location}</p>}
+                        {s.announcement && (
+                          <p className={`text-[11px] mt-1 italic ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>{s.announcement}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Footer */}
+              <div className={`px-4 py-3 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                <button onClick={() => { setSlotModalProf(null); router.push(`/dashboard/student/book/prof/${mp.professor_id}`); }}
+                  className="w-full py-2 rounded-xl text-sm font-semibold bg-[#0EA5E9] text-white hover:bg-[#0284C7] transition-colors shadow-sm shadow-sky-500/20">
+                  Book a Slot
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Profile card popup */}
       {profileCard && token && (

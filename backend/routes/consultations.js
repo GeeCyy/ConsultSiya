@@ -321,29 +321,31 @@ router.post('/', authenticate, authorize('student'), async (req, res) => {
         }).catch(() => {});
       } catch { /* notifications are best-effort */ }
 
-      // Email student — best-effort
-      try {
-        const eRow = await pool.query(`
-          SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
-                 c.date::text AS date, c.time::text AS time, c.mode, sch.location,
-                 sch.meeting_link AS slot_meeting_link,
-                 pu.email AS professor_email
-          FROM consultations c
-          JOIN students s ON c.student_id = s.id
-          JOIN users u ON s.user_id = u.id
-          JOIN professors p ON c.professor_id = p.id
-          JOIN users pu ON p.user_id = pu.id
-          LEFT JOIN schedules sch ON c.schedule_id = sch.id
-          WHERE c.id = $1
-        `, [result.rows[0].id]);
-        if (eRow.rows[0]) {
-          const { email, student_name, professor_name, date: eDate, time: eTime, mode, location, slot_meeting_link, professor_email } = eRow.rows[0];
-          await sendBookingPendingEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, mode, location });
-          if (professor_email) {
-            await sendNewBookingProfessorEmail({ to: professor_email, professorName: professor_name, studentName: student_name, date: eDate, time: eTime, mode, location, meetingLink: null, slotMeetingLink: slot_meeting_link });
+      // Email student — skip if proof_required (emails sent after proof is submitted instead)
+      if (proof_required !== true) {
+        try {
+          const eRow = await pool.query(`
+            SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+                   c.date::text AS date, c.time::text AS time, c.mode, sch.location,
+                   sch.meeting_link AS slot_meeting_link,
+                   pu.email AS professor_email
+            FROM consultations c
+            JOIN students s ON c.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+            JOIN professors p ON c.professor_id = p.id
+            JOIN users pu ON p.user_id = pu.id
+            LEFT JOIN schedules sch ON c.schedule_id = sch.id
+            WHERE c.id = $1
+          `, [result.rows[0].id]);
+          if (eRow.rows[0]) {
+            const { email, student_name, professor_name, date: eDate, time: eTime, mode, location, slot_meeting_link, professor_email } = eRow.rows[0];
+            await sendBookingPendingEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, mode, location });
+            if (professor_email) {
+              await sendNewBookingProfessorEmail({ to: professor_email, professorName: professor_name, studentName: student_name, date: eDate, time: eTime, mode, location, meetingLink: null, slotMeetingLink: slot_meeting_link });
+            }
           }
-        }
-      } catch { /* emails are best-effort */ }
+        } catch { /* emails are best-effort */ }
+      }
 
       res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -1115,7 +1117,7 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
   const { id } = req.params;
   try {
     const row = await pool.query(
-      `SELECT c.student_id, c.status, c.proof_of_evidence, c.proof_type
+      `SELECT c.student_id, c.status, c.proof_of_evidence, c.proof_type, c.proof_required
        FROM consultations c WHERE c.id = $1`, [id]
     );
     if (!row.rows[0]) return res.status(404).json({ error: 'Consultation not found.' });
@@ -1137,6 +1139,28 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
         [consultationId]
       ).then(r => {
         if (r.rows[0]) notifModule.pushNotification(r.rows[0].user_id, { type: 'proof_submitted', consultation_id: consultationId });
+      }).catch(() => {});
+    };
+
+    // Helper: send delayed booking emails for proof_required consultations (first submission only)
+    const sendDelayedBookingEmails = (consultationId) => {
+      if (!c.proof_required || c.proof_of_evidence) return; // only on first proof, only if was proof_required
+      pool.query(`
+        SELECT u.email, s.full_name AS student_name, p.full_name AS professor_name,
+               con.date::text AS date, con.time::text AS time, con.mode, sch.location,
+               sch.meeting_link AS slot_meeting_link, pu.email AS professor_email
+        FROM consultations con
+        JOIN students s ON con.student_id = s.id
+        JOIN users u ON s.user_id = u.id
+        JOIN professors p ON con.professor_id = p.id
+        JOIN users pu ON p.user_id = pu.id
+        LEFT JOIN schedules sch ON con.schedule_id = sch.id
+        WHERE con.id = $1
+      `, [consultationId]).then(async eRow => {
+        if (!eRow.rows[0]) return;
+        const { email, student_name, professor_name, date: eDate, time: eTime, mode, location, slot_meeting_link, professor_email } = eRow.rows[0];
+        try { await sendBookingPendingEmail({ to: email, studentName: student_name, professorName: professor_name, date: eDate, time: eTime, mode, location }); } catch { /**/ }
+        try { if (professor_email) await sendNewBookingProfessorEmail({ to: professor_email, professorName: professor_name, studentName: student_name, date: eDate, time: eTime, mode, location, meetingLink: null, slotMeetingLink: slot_meeting_link }); } catch { /**/ }
       }).catch(() => {});
     };
 
@@ -1173,6 +1197,7 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
         [secureUrl, id]
       );
       notifyProfessor(Number(id));
+      sendDelayedBookingEmails(Number(id));
       return res.json({ proof_of_evidence: secureUrl, proof_type: 'file' });
     }
 
@@ -1187,6 +1212,7 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
       [link, id]
     );
     notifyProfessor(Number(id));
+    sendDelayedBookingEmails(Number(id));
     res.json({ proof_of_evidence: link, proof_type: 'link' });
   } catch (err) {
     console.error(err);
