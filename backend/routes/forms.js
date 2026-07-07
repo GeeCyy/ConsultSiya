@@ -479,9 +479,24 @@ router.get('/download/:id', authenticate, async (req, res) => {
       if (!prof.rows[0] || prof.rows[0].id !== c.professor_id) return res.status(403).json({ error: 'Access denied.' });
     }
 
-    // New uploads are Cloudinary URLs — redirect directly
+    // New uploads are Cloudinary URLs — fetch server-side and stream back,
+    // so we can log Cloudinary's actual rejection reason instead of a bare redirect 401.
     if (c.uploaded_form_path.startsWith('https://')) {
-      return res.redirect(cloudinary.toDeliverableUrl(c.uploaded_form_path));
+      const deliveryUrl = cloudinary.toDeliverableUrl(c.uploaded_form_path);
+      let upstream;
+      try {
+        upstream = await fetch(deliveryUrl);
+      } catch (fetchErr) {
+        console.error(`[form:${id}] Cloudinary fetch error:`, fetchErr.message);
+        return res.status(502).json({ error: 'Could not reach file storage.' });
+      }
+      if (!upstream.ok) {
+        const body = await upstream.text().catch(() => '');
+        console.error(`[form:${id}] Cloudinary delivery ${upstream.status} for ${deliveryUrl}: ${body.slice(0, 500)}`);
+        return res.status(502).json({ error: `File storage returned ${upstream.status}.` });
+      }
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+      return res.send(Buffer.from(await upstream.arrayBuffer()));
     }
 
     // Legacy: file stored locally on disk
