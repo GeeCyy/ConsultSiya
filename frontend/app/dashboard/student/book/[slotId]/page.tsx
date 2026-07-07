@@ -4,18 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { ToastContainer, useToast } from '@/components/Toast';
-import SignaturePad from '@/components/SignaturePad';
 import DocPreviewModal from '@/components/DocPreviewModal';
+import AdvisingSlipStep from '@/components/AdvisingSlipStep';
+import ReplaceSlipModal from '@/components/ReplaceSlipModal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-const PROOF_LINK_PREFIXES = [
-  'https://drive.google.com/',
-  'https://docs.google.com/',
-  'https://onedrive.live.com/',
-  'https://1drv.ms/',
-];
-const isValidProofLink = (url: string) => PROOF_LINK_PREFIXES.some(p => url.startsWith(p));
 
 type MyConsult = {
   id: number;
@@ -192,21 +185,14 @@ export default function BookSlotPage() {
   const isDark = mounted ? _isDark : false;
 
   const preferredTimeRef = useRef<HTMLDivElement>(null);
-  const proofFileRef = useRef<HTMLInputElement>(null);
 
   const { toasts, toast, removeToast } = useToast();
   const [myConsults, setMyConsults] = useState<MyConsult[]>([]);
-  const [proofPanelId, setProofPanelId] = useState<number | null>(null);
-  const [proofMode, setProofMode] = useState<'link' | 'file'>('link');
-  const [proofLinkValue, setProofLinkValue] = useState('');
-  const [proofLinkError, setProofLinkError] = useState('');
-  const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
-  const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
+  const [replaceModalId, setReplaceModalId] = useState<number | null>(null);
   const [viewingFile, setViewingFile] = useState<number | null>(null);
   const [slipPreview, setSlipPreview] = useState<{ id: number } | null>(null);
   const [formMode, setFormMode] = useState<'auto' | 'manual'>('auto');
-  const [bookProofLink, setBookProofLink] = useState('');
-  const [bookProofLinkError, setBookProofLinkError] = useState('');
+  const [bookProofFile, setBookProofFile] = useState<File | null>(null);
   const [topicItems, setTopicItems] = useState<TopicItem[]>([]);
   const [profSpecializations, setProfSpecializations] = useState<TopicItem[]>([]);
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
@@ -295,56 +281,6 @@ export default function BookSlotPage() {
       .catch(() => {});
   }, [authReady, token, slot]);
 
-  const validateProofFile = (file: File): boolean => {
-    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
-    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-    if (!allowedExt.includes(ext)) { toast.error('Only PDF, JPG, and PNG files are allowed.'); return false; }
-    if (file.size > 10 * 1024 * 1024) { toast.error('File must be under 10 MB.'); return false; }
-    return true;
-  };
-
-  const handleProofFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !validateProofFile(file)) return;
-    setProofSelectedFile(file);
-  };
-
-  const handleProofSubmitFile = async (id: number) => {
-    const file = proofSelectedFile;
-    if (!file) return;
-    setSubmittingProofId(id);
-    const formData = new FormData();
-    formData.append('proof', file);
-    try {
-      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
-      });
-      const data = await res.json();
-      if (data.error) { toast.error(data.error); return; }
-      toast.success('Proof of evidence submitted!');
-      setProofPanelId(null);
-      setProofSelectedFile(null);
-      setMyConsults(prev => prev.map(c => c.id === id ? { ...c, proof_of_evidence: data.proof_of_evidence, proof_type: data.proof_type } : c));
-    } finally { setSubmittingProofId(null); }
-  };
-
-  const handleProofLinkSubmit = async (id: number) => {
-    const link = proofLinkValue.trim();
-    if (!link) { toast.error('Please enter a valid link.'); return; }
-    if (!isValidProofLink(link)) { setProofLinkError('Must be a Google Drive or OneDrive link.'); return; }
-    setProofLinkError('');
-    setSubmittingProofId(id);
-    try {
-      const data = await api.post(`/api/consultations/${id}/proof`, { link }, token!);
-      if (data.error) { toast.error(data.error); return; }
-      toast.success('Proof link submitted!');
-      setProofPanelId(null);
-      setProofLinkValue('');
-      setMyConsults(prev => prev.map(c => c.id === id ? { ...c, proof_of_evidence: data.proof_of_evidence, proof_type: data.proof_type } : c));
-    } finally { setSubmittingProofId(null); }
-  };
-
   const handleViewFile = async (id: number) => {
     setViewingFile(id);
     try {
@@ -357,14 +293,6 @@ export default function BookSlotPage() {
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } finally { setViewingFile(null); }
-  };
-
-  const openProofPanel = (id: number) => {
-    setProofPanelId(proofPanelId === id ? null : id);
-    setProofLinkValue('');
-    setProofLinkError('');
-    setProofSelectedFile(null);
-    setProofMode('link');
   };
 
   const toggleNature = (opt: string) => {
@@ -406,8 +334,17 @@ export default function BookSlotPage() {
         proof_required: proofRequired,
       }, token!);
       if (data.error) { setBookError(data.error); return; }
-      if (data.id && proofRequired && bookProofLink.trim()) {
-        await api.post(`/api/consultations/${data.id}/proof`, { link: bookProofLink.trim() }, token!).catch(() => {});
+      if (data.id && proofRequired && bookProofFile) {
+        try {
+          const fd = new FormData();
+          fd.append('proof', bookProofFile);
+          const upRes = await fetch(`${API_URL}/api/consultations/${data.id}/proof`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+          });
+          if (!upRes.ok) throw new Error();
+        } catch {
+          toast.error('Booking confirmed, but slip upload failed — submit it later from My Consultations.');
+        }
       }
       if (rememberSignature && bookForm.signature && bookForm.signature !== savedSignature) {
         api.put('/api/auth/signature', { signature: bookForm.signature }, token!).catch(() => {});
@@ -673,86 +610,25 @@ export default function BookSlotPage() {
                   <span className="w-5 h-5 rounded-full bg-[#0EA5E9] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
                   <h3 className={`text-sm font-bold ${tp}`}>Advising Slip</h3>
                 </div>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Required</span>
               </div>
-              <p className={`text-xs mb-3 ${ts}`}>Choose how to handle your advising slip for this consultation.</p>
+              <p className={`text-xs mb-1 ${ts}`}>Choose how to handle your advising slip for this consultation.</p>
+              <p className={`text-[11px] mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>You can submit this later from My Consultations if you&apos;re not ready.</p>
 
-              {/* Choice always shown first */}
-              <div className="space-y-2 mb-4">
-                {(['auto', 'manual'] as const).map(m => (
-                  <label key={m} className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="formMode-slot"
-                      checked={formMode === m}
-                      onChange={() => { setFormMode(m); if (m === 'manual') setBookForm(f => ({ ...f, signature: '' })); }}
-                      className="accent-[#0EA5E9] mt-0.5 flex-shrink-0"
-                    />
-                    <div>
-                      <span className={`text-xs font-medium ${tp}`}>
-                        {m === 'auto' ? 'Use automatic form' : "I'll fill and submit the form myself"}
-                      </span>
-                      <p className={`text-[11px] mt-0.5 ${ts}`}>
-                        {m === 'auto'
-                          ? 'Draw your signature below, or skip and we\'ll stamp your name and student number automatically.'
-                          : 'Download the blank form, fill it out, upload to Google Drive, and paste the link here.'}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-
-              {/* Auto: show signature pad */}
-              {formMode === 'auto' && (
-                <>
-                  <p className={`text-[11px] mb-2 ${ts}`}>Signature <span className={`${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional — leave blank to use auto-stamp)</span></p>
-                  <SignaturePad
-                    value={bookForm.signature}
-                    onChange={sig => setBookForm(f => ({ ...f, signature: sig }))}
-                    isDark={isDark}
-                  />
-                  {bookForm.signature && (
-                    <label className={`flex items-center gap-2 mt-2.5 text-xs cursor-pointer ${ts}`}>
-                      <input type="checkbox" checked={rememberSignature} onChange={e => setRememberSignature(e.target.checked)} className="accent-[#0EA5E9]" />
-                      Remember my signature for next time
-                    </label>
-                  )}
-                </>
-              )}
-
-              {/* Manual: show download + link */}
-              {formMode === 'manual' && (
-                <div className="space-y-2.5">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-                      if (!res.ok) return;
-                      const blob = await res.blob();
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
-                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    }}
-                    className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    Download Blank Form Template
-                  </button>
-                  <p className={`text-[11px] ${ts}`}>Fill it out, upload to Google Drive, then paste the link below <span className={`${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional — you can also submit later from My Consultations)</span>:</p>
-                  <input
-                    type="text"
-                    value={bookProofLink}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setBookProofLink(v);
-                      setBookProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : '');
-                    }}
-                    placeholder="https://drive.google.com/…"
-                    className={`w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 transition-colors ${bookProofLinkError ? '!border-red-500' : ''} ${inputCls}`}
-                  />
-                  {bookProofLinkError && <p className="text-red-500 text-[10px]">{bookProofLinkError}</p>}
-                </div>
-              )}
+              <AdvisingSlipStep
+                mode="full"
+                isDark={isDark}
+                token={token!}
+                apiUrl={API_URL}
+                formMode={formMode}
+                onFormModeChange={setFormMode}
+                signature={bookForm.signature}
+                onSignatureChange={sig => setBookForm(f => ({ ...f, signature: sig }))}
+                rememberSignature={rememberSignature}
+                onRememberSignatureChange={setRememberSignature}
+                proofFile={bookProofFile}
+                onProofFileChange={setBookProofFile}
+              />
             </div>
           </div>
 
@@ -1042,52 +918,25 @@ export default function BookSlotPage() {
                               {viewingFile === c.id ? '…' : 'View File'}
                             </button>
                           )}
-                          <button onClick={() => openProofPanel(c.id)}
+                          <button onClick={() => setReplaceModalId(c.id)}
                             className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}>
                             Replace
                           </button>
                         </>
                       ) : (
-                        <button onClick={() => openProofPanel(c.id)}
+                        <button onClick={() => setReplaceModalId(c.id)}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-600 ring-1 ring-violet-200 hover:bg-violet-100'}`}>
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                           Submit Proof of Evidence
                         </button>
                       )}
                     </div>
-
-                    {proofPanelId === c.id && (
-                      <div className={`mt-2 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                        <div className="flex gap-2">
-                          <input type="url" value={proofLinkValue}
-                            onChange={e => { const v = e.target.value; setProofLinkValue(v); setProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : ''); }}
-                            placeholder="https://drive.google.com/…"
-                            className={`flex-1 px-3 py-2 rounded-lg text-xs outline-none border transition-all ${
-                              proofLinkError
-                                ? 'border-red-500 ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                : isDark
-                                  ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50'
-                                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400'
-                            }`}
-                          />
-                          <button onClick={() => handleProofLinkSubmit(c.id)}
-                            disabled={submittingProofId === c.id || !proofLinkValue.trim() || !!proofLinkError}
-                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                            {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
-                          </button>
-                        </div>
-                        {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
-                        <p className={`text-[10px] mt-1.5 ${ts}`}>Accepted: Google Drive, Google Docs, OneDrive</p>
-                      </div>
-                    )}
                   </div>
                 );
               })}
             </div>
           </div>
         )}
-
-        <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
 
       </div>
     </div>
@@ -1100,6 +949,24 @@ export default function BookSlotPage() {
         fetchUrl={`${API_URL}/api/forms/advising-slip/${slipPreview.id}`}
         token={token ?? ''}
         filename={`advising-slip-${slipPreview.id}.pdf`}
+      />
+    )}
+    {replaceModalId !== null && (
+      <ReplaceSlipModal
+        isOpen={replaceModalId !== null}
+        onClose={() => setReplaceModalId(null)}
+        consultationId={replaceModalId}
+        token={token ?? ''}
+        apiUrl={API_URL}
+        isDark={isDark}
+        title="Submit Advising Slip"
+        onSuccess={async () => {
+          const data = await api.get('/api/consultations', token!);
+          if (Array.isArray(data) && slot) {
+            setMyConsults(data.filter((c: MyConsult) => c.professor_id === slot.professor_id && c.status !== 'cancelled'));
+          }
+          toast.success('Advising slip submitted!');
+        }}
       />
     )}
     </>

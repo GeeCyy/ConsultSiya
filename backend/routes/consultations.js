@@ -1247,21 +1247,14 @@ router.get('/:id/proof', authenticate, async (req, res) => {
     }
 
     if (c.proof_of_evidence.startsWith('https://')) {
-      const deliveryUrl = cloudinary.toDeliverableUrl(c.proof_of_evidence);
-      let upstream;
       try {
-        upstream = await fetch(deliveryUrl);
-      } catch (fetchErr) {
-        console.error(`[proof:${id}] Cloudinary fetch error:`, fetchErr.message);
-        return res.status(502).json({ error: 'Could not reach file storage.' });
+        const { buffer, contentType } = await cloudinary.fetchDeliverable(c.proof_of_evidence);
+        res.setHeader('Content-Type', contentType);
+        return res.send(buffer);
+      } catch (err) {
+        console.error(`[proof:${id}] ${err.message}${err.logDetail ? ` (${err.logDetail})` : ''}`);
+        return res.status(err.status || 502).json({ error: err.message });
       }
-      if (!upstream.ok) {
-        const body = await upstream.text().catch(() => '');
-        console.error(`[proof:${id}] Cloudinary delivery ${upstream.status} for ${deliveryUrl}: ${body.slice(0, 500)}`);
-        return res.status(502).json({ error: `File storage returned ${upstream.status}.` });
-      }
-      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
-      return res.send(Buffer.from(await upstream.arrayBuffer()));
     }
     const filePath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
