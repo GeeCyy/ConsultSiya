@@ -2064,7 +2064,7 @@ export default function StudentDashboard() {
                         className="text-xs text-sky-400 hover:text-sky-300 transition-colors mt-0.5">Clear filters</button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                    <div className="columns-1 sm:columns-2 gap-4">
                       {displayedProfessors.map(prof => {
                         const slotsSorted = [...prof.slots].sort((a, b) => {
                           if (a.date && b.date) return a.date.localeCompare(b.date);
@@ -2077,7 +2077,7 @@ export default function StudentDashboard() {
                         const alreadyBooked = bookedProfIds.has(prof.professor_id);
 
                         return (
-                          <div key={prof.professor_id} className={`rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
+                          <div key={prof.professor_id} className={`mb-4 break-inside-avoid rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
                             <div className="p-4 flex flex-col">
                               {/* Prof header */}
                               <div className="flex items-start gap-3">
