@@ -12,6 +12,7 @@ import LeftSidebar from '@/components/LeftSidebar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 import CustomSelect from '@/components/CustomSelect';
 import DocPreviewModal from '@/components/DocPreviewModal';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export type ProfessorTab = 'home' | 'schedules' | 'calendar' | 'consultations' | 'export' | 'history';
 
@@ -972,6 +973,9 @@ export default function ProfessorDashboard() {
   const [topNavNotifOpen, setTopNavNotifOpen] = useState(false);
   const [topNavProfileOpen, setTopNavProfileOpen] = useState(false);
   const [seenPendingIds, setSeenPendingIds] = useState<Set<number>>(new Set());
+  const { notifs: liveNotifs, markAllRead: markLiveAllRead, markRead: markLiveRead } = useNotifications(token);
+  const cancelledNotifs = liveNotifs.filter(n => n.type === 'cancelled');
+  const unseenCancelledCount = cancelledNotifs.filter(n => !n.is_read).length;
   const topNavNotifRef        = useRef<HTMLDivElement>(null);
   const topNavNotifPanelRef   = useRef<HTMLDivElement>(null);
   const topNavProfileRef      = useRef<HTMLDivElement>(null);
@@ -1967,6 +1971,7 @@ export default function ProfessorDashboard() {
   }
 
   const unseenPendingCount = consultations.filter(c => c.status === 'pending' && !seenPendingIds.has(c.id)).length;
+  const totalUnseenCount = unseenPendingCount + unseenCancelledCount;
 
   return (
     <div className={`h-screen flex overflow-hidden relative ${isDark ? 'bg-[#1e2235]' : ''}`} style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
@@ -2091,6 +2096,7 @@ export default function ProfessorDashboard() {
                     const ids = new Set([...seenPendingIds, ...consultations.filter(c => c.status === 'pending').map(c => c.id)]);
                     setSeenPendingIds(ids);
                     try { localStorage.setItem(`prof_seen_pending_${profile.email || 'default'}`, JSON.stringify([...ids])); } catch {}
+                    markLiveAllRead();
                   }
                 }}
                 className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:bg-gray-100'}`}
@@ -2098,9 +2104,9 @@ export default function ProfessorDashboard() {
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
-                {unseenPendingCount > 0 && (
+                {totalUnseenCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-[#CC0000] text-white text-[9px] font-bold flex items-center justify-center">
-                    {unseenPendingCount > 9 ? '9+' : unseenPendingCount}
+                    {totalUnseenCount > 9 ? '9+' : totalUnseenCount}
                   </span>
                 )}
               </button>
@@ -2144,9 +2150,9 @@ export default function ProfessorDashboard() {
           <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'bg-[#1e1e1e] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
             <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Notifications
-              {unseenPendingCount > 0 && (
+              {totalUnseenCount > 0 && (
                 <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#CC0000] text-white">
-                  {unseenPendingCount} new
+                  {totalUnseenCount} new
                 </span>
               )}
             </p>
@@ -2179,6 +2185,28 @@ export default function ProfessorDashboard() {
                 </button>
               </div>
             ))}
+            {cancelledNotifs.length > 0 && (
+              <div className={`px-4 py-1.5 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Cancellations</span>
+              </div>
+            )}
+            {cancelledNotifs.slice(0, 6).map(n => (
+              <div key={`tnl-${n.id}`} className={`border-b ${isDark ? 'border-white/5 bg-white/[0.03]' : 'border-gray-100 bg-red-50/60'}`}>
+                <button
+                  onClick={() => { markLiveRead(n.id); handleTabChange('consultations'); setTopNavNotifOpen(false); }}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/5' : 'hover:bg-red-50'}`}
+                >
+                  <span className="text-base flex-shrink-0 mt-0.5">❌</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-medium leading-snug ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{n.message}</p>
+                    <p className={`text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {new Date(n.created_at).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                  {!n.is_read && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 bg-[#CC0000]" />}
+                </button>
+              </div>
+            ))}
             {announcements.length > 0 && (
               <div className={`px-4 py-1.5 border-b ${isDark ? 'border-white/5 bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50'}`}>
                 <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Announcements</span>
@@ -2197,7 +2225,7 @@ export default function ProfessorDashboard() {
                 </button>
               </div>
             ))}
-            {consultations.filter(c => c.status === 'pending').length === 0 && announcements.length === 0 && (
+            {consultations.filter(c => c.status === 'pending').length === 0 && cancelledNotifs.length === 0 && announcements.length === 0 && (
               <div className="px-4 py-8 text-center">
                 <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No notifications</p>
               </div>

@@ -445,7 +445,7 @@ router.get('/', authenticate, async (req, res) => {
            ORDER BY id DESC LIMIT 1
          ) cd ON true
          WHERE c.student_id = $1
-         ORDER BY c.date DESC`,
+         ORDER BY c.created_at DESC`,
         [student.rows[0].id]
       );
     } else {
@@ -1247,7 +1247,7 @@ router.get('/:id/proof', authenticate, async (req, res) => {
     }
 
     if (c.proof_of_evidence.startsWith('https://')) {
-      return res.redirect(c.proof_of_evidence);
+      return res.redirect(cloudinary.toDeliverableUrl(c.proof_of_evidence));
     }
     const filePath = path.join(proofUploadDir, path.basename(c.proof_of_evidence));
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });

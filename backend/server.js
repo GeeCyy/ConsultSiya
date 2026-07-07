@@ -397,6 +397,10 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] consultations.session_started_at column ready'))
     .catch(err => console.error('[startup] consultations.session_started_at migration failed:', err.message));
 
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS in_session BOOLEAN NOT NULL DEFAULT false`)
+    .then(() => console.log('[startup] consultations.in_session column ready'))
+    .catch(err => console.error('[startup] consultations.in_session migration failed:', err.message));
+
   pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS signature_data TEXT`)
     .then(() => console.log('[startup] consultations.signature_data column ready'))
     .catch(err => console.error('[startup] consultations.signature_data migration failed:', err.message));
