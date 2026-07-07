@@ -34,7 +34,10 @@ export default function DocPreviewModal({ isOpen, onClose, title, fetchUrl, toke
     (async () => {
       try {
         const res = await fetch(fetchUrl, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.error || `Server returned ${res.status}`);
+        }
         const blob = await res.blob();
         if (cancelled) return;
         const url = URL.createObjectURL(blob);

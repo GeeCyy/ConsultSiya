@@ -13,6 +13,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import CustomSelect from '@/components/CustomSelect';
 import RescheduleBookingPanel from '@/components/RescheduleBookingPanel';
 import DocPreviewModal from '@/components/DocPreviewModal';
+import ReplaceSlipModal from '@/components/ReplaceSlipModal';
 import {
   CURRENT_TERM, buildTermFromConfig, getAcademicWeek, getWeekMode,
   daysUntil, getTermDates, getTermProgress,
@@ -196,14 +197,6 @@ function Avatar({ name, avatarUrl, size = 'md' }: { name: string; avatarUrl?: st
 }
 
 const MONTH_NAMES_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-const PROOF_LINK_PREFIXES = [
-  'https://drive.google.com/',
-  'https://docs.google.com/',
-  'https://onedrive.live.com/',
-  'https://1drv.ms/',
-];
-const isValidProofLink = (url: string) => PROOF_LINK_PREFIXES.some(p => url.startsWith(p));
 
 // ── Full-width Academic Calendar ─────────────────────────────────────────────
 
@@ -692,15 +685,8 @@ export default function StudentDashboard() {
   const [viewSlipLoading, setViewSlipLoading] = useState(false);
 
   // Proof of evidence
-  const [proofPanelId, setProofPanelId]         = useState<number | null>(null);
-  const [proofMode, setProofMode]               = useState<'file' | 'link'>('file');
-  const [proofLinkValue, setProofLinkValue]     = useState('');
-  const [proofLinkError, setProofLinkError]     = useState('');
-  const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
+  const [replaceModalId, setReplaceModalId]     = useState<number | null>(null);
   const [viewingFile, setViewingFile]           = useState<number | null>(null); // kept for backward compat but no longer used as loading flag
-  const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
-  const [proofDragActive, setProofDragActive]     = useState(false);
-  const proofFileRef   = useRef<HTMLInputElement>(null);
 
   // Profile card popup
   const [profileCard, setProfileCard] = useState<{ id: number; role: 'professor' | 'student' } | null>(null);
@@ -979,68 +965,6 @@ export default function StudentDashboard() {
       if (data.error) { toast.error(data.error); return; }
       await fetchData();
     } finally { setUploadingId(null); uploadForId.current = null; }
-  };
-
-  const validateProofFile = (file: File): boolean => {
-    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
-    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-    if (!allowedExt.includes(ext)) { toast.error('Only PDF, JPG, and PNG files are allowed.'); return false; }
-    if (file.size > 10 * 1024 * 1024) { toast.error('File must be 10 MB or smaller.'); return false; }
-    return true;
-  };
-
-  const handleProofFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !validateProofFile(file)) return;
-    setProofSelectedFile(file);
-  };
-
-  const handleProofDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setProofDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file || !validateProofFile(file)) return;
-    setProofSelectedFile(file);
-  };
-
-  const handleProofSubmitFile = async (id: number) => {
-    const file = proofSelectedFile;
-    if (!file) return;
-    setSubmittingProofId(id);
-    const formData = new FormData();
-    formData.append('proof', file);
-    try {
-      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
-      });
-      const data = await res.json();
-      if (data.error) { toast.error(data.error); return; }
-      toast.success('Proof of evidence submitted!');
-      setProofPanelId(null);
-      setProofSelectedFile(null);
-      await fetchData();
-    } finally { setSubmittingProofId(null); }
-  };
-
-  const handleProofLinkSubmit = async (id: number) => {
-    const link = proofLinkValue.trim();
-    if (!link) { toast.error('Please enter a valid link.'); return; }
-    if (!isValidProofLink(link)) {
-      setProofLinkError('Link must be from Google Drive, Google Docs, or OneDrive.');
-      return;
-    }
-    setProofLinkError('');
-    setSubmittingProofId(id);
-    try {
-      const data = await api.post(`/api/consultations/${id}/proof`, { link }, token!);
-      if (data.error) { toast.error(data.error); return; }
-      toast.success('Proof link submitted!');
-      setProofPanelId(null);
-      setProofLinkValue('');
-      await fetchData();
-    } finally { setSubmittingProofId(null); }
   };
 
   const handleViewFile = (id: number) => {
@@ -1472,7 +1396,6 @@ export default function StudentDashboard() {
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileSelected} />
-        <input ref={proofFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleProofFileSelected} />
 
         <main ref={mainScrollRef} className="flex-1 overflow-y-auto" style={!isDark ? { background: 'linear-gradient(135deg, #93c5fd 0%, #bfdbfe 45%, #eff6ff 100%)' } : undefined}>
         {loading ? (
@@ -2474,7 +2397,7 @@ export default function StudentDashboard() {
                     {c.proof_required && !c.proof_of_evidence && ['pending', 'confirmed'].includes(c.status) && (
                       <div className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs ${isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                         <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
-                        <span>This booking won&apos;t be visible to your professor until you submit proof of your filled advising slip. Download the template, fill it out, upload to Google Drive, and submit the link.</span>
+                        <span>This booking won&apos;t be visible to your professor until you submit proof of your filled advising slip. Download the template, fill it out, and upload the completed PDF.</span>
                       </div>
                     )}
 
@@ -2499,7 +2422,7 @@ export default function StudentDashboard() {
                                 </a>
                                 {['pending', 'confirmed'].includes(c.status) && (
                                   <button
-                                    onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
+                                    onClick={() => setReplaceModalId(c.id)}
                                     className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
                                     Replace
                                   </button>
@@ -2517,7 +2440,7 @@ export default function StudentDashboard() {
                                 </button>
                                 {['pending', 'confirmed'].includes(c.status) && (
                                   <button
-                                    onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); }}
+                                    onClick={() => setReplaceModalId(c.id)}
                                     className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
                                     Replace
                                   </button>
@@ -2540,21 +2463,21 @@ export default function StudentDashboard() {
                         {/* ── Auto: Replace Slip (upload manual PDF over the auto slip) ─────── */}
                         {['pending', 'confirmed'].includes(c.status) && !c.proof_required && !c.proof_of_evidence && (
                           <button
-                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
+                            onClick={() => setReplaceModalId(c.id)}
                             className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
-                            {proofPanelId === c.id ? 'Cancel' : 'Replace Slip'}
+                            Replace Slip
                           </button>
                         )}
 
                         {/* ── Manual: Submit Proof ──── */}
                         {['pending', 'confirmed'].includes(c.status) && c.proof_required && !c.proof_of_evidence && (
                           <button
-                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
+                            onClick={() => setReplaceModalId(c.id)}
                             className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'}`}>
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                             </svg>
-                            {proofPanelId === c.id ? 'Cancel' : 'Submit Proof'}
+                            Submit Proof
                           </button>
                         )}
                         {c.status === 'completed' && (
@@ -2582,79 +2505,6 @@ export default function StudentDashboard() {
                       )}
                     </div>
 
-                    {/* Expandable proof submission panel */}
-                    {c.status !== 'cancelled' && proofPanelId === c.id && (
-                      <div className={`mt-3 rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/5' : 'bg-gray-50 border border-gray-200'}`}>
-                        {!c.proof_required ? (
-                          /* Replace Slip mode — auto booking, student wants to submit manual proof */
-                          <>
-                            <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Replace with Manual Submission</p>
-                            <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Download the blank form, fill it out, then upload the PDF below.</p>
-                            <button
-                              onClick={async () => {
-                                const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-                                if (!res.ok) return;
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
-                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
-                              }}
-                              className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ring-1 transition-colors mb-3 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              Download Blank Form Template
-                            </button>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => { uploadForId.current = c.id; proofFileRef.current?.click(); }}
-                                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg ring-1 transition-colors ${isDark ? 'bg-white/[0.04] text-gray-300 ring-white/10 hover:bg-white/[0.08]' : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'}`}>
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                {proofSelectedFile ? proofSelectedFile.name.slice(0, 24) + (proofSelectedFile.name.length > 24 ? '…' : '') : 'Choose PDF File'}
-                              </button>
-                              {proofSelectedFile && (
-                                <button
-                                  onClick={() => handleProofSubmitFile(c.id)}
-                                  disabled={submittingProofId === c.id}
-                                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                                  {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Upload'}
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          /* Submit Proof mode — manual booking, link submission */
-                          <>
-                            <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Proof of Evidence</p>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={proofLinkValue}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setProofLinkValue(val);
-                                  setProofLinkError(val.trim() && !isValidProofLink(val.trim()) ? 'Invalid link. Please use a Google Drive or OneDrive link.' : '');
-                                }}
-                                placeholder="https://drive.google.com/…"
-                                className={`flex-1 px-3 py-2 rounded-lg text-xs transition-all ${
-                                  proofLinkError
-                                    ? 'border border-red-500 outline-none ' + (isDark ? 'bg-white/[0.04] text-white placeholder-white/20' : 'bg-white text-gray-800 placeholder-gray-400')
-                                    : isDark
-                                      ? 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/20 focus:border-violet-500/50 focus:bg-white/[0.07] outline-none'
-                                      : 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none'
-                                }`}
-                              />
-                              <button
-                                onClick={() => handleProofLinkSubmit(c.id)}
-                                disabled={submittingProofId === c.id || !proofLinkValue.trim() || (!!proofLinkValue.trim() && !isValidProofLink(proofLinkValue.trim()))}
-                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors">
-                                {submittingProofId === c.id ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : 'Submit'}
-                              </button>
-                            </div>
-                            {proofLinkError && <p className="text-red-500 text-[10px] mt-1">{proofLinkError}</p>}
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -2837,6 +2687,18 @@ export default function StudentDashboard() {
           fetchUrl={previewModal.fetchUrl}
           token={token ?? ''}
           filename={previewModal.filename}
+        />
+      )}
+      {replaceModalId !== null && (
+        <ReplaceSlipModal
+          isOpen={replaceModalId !== null}
+          onClose={() => setReplaceModalId(null)}
+          consultationId={replaceModalId}
+          token={token ?? ''}
+          apiUrl={API_URL}
+          isDark={isDark}
+          title={consultations.find(c => c.id === replaceModalId)?.proof_required ? 'Submit Proof of Evidence' : 'Replace Advising Slip'}
+          onSuccess={fetchData}
         />
       )}
     </div>
