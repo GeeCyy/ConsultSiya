@@ -2077,8 +2077,8 @@ export default function StudentDashboard() {
                         const alreadyBooked = bookedProfIds.has(prof.professor_id);
 
                         return (
-                          <div key={prof.professor_id} className={`h-full rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
-                            <div className="h-full p-4 flex flex-col">
+                          <div key={prof.professor_id} className={`rounded-2xl overflow-hidden transition-all ${card} ${isDark ? 'hover:border-white/10' : 'hover:border-sky-200'}`}>
+                            <div className="p-4 flex flex-col">
                               {/* Prof header */}
                               <div className="flex items-start gap-3">
                                 <button type="button" onClick={() => setProfileCard({ id: prof.professor_id, role: 'professor' })}
