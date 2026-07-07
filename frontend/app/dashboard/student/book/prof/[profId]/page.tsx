@@ -851,7 +851,7 @@ export default function BookProfPage() {
                   </button>
                   <p className={`text-[11px] ${ts}`}>Fill it out, upload to Google Drive, then paste the link below <span className={`${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional — you can also submit later from My Consultations)</span>:</p>
                   <input
-                    type="url"
+                    type="text"
                     value={bookProofLink}
                     onChange={e => {
                       const v = e.target.value;

@@ -8,7 +8,7 @@ async function sendEmail({ to, subject, htmlContent }) {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      sender: { name: 'ConsultSiya', email: process.env.EMAIL_FROM },
+      sender: { name: 'Consulta', email: process.env.EMAIL_FROM },
       to: [{ email: to }],
       subject,
       htmlContent,
@@ -52,7 +52,7 @@ function baseHtml({ accentBg, title, subtitle, bodyRows, footer }) {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
         <tr>
           <td style="background:${accentBg};padding:32px 40px;text-align:center;">
-            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">ConsultSiya</h1>
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Consulta</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.75);font-size:13px;">Mapúa School of Information Technology</p>
           </td>
         </tr>
@@ -68,7 +68,7 @@ function baseHtml({ accentBg, title, subtitle, bodyRows, footer }) {
         </tr>
         <tr>
           <td style="padding:20px 40px;border-top:1px solid #f3f4f6;text-align:center;">
-            <p style="margin:0;color:#9ca3af;font-size:12px;">&copy; ${new Date().getFullYear()} ConsultSiya &mdash; Mapúa SOIT. All rights reserved.</p>
+            <p style="margin:0;color:#9ca3af;font-size:12px;">&copy; ${new Date().getFullYear()} Consulta &mdash; Mapúa SOIT. All rights reserved.</p>
           </td>
         </tr>
       </table>
@@ -94,7 +94,7 @@ async function sendBookingPendingEmail({ to, studentName, professorName, date, t
   ].join('');
   await sendEmail({
     to,
-    subject: 'Your consultation booking is pending – ConsultSiya',
+    subject: 'Your consultation booking is pending – Consulta',
     htmlContent: baseHtml({
       accentBg: '#b91c1c',
       title: 'Booking Received',
@@ -121,13 +121,13 @@ async function sendBookingConfirmedEmail({ to, studentName, professorName, date,
   ].join('');
   await sendEmail({
     to,
-    subject: 'Your consultation has been confirmed – ConsultSiya',
+    subject: 'Your consultation has been confirmed – Consulta',
     htmlContent: baseHtml({
       accentBg: '#15803d',
       title: 'Consultation Confirmed',
       subtitle: `Hi ${studentName || 'there'}, your consultation has been <strong>confirmed</strong>. Please be on time.`,
       bodyRows: rows,
-      footer: 'If you need to cancel, please do so through the ConsultSiya portal as early as possible.',
+      footer: 'If you need to cancel, please do so through the Consulta portal as early as possible.',
     }),
   });
 }
@@ -146,13 +146,13 @@ async function sendBookingCompletedEmail({ to, studentName, professorName, date,
   ].join('');
   await sendEmail({
     to,
-    subject: 'Your consultation is complete – ConsultSiya',
+    subject: 'Your consultation is complete – Consulta',
     htmlContent: baseHtml({
       accentBg: '#1d4ed8',
       title: 'Consultation Complete',
       subtitle: `Hi ${studentName || 'there'}, your consultation session has been marked as <strong>completed</strong>. Thank you!`,
       bodyRows: rows,
-      footer: 'You can view the details and download your advising slip from the ConsultSiya portal.',
+      footer: 'You can view the details and download your advising slip from the Consulta portal.',
     }),
   });
 }
@@ -171,13 +171,13 @@ async function sendNewBookingProfessorEmail({ to, professorName, studentName, da
   ].join('');
   await sendEmail({
     to,
-    subject: 'New consultation request – ConsultSiya',
+    subject: 'New consultation request – Consulta',
     htmlContent: baseHtml({
       accentBg: '#7c3aed',
       title: 'New Booking Request',
       subtitle: `Hi ${professorName || 'Professor'}, a student has requested a consultation with you and is <strong>awaiting your confirmation</strong>.`,
       bodyRows: rows,
-      footer: 'Please log in to ConsultSiya to confirm or manage this booking.',
+      footer: 'Please log in to Consulta to confirm or manage this booking.',
     }),
   });
 }
@@ -191,7 +191,7 @@ async function sendBookingCancelledProfessorEmail({ to, professorName, studentNa
   ].join('');
   await sendEmail({
     to,
-    subject: 'Consultation booking cancelled by student – ConsultSiya',
+    subject: 'Consultation booking cancelled by student – Consulta',
     htmlContent: baseHtml({
       accentBg: '#dc2626',
       title: 'Booking Cancelled',
@@ -211,13 +211,13 @@ async function sendBookingCancelledEmail({ to, studentName, professorName, date,
   ].join('');
   await sendEmail({
     to,
-    subject: 'Your consultation booking has been cancelled – ConsultSiya',
+    subject: 'Your consultation booking has been cancelled – Consulta',
     htmlContent: baseHtml({
       accentBg: '#dc2626',
       title: 'Booking Cancelled',
       subtitle: `Hi ${studentName || 'there'}, your consultation booking has been <strong>cancelled</strong>.`,
       bodyRows: rows,
-      footer: 'If you believe this was a mistake or would like to rebook, please visit the ConsultSiya portal.',
+      footer: 'If you believe this was a mistake or would like to rebook, please visit the Consulta portal.',
     }),
   });
 }
@@ -232,13 +232,13 @@ async function sendBookingRescheduledEmail({ to, studentName, professorName, dat
   ].join('');
   await sendEmail({
     to,
-    subject: 'Your consultation has been rescheduled – ConsultSiya',
+    subject: 'Your consultation has been rescheduled – Consulta',
     htmlContent: baseHtml({
       accentBg: '#d97706',
       title: 'Consultation Rescheduled',
-      subtitle: `Hi ${studentName || 'there'}, your consultation has been <strong>rescheduled</strong>. Please check the ConsultSiya portal to book a new slot.`,
+      subtitle: `Hi ${studentName || 'there'}, your consultation has been <strong>rescheduled</strong>. Please check the Consulta portal to book a new slot.`,
       bodyRows: rows,
-      footer: 'Please rebook through the ConsultSiya portal at your earliest convenience.',
+      footer: 'Please rebook through the Consulta portal at your earliest convenience.',
     }),
   });
 }

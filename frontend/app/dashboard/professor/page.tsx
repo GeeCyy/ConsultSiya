@@ -11,6 +11,7 @@ import UserProfileCard from '@/components/UserProfileCard';
 import LeftSidebar from '@/components/LeftSidebar';
 import LeaderboardCard, { type LeaderboardItem } from '@/components/LeaderboardCard';
 import CustomSelect from '@/components/CustomSelect';
+import DocPreviewModal from '@/components/DocPreviewModal';
 
 export type ProfessorTab = 'home' | 'schedules' | 'calendar' | 'consultations' | 'export' | 'history';
 
@@ -1002,6 +1003,7 @@ export default function ProfessorDashboard() {
   const [exportTerm, setExportTerm] = useState('');
   const [exportStatus, setExportStatus] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfPreviewModal, setPdfPreviewModal] = useState<{ fetchUrl: string; title: string; filename: string } | null>(null);
   const [histTermExporting, setHistTermExporting] = useState<string | null>(null);
 
   // Add schedule
@@ -1722,35 +1724,16 @@ export default function ProfessorDashboard() {
     const headers = ['Student Name', 'Student No.', 'Program', 'Date', 'Time', 'Mode', 'Nature of Advising', 'Action Taken', 'Status', 'Proof of Evidence'];
 
     if (format === 'pdf') {
-      if (pdfExporting) return;
-      setPdfExporting(true);
-      try {
-        const params = new URLSearchParams();
-        if (exportDateFrom) params.set('date_from', exportDateFrom);
-        if (exportDateTo)   params.set('date_to',   exportDateTo);
-        if (exportStatus !== 'all') params.set('status', exportStatus);
-
-        const resp = await fetch(`${API_URL}/api/reports/pdf?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          toast.error(err.error || 'Failed to generate PDF.');
-          return;
-        }
-        const blob = await resp.blob();
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href     = url;
-        a.download = `advising-report-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success(`PDF downloaded (${rows.length} record${rows.length !== 1 ? 's' : ''}).`);
-      } catch {
-        toast.error('Failed to generate PDF. Please try again.');
-      } finally {
-        setPdfExporting(false);
-      }
+      const params = new URLSearchParams();
+      if (exportDateFrom) params.set('date_from', exportDateFrom);
+      if (exportDateTo)   params.set('date_to',   exportDateTo);
+      if (exportStatus !== 'all') params.set('status', exportStatus);
+      const dateTag = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      setPdfPreviewModal({
+        fetchUrl: `${API_URL}/api/reports/pdf?${params.toString()}`,
+        title: `Advising Report — ${dateTag}`,
+        filename: `advising-report-${dateTag}.pdf`,
+      });
     } else {
       const wsData = [headers, ...tableData];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -1771,26 +1754,33 @@ export default function ProfessorDashboard() {
       const dateFrom = dates[0];
       const dateTo   = dates[dates.length - 1];
       const params   = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, status: 'all' });
-      const endpoint = format === 'pdf' ? '/api/reports/pdf' : '/api/reports/excel';
-      const ext      = format === 'pdf' ? 'pdf' : 'xlsx';
-      const resp = await fetch(`${API_URL}${endpoint}?${params.toString()}`, {
+      if (format === 'pdf') {
+        const slug = termLabel.replace(/[^a-z0-9]/gi, '-');
+        setPdfPreviewModal({
+          fetchUrl: `${API_URL}/api/reports/pdf?${params.toString()}`,
+          title: `Archive — ${termLabel}`,
+          filename: `archive-${slug}.pdf`,
+        });
+        return;
+      }
+      const resp = await fetch(`${API_URL}/api/reports/excel?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        toast.error(err.error || `Failed to generate ${format.toUpperCase()}.`);
+        toast.error(err.error || 'Failed to generate Excel.');
         return;
       }
       const blob = await resp.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
-      a.download = `archive-${termLabel.replace(/[^a-z0-9]/gi, '-')}.${ext}`;
+      a.download = `archive-${termLabel.replace(/[^a-z0-9]/gi, '-')}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`${format.toUpperCase()} downloaded (${items.length} record${items.length !== 1 ? 's' : ''}).`);
+      toast.success(`Excel downloaded (${items.length} record${items.length !== 1 ? 's' : ''}).`);
     } catch {
-      toast.error(`Failed to generate ${format.toUpperCase()}. Please try again.`);
+      toast.error('Failed to generate export. Please try again.');
     } finally {
       setHistTermExporting(null);
     }
@@ -4787,6 +4777,17 @@ export default function ProfessorDashboard() {
           profileRole={profileCard.role}
           token={token}
           onClose={() => setProfileCard(null)}
+        />
+      )}
+
+      {pdfPreviewModal && (
+        <DocPreviewModal
+          isOpen={!!pdfPreviewModal}
+          onClose={() => setPdfPreviewModal(null)}
+          title={pdfPreviewModal.title}
+          fetchUrl={pdfPreviewModal.fetchUrl}
+          token={token ?? ''}
+          filename={pdfPreviewModal.filename}
         />
       )}
 

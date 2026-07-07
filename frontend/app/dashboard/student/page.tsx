@@ -134,6 +134,7 @@ type Consultation = {
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
   proof_required?: boolean;
+  cancelled_by?: string | null;
   professor_avatar?: string | null;
   in_session?: boolean;
   prof_in_session?: boolean;
@@ -657,7 +658,6 @@ export default function StudentDashboard() {
   // Book tab filters
   const [bookSearch, setBookSearch]       = useState('');
   const [bookDeptFilter, setBookDeptFilter] = useState<'all' | 'IT' | 'CS' | 'Other'>('all');
-  const deptFilterInitialized = useRef(false);
   const [bookTopicFilter, setBookTopicFilter] = useState<string>('all');
   const [bookSortBy, setBookSortBy]       = useState<'slots' | 'date'>('slots');
   const [slotModalProf, setSlotModalProf] = useState<{
@@ -697,7 +697,7 @@ export default function StudentDashboard() {
   const [proofLinkValue, setProofLinkValue]     = useState('');
   const [proofLinkError, setProofLinkError]     = useState('');
   const [submittingProofId, setSubmittingProofId] = useState<number | null>(null);
-  const [viewingFile, setViewingFile]           = useState<number | null>(null);
+  const [viewingFile, setViewingFile]           = useState<number | null>(null); // kept for backward compat but no longer used as loading flag
   const [proofSelectedFile, setProofSelectedFile] = useState<File | null>(null);
   const [proofDragActive, setProofDragActive]     = useState(false);
   const proofFileRef   = useRef<HTMLInputElement>(null);
@@ -775,15 +775,6 @@ export default function StudentDashboard() {
     if (!authReady || !token) return;
     fetchData().catch(() => setLoading(false));
   }, [authReady]);
-
-  // Auto-set dept filter once based on student's program
-  useEffect(() => {
-    if (deptFilterInitialized.current || !profile.program) return;
-    deptFilterInitialized.current = true;
-    const prog = profile.program.toLowerCase();
-    if (prog.includes('information technology') || /\bit\b/.test(prog)) setBookDeptFilter('IT');
-    else if (prog.includes('computer science') || /\bcs\b/.test(prog)) setBookDeptFilter('CS');
-  }, [profile.program]);
 
   // Poll consultations + schedules every 30 s for real-time feel
   useEffect(() => {
@@ -1052,18 +1043,12 @@ export default function StudentDashboard() {
     } finally { setSubmittingProofId(null); }
   };
 
-  const handleViewFile = async (id: number) => {
-    setViewingFile(id);
-    try {
-      const res = await fetch(`${API_URL}/api/consultations/${id}/proof`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { const e = await res.json(); toast.error(e.error || 'Could not open file.'); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } finally { setViewingFile(null); }
+  const handleViewFile = (id: number) => {
+    setPreviewModal({
+      fetchUrl: `${API_URL}/api/consultations/${id}/proof`,
+      title: 'Proof of Evidence',
+      filename: `proof-${id}.pdf`,
+    });
   };
 
   // ── Theme ──
@@ -1117,8 +1102,10 @@ export default function StudentDashboard() {
     .slice(0, 3);
 
   // Notification bell: status-update consultations (confirmed/rescheduled/cancelled) for the bell
+  // Exclude student-self-cancelled consultations — student doesn't need to be notified they cancelled
   const statusNotifConsults = consultations
-    .filter(c => ['confirmed', 'rescheduled', 'cancelled'].includes(c.status) && !!c.date)
+    .filter(c => ['confirmed', 'rescheduled', 'cancelled'].includes(c.status) && !!c.date
+      && !(c.status === 'cancelled' && c.cancelled_by === 'student'))
     .map(c => ({
       id: c.id,
       student_name: '',
@@ -1988,7 +1975,7 @@ export default function StudentDashboard() {
               // Filter + sort
               const q = bookSearch.trim().toLowerCase();
               const filtered = allProfessors.filter(p => {
-                const matchQ     = !q || p.professor_name.toLowerCase().includes(q) || p.department.toLowerCase().includes(q);
+                const matchQ     = !q || p.professor_name.toLowerCase().includes(q) || (p.department || '').toLowerCase().includes(q);
                 const matchDept  = bookDeptFilter === 'all' || deptCat(p.department) === bookDeptFilter;
                 const matchTopic = bookTopicFilter === 'all' || p.specializations.includes(bookTopicFilter);
                 return matchQ && matchDept && matchTopic;
@@ -2540,49 +2527,35 @@ export default function StudentDashboard() {
                           </>
                         )}
 
-                        {/* ── Auto slip: View Slip + Replace option ─────── */}
-                        {['pending', 'confirmed'].includes(c.status) && !c.proof_required && !c.proof_of_evidence && (
-                          <>
-                            <button
-                              onClick={() => setPreviewModal({ fetchUrl: `${API_URL}/api/forms/advising-slip/${c.id}`, title: `Advising Slip #${c.id}`, filename: `advising-slip-${c.id}.pdf` })}
-                              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              View Slip
-                            </button>
-                            <button
-                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
-                              className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
-                              {proofPanelId === c.id ? 'Cancel' : 'Replace Slip'}
-                            </button>
-                          </>
+                        {/* ── View Slip: always available for pending/confirmed (auto-generated) ─────── */}
+                        {['pending', 'confirmed'].includes(c.status) && !c.proof_of_evidence && (
+                          <button
+                            onClick={() => setPreviewModal({ fetchUrl: `${API_URL}/api/forms/advising-slip/${c.id}`, title: `Advising Slip #${c.id}`, filename: `advising-slip-${c.id}.pdf` })}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            View Slip
+                          </button>
                         )}
 
-                        {/* ── Manual: Download template + Submit Proof ──── */}
+                        {/* ── Auto: Replace Slip (upload manual PDF over the auto slip) ─────── */}
+                        {['pending', 'confirmed'].includes(c.status) && !c.proof_required && !c.proof_of_evidence && (
+                          <button
+                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
+                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${isDark ? 'text-[#c0392b] hover:text-[#e74c3c] hover:bg-red-900/20' : 'text-[#8B0000] hover:text-[#a00000] hover:bg-red-50'}`}>
+                            {proofPanelId === c.id ? 'Cancel' : 'Replace Slip'}
+                          </button>
+                        )}
+
+                        {/* ── Manual: Submit Proof ──── */}
                         {['pending', 'confirmed'].includes(c.status) && c.proof_required && !c.proof_of_evidence && (
-                          <>
-                            <button
-                              onClick={async () => {
-                                const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-                                if (!res.ok) return;
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
-                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
-                              }}
-                              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-amber-500/10 text-amber-400 ring-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100'}`}>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                              Download Template
-                            </button>
-                            <button
-                              onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
-                              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'}`}>
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                              </svg>
-                              {proofPanelId === c.id ? 'Cancel' : 'Submit Proof'}
-                            </button>
-                          </>
+                          <button
+                            onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-violet-500/10 text-violet-400 ring-violet-500/20 hover:bg-violet-500/20' : 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            {proofPanelId === c.id ? 'Cancel' : 'Submit Proof'}
+                          </button>
                         )}
                         {c.status === 'completed' && (
                           <>
@@ -2654,7 +2627,7 @@ export default function StudentDashboard() {
                             <p className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Proof of Evidence</p>
                             <div className="flex gap-2">
                               <input
-                                type="url"
+                                type="text"
                                 value={proofLinkValue}
                                 onChange={e => {
                                   const val = e.target.value;
