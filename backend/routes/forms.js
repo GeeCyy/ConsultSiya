@@ -481,7 +481,7 @@ router.get('/download/:id', authenticate, async (req, res) => {
 
     // New uploads are Cloudinary URLs — redirect directly
     if (c.uploaded_form_path.startsWith('https://')) {
-      return res.redirect(c.uploaded_form_path);
+      return res.redirect(cloudinary.toDeliverableUrl(c.uploaded_form_path));
     }
 
     // Legacy: file stored locally on disk
