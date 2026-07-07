@@ -41,19 +41,29 @@ router.post(
 
     const { email, password, role, full_name, student_number, program, year_level, department } = req.body;
 
+    // Validate role-specific fields before touching the database
+    if (role === 'student') {
+      if (!student_number || !/^\d{10}$/.test(student_number)) {
+        return res.status(400).json({ error: 'Student number must be exactly 10 digits.' });
+      }
+    }
+
+    const client = await pool.connect();
     try {
       const password_hash = await bcrypt.hash(password, 12);
 
       // Check if admin approval is required (default: true)
       let requireApproval = true;
       try {
-        const settingRes = await pool.query(
+        const settingRes = await client.query(
           `SELECT value FROM system_settings WHERE key = 'require_admin_approval'`
         );
         if (settingRes.rows.length > 0) requireApproval = settingRes.rows[0].value !== 'false';
       } catch { /* system_settings table not yet created — keep default */ }
 
-      const userResult = await pool.query(
+      await client.query('BEGIN');
+
+      const userResult = await client.query(
         `INSERT INTO users (email, password_hash, role, is_approved)
          VALUES ($1, $2, $3, $4) RETURNING id`,
         [email, password_hash, role, !requireApproval]
@@ -62,19 +72,20 @@ router.post(
       const userId = userResult.rows[0].id;
 
       if (role === 'student') {
-        if (!student_number || !/^\d{10}$/.test(student_number)) return res.status(400).json({ error: 'Student number must be exactly 10 digits.' });
-        await pool.query(
+        await client.query(
           `INSERT INTO students (user_id, full_name, student_number, program, year_level)
            VALUES ($1, $2, $3, $4, $5)`,
           [userId, full_name, student_number, program || null, year_level ? parseInt(year_level) : null]
         );
       } else {
-        await pool.query(
+        await client.query(
           `INSERT INTO professors (user_id, full_name, department)
            VALUES ($1, $2, $3)`,
           [userId, full_name, department || null]
         );
       }
+
+      await client.query('COMMIT');
 
       res.status(201).json({
         message: requireApproval
@@ -93,9 +104,12 @@ router.post(
         ));
       }).catch(() => {});
     } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
       console.error('[Register]', err.code, err.message);
       if (err.code === '23505') return res.status(400).json({ error: 'Email or student number already registered.' });
       res.status(500).json({ error: 'Registration failed. Please try again.' });
+    } finally {
+      client.release();
     }
   }
 );

@@ -12,6 +12,7 @@ import { ToastContainer, useToast } from '@/components/Toast';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import CustomSelect from '@/components/CustomSelect';
 import RescheduleBookingPanel from '@/components/RescheduleBookingPanel';
+import DocPreviewModal from '@/components/DocPreviewModal';
 import {
   CURRENT_TERM, buildTermFromConfig, getAcademicWeek, getWeekMode,
   daysUntil, getTermDates, getTermProgress,
@@ -132,6 +133,7 @@ type Consultation = {
   meeting_link?: string | null;
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
+  proof_required?: boolean;
   professor_avatar?: string | null;
   in_session?: boolean;
   prof_in_session?: boolean;
@@ -672,7 +674,7 @@ export default function StudentDashboard() {
 
   // File upload / download
   const [uploadingId, setUploadingId]               = useState<number | null>(null);
-  const [downloadingSlip, setDownloadingSlip]       = useState<number | null>(null);
+  const [previewModal, setPreviewModal]             = useState<{ fetchUrl: string; title: string; filename: string } | null>(null);
   const [expandedRemarks, setExpandedRemarks]       = useState<Set<number>>(new Set());
   const [dayModal, setDayModal]                     = useState<{ date: string; label: string; dateObj: Date } | null>(null);
   const [weekOverviewOpen, setWeekOverviewOpen]     = useState(false);
@@ -934,23 +936,6 @@ export default function StudentDashboard() {
       if (res.ok) { const d = await res.json(); setViewSlipData(d); }
     } catch { /* ignore */ }
     setViewSlipLoading(false);
-  };
-
-  const handleDownloadSlip = async () => {
-    setDownloadingSlip(-1);
-    try {
-      const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { toast.error('Failed to download form template.'); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'advising-slip-FM-AS-11-02.pdf';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } finally { setDownloadingSlip(null); }
   };
 
   const triggerUpload = (id: number) => { uploadForId.current = id; fileInputRef.current?.click(); };
@@ -2493,6 +2478,14 @@ export default function StudentDashboard() {
                       </div>
                     )}
 
+                    {/* ── Proof-required warning ───────────────────────── */}
+                    {c.proof_required && !c.proof_of_evidence && ['pending', 'confirmed'].includes(c.status) && (
+                      <div className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs ${isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                        <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                        <span>This booking won&apos;t be visible to your professor until you submit proof of your filled advising slip. Download the template, fill it out, upload to Google Drive, and submit the link.</span>
+                      </div>
+                    )}
+
                     {/* ── Proof + Actions row ───────────────────────────── */}
                     <div className={`mt-3.5 pt-3.5 border-t ${isDark ? 'border-white/5' : 'border-gray-100'} flex flex-wrap items-center justify-between gap-2`}>
                       {/* Left: proof status or download receipt */}
@@ -2527,6 +2520,30 @@ export default function StudentDashboard() {
                             </button>
                           </>
                         )}
+                        {['pending', 'confirmed'].includes(c.status) && !c.proof_required && (
+                          <button
+                            onClick={() => setPreviewModal({ fetchUrl: `${API_URL}/api/forms/advising-slip/${c.id}`, title: `Advising Slip #${c.id}`, filename: `advising-slip-${c.id}.pdf` })}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            View Slip
+                          </button>
+                        )}
+                        {['pending', 'confirmed'].includes(c.status) && c.proof_required && !c.proof_of_evidence && (
+                          <button
+                            onClick={async () => {
+                              const res = await fetch(`${API_URL}/api/forms/blank-slip`, { headers: { Authorization: `Bearer ${token}` } });
+                              if (!res.ok) return;
+                              const blob = await res.blob();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a'); a.href = url; a.download = 'advising-slip-FM-AS-11-02.pdf';
+                              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                            }}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ring-1 transition-colors ${isDark ? 'bg-amber-500/10 text-amber-400 ring-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Download Template
+                          </button>
+                        )}
                         {['pending', 'confirmed'].includes(c.status) && !c.proof_of_evidence && (
                           <button
                             onClick={() => { setProofPanelId(proofPanelId === c.id ? null : c.id); setProofLinkValue(''); setProofLinkError(''); }}
@@ -2544,11 +2561,10 @@ export default function StudentDashboard() {
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                               View Slip
                             </button>
-                            <button onClick={() => handleDownloadSlip()} disabled={downloadingSlip === -1}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
-                              {downloadingSlip === -1
-                                ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>}
+                            <button
+                              onClick={() => setPreviewModal({ fetchUrl: `${API_URL}/api/forms/advising-slip/${c.id}`, title: `Advising Slip #${c.id}`, filename: `advising-slip-${c.id}.pdf` })}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                               Download Receipt
                             </button>
                           </>
@@ -2705,6 +2721,17 @@ export default function StudentDashboard() {
 
       <ChatbotWidget token={token ?? ''} role="student" />
       <NavigationTour isDark={isDark} />
+
+      {previewModal && (
+        <DocPreviewModal
+          isOpen={!!previewModal}
+          onClose={() => setPreviewModal(null)}
+          title={previewModal.title}
+          fetchUrl={previewModal.fetchUrl}
+          token={token ?? ''}
+          filename={previewModal.filename}
+        />
+      )}
     </div>
   );
 }
