@@ -494,6 +494,9 @@ export default function BookProfPage() {
     if (selectedSlot.mode === 'BOTH' && !bookForm.preferredMode) {
       setBookError('Please select your preferred consultation mode.'); return;
     }
+    if (bookProofLink.trim() && !isValidProofLink(bookProofLink.trim())) {
+      setBookError('Proof of evidence must be a Google Drive or OneDrive link.'); return;
+    }
     setIsBooking(true);
     try {
       if (rescheduleId) {
@@ -519,8 +522,8 @@ export default function BookProfPage() {
           signature: bookForm.signature || undefined,
         }, token!);
         if (data.error) { setBookError(data.error); return; }
-        if (data.id) {
-          await api.post(`/api/consultations/${data.id}/proof`, { link: bookProofLink.trim() }, token!);
+        if (data.id && bookProofLink.trim()) {
+          await api.post(`/api/consultations/${data.id}/proof`, { link: bookProofLink.trim() }, token!).catch(() => {});
         }
         if (rememberSignature && bookForm.signature && bookForm.signature !== savedSignature) {
           api.put('/api/auth/signature', { signature: bookForm.signature }, token!).catch(() => {});
@@ -800,6 +803,31 @@ export default function BookProfPage() {
                   Remember my signature for next time
                 </label>
               )}
+            </div>
+
+            {/* Proof of Evidence */}
+            <div className={`rounded-2xl border p-5 ${card}`}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className={`text-sm font-bold ${tp}`}>Proof of Evidence</h3>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>Optional</span>
+              </div>
+              <p className={`text-xs mb-3 ${ts}`}>
+                Attach a Google Drive, Google Docs, or OneDrive link now if you already have supporting documents. You can also submit this later from My Consultations.
+              </p>
+              <input
+                type="url"
+                value={bookProofLink}
+                onChange={e => {
+                  const v = e.target.value;
+                  setBookProofLink(v);
+                  setBookProofLinkError(v.trim() && !isValidProofLink(v.trim()) ? 'Must be a Google Drive or OneDrive link.' : '');
+                }}
+                placeholder="https://drive.google.com/…"
+                className={`w-full rounded-xl text-sm px-3 py-2.5 border focus:outline-none placeholder-gray-400 transition-colors ${
+                  bookProofLinkError ? '!border-red-500' : ''
+                } ${inputCls}`}
+              />
+              {bookProofLinkError && <p className="text-red-500 text-[10px] mt-1.5">{bookProofLinkError}</p>}
             </div>
 
           </div>
