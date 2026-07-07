@@ -22,6 +22,7 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { Ban, Trash2, UserCheck, Users, BarChart3, ClipboardList } from 'lucide-react';
 import ChatbotWidget from '@/components/ChatbotWidget';
 import NavigationTour from '@/components/NavigationTour';
+import DocPreviewModal from '@/components/DocPreviewModal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -297,6 +298,7 @@ export default function AdminDashboard() {
   // Report period
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>('');
   const [exporting, setExporting] = useState<string | null>(null);
+  const [pdfPreviewModal, setPdfPreviewModal] = useState<{ fetchUrl: string; title: string; filename: string } | null>(null);
 
   // Account management
   const [accountRoleFilter, setAccountRoleFilter] = useState<string>('all');
@@ -650,6 +652,10 @@ export default function AdminDashboard() {
   };
 
   const handleDownload = async (url: string, filename: string, key: string) => {
+    if (filename.endsWith('.pdf')) {
+      setPdfPreviewModal({ fetchUrl: `${API_URL}${url}`, title: filename.replace('.pdf', '').replace(/-/g, ' '), filename });
+      return;
+    }
     setExporting(key);
     try {
       const res = await fetch(`${API_URL}${url}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -3501,6 +3507,17 @@ export default function AdminDashboard() {
         onConfirm={handleConfirmModalExecute}
         onCancel={() => { setConfirmModalOpen(false); setConfirmModalError(''); }}
       />
+
+      {pdfPreviewModal && (
+        <DocPreviewModal
+          isOpen={!!pdfPreviewModal}
+          onClose={() => setPdfPreviewModal(null)}
+          title={pdfPreviewModal.title}
+          fetchUrl={pdfPreviewModal.fetchUrl}
+          token={token ?? ''}
+          filename={pdfPreviewModal.filename}
+        />
+      )}
 
       <ChatbotWidget token={token} role="admin" />
       <NavigationTour isDark={isDark} role="admin" />

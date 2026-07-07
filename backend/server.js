@@ -409,6 +409,10 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] consultations.proof_required column ready'))
     .catch(err => console.error('[startup] consultations.proof_required migration failed:', err.message));
 
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(20)`)
+    .then(() => console.log('[startup] consultations.cancelled_by column ready'))
+    .catch(err => console.error('[startup] consultations.cancelled_by migration failed:', err.message));
+
   pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS saved_signature TEXT`)
     .then(() => console.log('[startup] students.saved_signature column ready'))
     .catch(err => console.error('[startup] students.saved_signature migration failed:', err.message));

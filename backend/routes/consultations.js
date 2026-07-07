@@ -636,8 +636,8 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1, in_session = false, session_started_at = NULL WHERE id = $2`,
-      [cancel_reason?.trim() || null, id]
+      `UPDATE consultations SET status = 'cancelled', cancel_reason = $1, cancelled_by = $2, in_session = false, session_started_at = NULL WHERE id = $3`,
+      [cancel_reason?.trim() || null, req.user.role, id]
     );
 
     // Clear professor-level session if this was the active consultation

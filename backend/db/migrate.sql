@@ -139,6 +139,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_consultation_active
   ON consultations (student_id, professor_id, date, time)
   WHERE status IN ('pending', 'confirmed', 'rescheduled', 'needs_reschedule');
 
+-- Track who cancelled each consultation ('student' or 'professor')
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(20);
+
 -- Announcements: admin-managed notices shown on all dashboards
 CREATE TABLE IF NOT EXISTS announcements (
   id         SERIAL PRIMARY KEY,
