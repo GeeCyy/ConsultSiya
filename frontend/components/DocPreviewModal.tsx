@@ -71,7 +71,7 @@ export default function DocPreviewModal({ isOpen, onClose, title, fetchUrl, toke
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4"
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-[10000] p-4"
       onClick={onClose}
     >
       <div

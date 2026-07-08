@@ -5,13 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 type Props = {
   value: string | null;
   onChange: (dataUrl: string | null) => void;
-  isDark: boolean;
   disabled?: boolean;
 };
 
 const PAD = 8; // CSS-px margin kept around the cropped ink on export
 
-export default function SignaturePad({ value, onChange, isDark, disabled }: Props) {
+export default function SignaturePad({ value, onChange, disabled }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -38,7 +37,10 @@ export default function SignaturePad({ value, onChange, isDark, disabled }: Prop
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = isDark ? '#f5f5f5' : '#1a1a1a';
+    // Always a fixed dark ink, regardless of app theme — the signature is exported
+    // as a transparent PNG stamped straight onto a white PDF page, so light ink
+    // (e.g. a dark-mode-matched color) would be invisible on the printed slip.
+    ctx.strokeStyle = '#1a1a1a';
 
     if (value) {
       const img = new Image();
@@ -128,12 +130,12 @@ export default function SignaturePad({ value, onChange, isDark, disabled }: Prop
         onPointerMove={handlePointerMove}
         onPointerUp={stopDrawing}
         onPointerLeave={stopDrawing}
-        className={`w-full h-32 rounded-xl border touch-none ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-crosshair'} ${
-          isDark ? 'bg-white/[0.03] border-white/10' : 'bg-gray-50 border-gray-200'
+        className={`w-full h-32 rounded-xl border touch-none bg-gray-50 border-gray-200 ${
+          disabled ? 'cursor-not-allowed opacity-60' : 'cursor-crosshair'
         }`}
       />
       {!hasDrawn && (
-        <p className={`absolute inset-0 flex items-center justify-center text-xs pointer-events-none ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+        <p className="absolute inset-0 flex items-center justify-center text-xs pointer-events-none text-gray-400">
           Draw your signature here
         </p>
       )}
@@ -141,9 +143,7 @@ export default function SignaturePad({ value, onChange, isDark, disabled }: Prop
         <button
           type="button"
           onClick={handleClear}
-          className={`absolute top-2 right-2 text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${
-            isDark ? 'bg-white/10 text-gray-300 hover:bg-white/20' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-          }`}
+          className="absolute top-2 right-2 text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
         >
           Clear
         </button>
