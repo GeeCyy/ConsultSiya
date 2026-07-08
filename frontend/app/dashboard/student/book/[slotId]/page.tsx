@@ -193,6 +193,7 @@ export default function BookSlotPage() {
   const [slipPreview, setSlipPreview] = useState<{ id: number } | null>(null);
   const [formMode, setFormMode] = useState<'auto' | 'manual'>('auto');
   const [bookProofFile, setBookProofFile] = useState<File | null>(null);
+  const [bookProofLink, setBookProofLink] = useState('');
   const [topicItems, setTopicItems] = useState<TopicItem[]>([]);
   const [profSpecializations, setProfSpecializations] = useState<TopicItem[]>([]);
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
@@ -334,13 +335,19 @@ export default function BookSlotPage() {
         proof_required: proofRequired,
       }, token!);
       if (data.error) { setBookError(data.error); return; }
-      if (data.id && proofRequired && bookProofFile) {
+      if (data.id && proofRequired && (bookProofFile || bookProofLink.trim())) {
         try {
-          const fd = new FormData();
-          fd.append('proof', bookProofFile);
-          const upRes = await fetch(`${API_URL}/api/consultations/${data.id}/proof`, {
-            method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
-          });
+          const upRes = bookProofFile
+            ? await fetch(`${API_URL}/api/consultations/${data.id}/proof`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: (() => { const fd = new FormData(); fd.append('proof', bookProofFile); return fd; })(),
+              })
+            : await fetch(`${API_URL}/api/consultations/${data.id}/proof`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ link: bookProofLink.trim() }),
+              });
           if (!upRes.ok) throw new Error();
         } catch {
           toast.error('Booking confirmed, but slip upload failed — submit it later from My Consultations.');
@@ -628,6 +635,8 @@ export default function BookSlotPage() {
                 onRememberSignatureChange={setRememberSignature}
                 proofFile={bookProofFile}
                 onProofFileChange={setBookProofFile}
+                proofLink={bookProofLink}
+                onProofLinkChange={setBookProofLink}
               />
             </div>
           </div>
