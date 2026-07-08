@@ -605,29 +605,6 @@ function FullCalendar({
   );
 }
 
-function AnnouncementBubble({ ann, slotLabel, isDark }: { ann: string; slotLabel?: string | null; isDark: boolean }) {
-  const isLong = ann.length > 50;
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border ${isDark ? 'bg-violet-500/10 border-violet-500/20' : 'bg-violet-50 border-violet-200'}`}>
-      <Megaphone className={`flex-shrink-0 mt-0.5 ${isDark ? 'text-violet-400' : 'text-violet-500'}`} size={14} strokeWidth={2} />
-      <div className="min-w-0">
-        {slotLabel && <p className={`text-[10px] font-semibold mb-0.5 ${isDark ? 'text-violet-400' : 'text-violet-600'}`}>{slotLabel}</p>}
-        <p className={`text-xs leading-relaxed ${isDark ? 'text-violet-200' : 'text-violet-800'}`}>
-          {isLong && !expanded ? ann.slice(0, 50) + '...' : ann}
-          {isLong && (
-            <>{' '}<button
-              type="button"
-              onClick={() => setExpanded(e => !e)}
-              className={`font-semibold underline underline-offset-2 transition-colors ${isDark ? 'text-violet-400 hover:text-violet-300' : 'text-violet-600 hover:text-violet-800'}`}
-            >{expanded ? 'See less' : 'See more'}</button></>
-          )}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function StudentDashboard() {
@@ -2034,10 +2011,18 @@ export default function StudentDashboard() {
                                   ) : prof.department && prof.department.toLowerCase() !== 'others' ? (
                                     <p className={`text-xs mt-0.5 truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{prof.department}</p>
                                   ) : null}
-                                  <span className="inline-flex items-center gap-1 text-xs text-emerald-500 mt-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    {prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''} open
-                                  </span>
+                                  <div className="flex items-center flex-wrap gap-2 mt-1">
+                                    <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      {prof.slots.length} slot{prof.slots.length !== 1 ? 's' : ''} open
+                                    </span>
+                                    {slotsSorted.filter(s => s.announcement).length > 0 && (
+                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${isDark ? 'bg-violet-500/15 text-violet-300 border border-violet-500/25' : 'bg-violet-50 text-violet-700 border border-violet-200'}`}>
+                                        <Megaphone size={10} strokeWidth={2.5} />
+                                        {slotsSorted.filter(s => s.announcement).length} note{slotsSorted.filter(s => s.announcement).length !== 1 ? 's' : ''}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 
@@ -2067,32 +2052,15 @@ export default function StudentDashboard() {
                                 )}
                               </div>
 
-                              {/* Announcements — always visible, one per slot that has one */}
-                              {(() => {
-                                const withAnn = slotsSorted.filter(s => s.announcement);
-                                if (withAnn.length === 0) return null;
-                                const multiSlot = slotsSorted.length > 1;
-                                return (
-                                  <div className="mt-3 space-y-2">
-                                    {withAnn.map(s => {
-                                      const dateObj = s.date ? new Date(s.date + 'T12:00:00') : null;
-                                      const slotLabel = multiSlot
-                                        ? (dateObj ? dateObj.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' }) : s.day)
-                                        : null;
-                                      return (
-                                        <AnnouncementBubble key={s.id} ann={s.announcement!} slotLabel={slotLabel} isDark={isDark} />
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              })()}
-
                               {/* Actions */}
                               <div className="mt-auto pt-3 flex items-center justify-between gap-2">
                                 <button type="button"
                                   onClick={() => setSlotModalProf(prof)}
-                                  className={`flex items-center gap-1 text-xs font-medium transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}>
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                  className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-700'}`}>
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                  </svg>
                                   Preview slots
                                 </button>
                                 <button onClick={() => router.push(`/dashboard/student/book/prof/${prof.professor_id}`)}
