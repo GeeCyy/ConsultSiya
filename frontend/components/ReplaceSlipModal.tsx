@@ -18,6 +18,7 @@ export default function ReplaceSlipModal({
   isOpen, onClose, consultationId, token, apiUrl, isDark, title, onSuccess,
 }: ReplaceSlipModalProps) {
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofLink, setProofLink] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,23 +27,31 @@ export default function ReplaceSlipModal({
   const handleClose = () => {
     if (submitting) return;
     setProofFile(null);
+    setProofLink('');
     setError('');
     onClose();
   };
 
   const handleSubmit = async () => {
-    if (!proofFile) return;
+    if (!proofFile && !proofLink.trim()) return;
     setSubmitting(true);
     setError('');
     try {
-      const formData = new FormData();
-      formData.append('proof', proofFile);
-      const res = await fetch(`${apiUrl}/api/consultations/${consultationId}/proof`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
-      });
+      const res = proofFile
+        ? await fetch(`${apiUrl}/api/consultations/${consultationId}/proof`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: (() => { const fd = new FormData(); fd.append('proof', proofFile); return fd; })(),
+          })
+        : await fetch(`${apiUrl}/api/consultations/${consultationId}/proof`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ link: proofLink.trim() }),
+          });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) { setError(data.error || 'Failed to submit the slip.'); return; }
       setProofFile(null);
+      setProofLink('');
       await onSuccess();
       onClose();
     } catch {
@@ -79,6 +88,8 @@ export default function ReplaceSlipModal({
             apiUrl={apiUrl}
             proofFile={proofFile}
             onProofFileChange={setProofFile}
+            proofLink={proofLink}
+            onProofLinkChange={setProofLink}
           />
           {error && <p className="text-red-500 text-xs mt-3">{error}</p>}
         </div>
@@ -93,7 +104,7 @@ export default function ReplaceSlipModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting || !proofFile}
+            disabled={submitting || (!proofFile && !proofLink.trim())}
             className="px-4 py-2 rounded-lg text-xs font-semibold bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center gap-1.5"
           >
             {submitting && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />}

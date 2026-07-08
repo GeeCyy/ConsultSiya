@@ -1746,10 +1746,14 @@ export default function ProfessorDashboard() {
     const rows = getExportRows();
     if (rows.length === 0) { toast.error('No records match the selected filters.'); return; }
 
+    // File-type proofs can't be signed client-side (no access to the Cloudinary
+    // secret), so route them through our own serving endpoint instead — it works
+    // as long as whoever opens the link is still logged into the app in the same
+    // browser (cookie auth), and never shows as empty for an uploaded file.
     const proofLabel = (c: Consultation): string => {
       if (!c.proof_of_evidence) return '—';
       if (c.proof_type === 'link') return c.proof_of_evidence;
-      return c.proof_of_evidence; // filename
+      return `${API_URL}/api/consultations/${c.id}/proof`;
     };
 
     const tableData = rows.map(c => [
