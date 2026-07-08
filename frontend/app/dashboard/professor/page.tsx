@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { downloadBlob } from '@/lib/downloadFile';
 import * as XLSX from 'xlsx';
 import { Label } from '@/components/ui/label';
 import UserProfileCard from '@/components/UserProfileCard';
@@ -116,12 +115,14 @@ type Consultation = {
   referral_specify: string | null;
   remarks: string | null;
   reschedule_remarks?: string | null;
+  reschedule_history?: { message: string; sender: 'student' | 'professor'; at: string | null }[];
   notes?: string | null;
   location?: string;
   meeting_link?: string | null;
   student_avatar?: string | null;
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
+  proof_attempts?: number;
   in_session?: boolean;
   session_started_at?: string | null;
 };
@@ -961,6 +962,60 @@ function ProfCalendar({
   );
 }
 
+function formatRescheduleAt(at: string | null): string {
+  if (!at) return '';
+  try {
+    return new Date(at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+// Reschedule remarks used to be appended directly into the student's `notes`
+// field as "[Reschedule request: ...]" text, misattributing them as the
+// student's own note. They're now stored separately in reschedule_history and
+// rendered here, visually distinct from "Student's Note".
+function RescheduleHistoryNote({ history, isDark }: {
+  history: { message: string; sender: 'student' | 'professor'; at: string | null }[];
+  isDark: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (history.length === 0) return null;
+  const [latest, ...earlier] = [...history].reverse();
+
+  const entry = (h: typeof latest, key: number | string) => (
+    <p key={key} className={`text-xs leading-relaxed ${isDark ? 'text-amber-200/80' : 'text-amber-800'}`}>
+      <span className="font-semibold capitalize">{h.sender}</span>
+      {h.at && <span className="opacity-70"> · {formatRescheduleAt(h.at)}</span>}
+      <br />
+      {h.message}
+    </p>
+  );
+
+  return (
+    <div className={`mt-2 rounded-lg border px-3 py-2.5 ${isDark ? 'bg-amber-500/[0.06] border-amber-500/15' : 'bg-amber-50 border-amber-100'}`}>
+      <p className={`text-[11px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-amber-400/70' : 'text-amber-600/70'}`}>Reschedule Note</p>
+      {entry(latest, 'latest')}
+      {earlier.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded(e => !e)}
+            className={`text-[11px] font-semibold underline underline-offset-2 mt-1.5 transition-colors ${isDark ? 'text-amber-400/70 hover:text-amber-300' : 'text-amber-600/70 hover:text-amber-800'}`}
+          >
+            {expanded ? 'Hide earlier' : `+${earlier.length} earlier`}
+          </button>
+          {expanded && (
+            <div className={`mt-1.5 space-y-1.5 border-t pt-1.5 ${isDark ? 'border-amber-500/15' : 'border-amber-200'}`}>
+              {earlier.map((h, i) => entry(h, i))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ProfessorDashboard() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('home');
@@ -1032,7 +1087,6 @@ export default function ProfessorDashboard() {
   const [pendingEdit, setPendingEdit] = useState<{ id: number; date: string; announcement?: string; meeting_link?: string; mode?: string } & typeof editSched | null>(null);
 
   const [downloadingForm, setDownloadingForm]   = useState<number | null>(null);
-  const [downloadingSlip, setDownloadingSlip]   = useState<number | null>(null);
   const [togglingSession, setTogglingSession]   = useState<number | null>(null);
   // Digital slip state
   const [slipConsultId, setSlipConsultId] = useState<number | null>(null);
@@ -1527,17 +1581,22 @@ export default function ProfessorDashboard() {
     }
   };
 
-  // The advising slip is filled (and signed, if the student drew or saved a signature)
-  // automatically as soon as the booking is made — no separate submission step needed,
-  // so this is always available rather than gated behind an upload/proof step.
-  const handleDownloadAdvisingSlip = async (id: number) => {
-    setDownloadingSlip(id);
-    try {
-      const ok = await downloadBlob(`${API_URL}/api/forms/advising-slip/${id}`, token!, `advising-slip-${id}.pdf`);
-      if (!ok) toast.error('Download failed.');
-    } finally {
-      setDownloadingSlip(null);
+  // Always opens the most current advising slip: the student's uploaded replacement
+  // if one exists, otherwise the auto-generated slip (filled/signed at booking time).
+  // Link-type replacements can't be previewed in-app, so those still open in a new tab.
+  const handleViewAdvisingSlip = (c: Consultation) => {
+    if (c.proof_of_evidence && c.proof_type === 'link') {
+      window.open(c.proof_of_evidence, '_blank');
+      return;
     }
+    const hasReplacement = !!c.proof_of_evidence && c.proof_type === 'file';
+    setPdfPreviewModal({
+      fetchUrl: hasReplacement
+        ? `${API_URL}/api/consultations/${c.id}/proof`
+        : `${API_URL}/api/forms/advising-slip/${c.id}`,
+      title: 'Advising Slip',
+      filename: `advising-slip-${c.id}.pdf`,
+    });
   };
 
   const handleToggleInSession = async (c: Consultation) => {
@@ -1563,21 +1622,6 @@ export default function ProfessorDashboard() {
     } finally {
       setTogglingSession(null);
     }
-  };
-
-  const handleViewProof = (id: number, proofType: string | null, proofOfEvidence: string | null) => {
-    if (proofType === 'link') {
-      if (proofOfEvidence) window.open(proofOfEvidence, '_blank');
-      return;
-    }
-    // Open in the in-app preview modal rather than window.open() — window.open()
-    // called after an async fetch falls outside the original click's user-gesture
-    // stack, so browsers silently block it as a popup.
-    setPdfPreviewModal({
-      fetchUrl: `${API_URL}/api/consultations/${id}/proof`,
-      title: 'Proof of Evidence',
-      filename: `proof-${id}.pdf`,
-    });
   };
 
   // Schedule add — show confirmation dialog first
@@ -3333,21 +3377,26 @@ export default function ProfessorDashboard() {
                             <p className={`text-xs leading-relaxed ${isDark ? 'text-sky-200/80' : 'text-sky-800'}`}>{c.notes}</p>
                           </div>
                         )}
+                        {!!c.reschedule_history?.length && (
+                          <RescheduleHistoryNote history={c.reschedule_history} isDark={isDark} />
+                        )}
 
                         <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            {/* Advising slip — filled (and signed, if provided) automatically at
-                                booking time, so it's always available here, no student action needed */}
+                            {/* Advising slip — always opens the most current document: the
+                                student's uploaded replacement if one exists, otherwise the
+                                auto-generated slip (filled/signed automatically at booking time) */}
                             <button
-                              onClick={() => handleDownloadAdvisingSlip(c.id)}
-                              disabled={downloadingSlip === c.id}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
-                              {downloadingSlip === c.id
-                                ? <span className="w-3 h-3 border border-sky-400 border-t-transparent rounded-full animate-spin" />
-                                : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 0 1 2-2h6l2 2h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-                              }
+                              onClick={() => handleViewAdvisingSlip(c)}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                               Advising Slip
                             </button>
+                            {!!c.proof_attempts && c.proof_attempts > 0 && (
+                              <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                Resubmitted ×{c.proof_attempts}
+                              </span>
+                            )}
                             {/* Fill / View Digital Slip */}
                             {(c.status === 'confirmed' || c.status === 'completed') && (
                               <button
@@ -3368,29 +3417,6 @@ export default function ProfessorDashboard() {
                                 }
                                 Student Form
                               </button>
-                            )}
-                            {c.proof_of_evidence && (
-                              c.proof_type === 'link' ? (
-                                <a
-                                  href={c.proof_of_evidence}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors">
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
-                                  View Proof
-                                </a>
-                              ) : (
-                                <button
-                                  onClick={() => handleViewProof(c.id, c.proof_type, c.proof_of_evidence)}
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-colors">
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
-                                  View Proof
-                                </button>
-                              )
                             )}
                           </div>
 

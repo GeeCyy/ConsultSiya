@@ -417,6 +417,46 @@ app.listen(PORT, '0.0.0.0', () => {
     .then(() => console.log('[startup] consultations.cancelled_by column ready'))
     .catch(err => console.error('[startup] consultations.cancelled_by migration failed:', err.message));
 
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS proof_attempts INTEGER NOT NULL DEFAULT 0`)
+    .then(() => console.log('[startup] consultations.proof_attempts column ready'))
+    .catch(err => console.error('[startup] consultations.proof_attempts migration failed:', err.message));
+
+  pool.query(`ALTER TABLE consultations ADD COLUMN IF NOT EXISTS reschedule_history JSONB NOT NULL DEFAULT '[]'::jsonb`)
+    .then(async () => {
+      console.log('[startup] consultations.reschedule_history column ready');
+      // One-time cleanup: reschedule remarks used to be appended into `notes` as
+      // "[Reschedule request: ...]" text, misattributing them as the student's own
+      // note. Move any such tags out of notes and into reschedule_history instead.
+      // Safe to re-run on every boot — once cleaned, no row matches the pattern.
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, notes, reschedule_history FROM consultations WHERE notes ~ '\\[Reschedule request:'`
+        );
+        const tagPattern = /\n?\[Reschedule request: ([^\]]*)\]/g;
+        let migrated = 0;
+        for (const row of rows) {
+          const extracted = [];
+          let match;
+          tagPattern.lastIndex = 0;
+          while ((match = tagPattern.exec(row.notes)) !== null) {
+            extracted.push({ message: match[1], sender: 'professor', at: null });
+          }
+          if (extracted.length === 0) continue;
+          const cleanedNotes = row.notes.replace(tagPattern, '').trim();
+          const existingHistory = Array.isArray(row.reschedule_history) ? row.reschedule_history : [];
+          await pool.query(
+            `UPDATE consultations SET notes = $2, reschedule_history = $3::jsonb WHERE id = $1`,
+            [row.id, cleanedNotes || null, JSON.stringify([...existingHistory, ...extracted])]
+          );
+          migrated++;
+        }
+        if (migrated > 0) console.log(`[startup] migrated ${migrated} consultation(s) with legacy reschedule notes out of the notes field`);
+      } catch (err) {
+        console.error('[startup] reschedule note cleanup failed:', err.message);
+      }
+    })
+    .catch(err => console.error('[startup] consultations.reschedule_history migration failed:', err.message));
+
   pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS saved_signature TEXT`)
     .then(() => console.log('[startup] students.saved_signature column ready'))
     .catch(err => console.error('[startup] students.saved_signature migration failed:', err.message));

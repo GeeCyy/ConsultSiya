@@ -1061,17 +1061,20 @@ router.patch('/:id/accept-reschedule', authenticate, authorize('student'), async
       return res.status(409).json({ error: 'You already have a booking with this professor at this time.' });
     }
 
-    const archivedNote = consultation.rows[0].reschedule_remarks
-      ? `[Reschedule request: ${consultation.rows[0].reschedule_remarks}]`
+    // Archive the professor's reschedule remark into reschedule_history (its own
+    // column) instead of appending it into `notes` — notes is the student's own
+    // booking-time note and must never be mixed with reschedule messages.
+    const historyEntry = consultation.rows[0].reschedule_remarks
+      ? JSON.stringify([{ message: consultation.rows[0].reschedule_remarks, sender: 'professor', at: new Date().toISOString() }])
       : null;
 
     await pool.query(
       `UPDATE consultations
        SET status = 'pending', date = $2, time = $3, schedule_id = $4, mode = $5,
            reschedule_remarks = NULL,
-           notes = CASE WHEN $6::text IS NOT NULL THEN COALESCE(NULLIF(notes,'') || E'\n', '') || $6 ELSE notes END
+           reschedule_history = CASE WHEN $6::jsonb IS NOT NULL THEN reschedule_history || $6::jsonb ELSE reschedule_history END
        WHERE id = $1`,
-      [id, date, time, schedule_id, newConsultMode, archivedNote]
+      [id, date, time, schedule_id, newConsultMode, historyEntry]
     );
 
     try {
@@ -1192,13 +1195,13 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
         );
         stream.end(req.file.buffer);
       });
-      await pool.query(
-        `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'file' WHERE id = $2`,
+      const updated = await pool.query(
+        `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'file', proof_attempts = proof_attempts + 1 WHERE id = $2 RETURNING proof_attempts`,
         [secureUrl, id]
       );
       notifyProfessor(Number(id));
       sendDelayedBookingEmails(Number(id));
-      return res.json({ proof_of_evidence: secureUrl, proof_type: 'file' });
+      return res.json({ proof_of_evidence: secureUrl, proof_type: 'file', proof_attempts: updated.rows[0].proof_attempts });
     }
 
     const link = (req.body?.link || '').trim();
@@ -1207,13 +1210,13 @@ router.post('/:id/proof', authenticate, authorize('student'), (req, res, next) =
       return res.status(400).json({ error: 'Proof link must be from Google Drive, Google Docs, or OneDrive (onedrive.live.com or 1drv.ms).' });
     }
 
-    await pool.query(
-      `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'link' WHERE id = $2`,
+    const updatedLink = await pool.query(
+      `UPDATE consultations SET proof_of_evidence = $1, proof_type = 'link', proof_attempts = proof_attempts + 1 WHERE id = $2 RETURNING proof_attempts`,
       [link, id]
     );
     notifyProfessor(Number(id));
     sendDelayedBookingEmails(Number(id));
-    res.json({ proof_of_evidence: link, proof_type: 'link' });
+    res.json({ proof_of_evidence: link, proof_type: 'link', proof_attempts: updatedLink.rows[0].proof_attempts });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
