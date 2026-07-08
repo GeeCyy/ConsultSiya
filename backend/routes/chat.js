@@ -204,6 +204,7 @@ Professor dashboard (use when helping a professor navigate):
 Other pages:
 - /dashboard/admin — Admin dashboard
 - /dashboard/help — Help & FAQ page
+- /dashboard/help#contact — Contact & Support section of the Help page (use this, not the bare /dashboard/help, whenever the user asks how to contact/reach the SOIT admin or report a problem)
 - /dashboard/home — Shared home page
 
 Rules:
@@ -211,7 +212,7 @@ Rules:
 - If no specific professor is identified from LIVE SCHEDULE DATA, use /dashboard/student?view=book instead.
 - Notifications are the bell icon in the top navbar — no separate page, never include an action for this.
 
-Always be concise, friendly, and specific to ConsultSiya. If unsure, suggest contacting the SOIT admin.`;
+Always be concise, friendly, and specific to ConsultSiya. If unsure, or if asked how to contact the SOIT admin, point to /dashboard/help#contact.`;
 
 // Keywords that suggest the user is asking which professor handles a concern/topic.
 // Use stems where possible so a single entry covers all inflections
