@@ -657,9 +657,7 @@ export default function StudentDashboard() {
   const uploadForId   = useRef<number | null>(null);
 
   // Digital slip view
-  const [viewSlipId, setViewSlipId] = useState<number | null>(null);
-  const [viewSlipData, setViewSlipData] = useState<Record<string, string | null>>({});
-  const [viewSlipLoading, setViewSlipLoading] = useState(false);
+  const [viewSlipConsult, setViewSlipConsult] = useState<Consultation | null>(null);
 
   // Proof of evidence
   const [replaceModalId, setReplaceModalId]     = useState<number | null>(null);
@@ -915,14 +913,7 @@ export default function StudentDashboard() {
     );
   };
 
-  const openViewSlip = async (id: number) => {
-    setViewSlipId(id); setViewSlipLoading(true); setViewSlipData({});
-    try {
-      const res = await fetch(`${API_URL}/api/consultations/${id}/slip`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) { const d = await res.json(); setViewSlipData(d); }
-    } catch { /* ignore */ }
-    setViewSlipLoading(false);
-  };
+  const openViewSlip = (c: Consultation) => setViewSlipConsult(c);
 
   const triggerUpload = (id: number) => { uploadForId.current = id; fileInputRef.current?.click(); };
 
@@ -2450,7 +2441,7 @@ export default function StudentDashboard() {
                         )}
                         {c.status === 'completed' && (
                           <>
-                            <button onClick={() => openViewSlip(c.id)}
+                            <button onClick={() => openViewSlip(c)}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20 hover:bg-sky-500/20' : 'bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100'}`}>
                               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                               View Slip
@@ -2483,7 +2474,7 @@ export default function StudentDashboard() {
       </main>
 
       {/* ── Digital Advising Slip View Modal ── */}
-      {viewSlipId !== null && (
+      {viewSlipConsult !== null && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className={`rounded-2xl p-6 w-full max-w-md border shadow-2xl ${isDark ? 'bg-[#1a1a2e] border-white/10' : 'bg-white border-gray-200'}`}>
             <div className="flex items-start justify-between mb-4">
@@ -2491,70 +2482,51 @@ export default function StudentDashboard() {
                 <p className={`font-bold text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>Advising Slip</p>
                 <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Record of action taken by your adviser</p>
               </div>
-              <button onClick={() => setViewSlipId(null)} className={`p-1.5 rounded-lg ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+              <button onClick={() => setViewSlipConsult(null)} className={`p-1.5 rounded-lg ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            {viewSlipLoading ? (
-              <div className="flex justify-center py-8"><span className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
-            ) : (
-              <div className="space-y-3">
-                {/* Student info */}
-                {viewSlipData.student_name && (
-                  <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Student</p>
-                    <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{viewSlipData.student_name}</p>
-                    {viewSlipData.student_number && <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{viewSlipData.student_number} · {viewSlipData.program}</p>}
-                  </div>
-                )}
-                {/* Nature of advising */}
-                {viewSlipData.nature_of_advising && (
-                  <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Nature of Advising</p>
-                    {(() => {
-                      try { const arr = JSON.parse(viewSlipData.nature_of_advising as string); return (Array.isArray(arr) ? arr : [viewSlipData.nature_of_advising]).map((n: string) => <p key={n} className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>• {n}</p>); }
-                      catch { return <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>• {viewSlipData.nature_of_advising}</p>; }
-                    })()}
-                  </div>
-                )}
-                {/* Outcome */}
+            <div className="space-y-3">
+              {/* Nature of advising */}
+              {viewSlipConsult.nature_of_advising && (
                 <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Action Taken</p>
-                  {viewSlipData.slip_outcome ? (
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${viewSlipData.slip_outcome === 'resolved' ? (isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : (isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-50 text-amber-700')}`}>
-                      {viewSlipData.slip_outcome === 'resolved' ? 'Resolved' : 'For Follow-up'}
-                    </span>
-                  ) : <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Not yet filled by adviser</p>}
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Nature of Advising</p>
+                  {(() => {
+                    try { const arr = JSON.parse(viewSlipConsult.nature_of_advising); return (Array.isArray(arr) ? arr : [viewSlipConsult.nature_of_advising]).map((n: string) => <p key={n} className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>• {n}</p>); }
+                    catch { return <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>• {viewSlipConsult.nature_of_advising}</p>; }
+                  })()}
                 </div>
-                {/* Referred to */}
-                {viewSlipData.slip_referred_to && (
-                  <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Referred To</p>
-                    <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{viewSlipData.slip_referred_to}</p>
-                  </div>
-                )}
-                {/* Prof notes */}
-                {viewSlipData.slip_prof_notes && (
-                  <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Adviser Remarks</p>
-                    <p className={`text-xs leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{viewSlipData.slip_prof_notes}</p>
-                  </div>
-                )}
-                <p className={`text-[11px] text-center ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                  Need to submit a physically signed copy instead?{' '}
-                  <button
-                    onClick={() => triggerUpload(viewSlipId)}
-                    disabled={uploadingId === viewSlipId}
-                    className={`underline font-medium disabled:opacity-50 ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-700'}`}
-                  >
-                    {uploadingId === viewSlipId ? 'Uploading…' : 'Upload a scan'}
-                  </button>
-                </p>
-                <button onClick={() => setViewSlipId(null)} className={`w-full py-2.5 rounded-xl text-sm font-medium mt-2 transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                  Close
-                </button>
+              )}
+              {/* Outcome */}
+              <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Action Taken</p>
+                {viewSlipConsult.action_taken ? (
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${viewSlipConsult.action_taken === 'Resolved' ? (isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : (isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-50 text-amber-700')}`}>
+                    {actionLabel(viewSlipConsult.action_taken, viewSlipConsult.referral, viewSlipConsult.referral_specify)}
+                  </span>
+                ) : <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Not yet filled by adviser</p>}
               </div>
-            )}
+              {/* Remarks */}
+              {viewSlipConsult.remarks && (
+                <div className={`rounded-xl px-4 py-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Adviser Remarks</p>
+                  <p className={`text-xs leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{viewSlipConsult.remarks}</p>
+                </div>
+              )}
+              <p className={`text-[11px] text-center ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                Need to submit a physically signed copy instead?{' '}
+                <button
+                  onClick={() => triggerUpload(viewSlipConsult.id)}
+                  disabled={uploadingId === viewSlipConsult.id}
+                  className={`underline font-medium disabled:opacity-50 ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-700'}`}
+                >
+                  {uploadingId === viewSlipConsult.id ? 'Uploading…' : 'Upload a scan'}
+                </button>
+              </p>
+              <button onClick={() => setViewSlipConsult(null)} className={`w-full py-2.5 rounded-xl text-sm font-medium mt-2 transition-colors ${isDark ? 'bg-white/5 text-gray-300 hover:bg-white/10' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

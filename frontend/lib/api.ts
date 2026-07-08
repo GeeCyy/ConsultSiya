@@ -4,6 +4,7 @@ async function request(endpoint: string, options: RequestInit, token?: string): 
   try {
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),

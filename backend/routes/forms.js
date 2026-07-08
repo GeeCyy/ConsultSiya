@@ -260,6 +260,23 @@ async function fillSlipOnTemplate(templateBytes, data) {
   const leftCbY  = [553, 542, 524];           // Thesis, Mentoring, Requirements
   const rightCbY = [554, 543, 533, 523, 513]; // Electives, Internship, Placement, Personal, Others
 
+  // Action Taken row (top copy) — x/y derived the same way as the boxes above:
+  // ~16pt left of and ~2.5pt below each checkbox's label text baseline.
+  const actionCbX  = 74;                // "Resolved" / "For Follow-up" — same column as Nature-of-Advising left boxes
+  const actionCbY  = { resolved: 494, followUp: 484 };
+  const referredCbX = 166;              // "Referred to:" own checkbox
+  const referredCbY = 494;              // same row as "Resolved"
+  const referralSubCbX = 258;           // Peer Advising / Counseling / Career Advising / Other Office
+  const referralSubCbY = [494, 484, 475, 465];
+  // Matches consultation_details.referral values written by the "Mark as Completed" form
+  // (frontend/app/dashboard/professor/page.tsx REFERRAL_OPTIONS) — order matches the template's printed list.
+  const REFERRAL_OPTIONS = [
+    'Peer Advising (W501-Intramuros / R203-Makati)',
+    'Counseling of Personal Concerns (Center for Guidance and Counseling)',
+    'Career Advising (Center for Career Services)',
+    'Other Office (Please Specify)',
+  ];
+
   // The two copies have different vertical spacings in the template:
   // - Checkboxes:   top-y minus bottom-y = 339.07  (from content stream box coords)
   // - Text fields:  top-y minus bottom-y = 334.49  (from content stream underline coords)
@@ -345,6 +362,18 @@ async function fillSlipOnTemplate(templateBytes, data) {
         }
       }
     });
+
+    // Action Taken — set by the professor's "Mark as Completed" form (consultation_details),
+    // not filled until the consultation is actually completed.
+    if (data.action_taken === 'Resolved') {
+      drawTick(actionCbX, actionCbY.resolved + cbDy);
+    } else if (data.action_taken === 'For Follow-up') {
+      drawTick(actionCbX, actionCbY.followUp + cbDy);
+    } else if (data.action_taken === 'Referred to') {
+      drawTick(referredCbX, referredCbY + cbDy);
+      const refIdx = REFERRAL_OPTIONS.indexOf(data.referral);
+      if (refIdx !== -1) drawTick(referralSubCbX, referralSubCbY[refIdx] + cbDy);
+    }
   };
 
   fillCopy(0,           0);            // top copy
@@ -379,10 +408,12 @@ router.get('/advising-slip/:id', authenticate, async (req, res) => {
       `SELECT c.id, c.date, c.nature_of_advising, c.nature_of_advising_specify, c.student_id,
               c.professor_id, c.signature_data, c.created_at,
               s.full_name AS student_name, s.student_number, s.program, s.year_level,
-              p.full_name AS professor_name
+              p.full_name AS professor_name,
+              cd.action_taken, cd.referral
        FROM consultations c
        JOIN students s ON c.student_id = s.id
        JOIN professors p ON c.professor_id = p.id
+       LEFT JOIN consultation_details cd ON cd.consultation_id = c.id
        WHERE c.id = $1`,
       [id]
     );

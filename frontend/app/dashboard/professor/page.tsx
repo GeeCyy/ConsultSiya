@@ -123,6 +123,7 @@ type Consultation = {
   proof_of_evidence: string | null;
   proof_type: 'file' | 'link' | null;
   proof_attempts?: number;
+  proof_required?: boolean;
   in_session?: boolean;
   session_started_at?: string | null;
 };
@@ -1088,11 +1089,6 @@ export default function ProfessorDashboard() {
 
   const [downloadingForm, setDownloadingForm]   = useState<number | null>(null);
   const [togglingSession, setTogglingSession]   = useState<number | null>(null);
-  // Digital slip state
-  const [slipConsultId, setSlipConsultId] = useState<number | null>(null);
-  const [slipData, setSlipData] = useState<Record<string, string | null>>({ outcome: '', referred_to: '', prof_notes: '' });
-  const [slipLoading, setSlipLoading] = useState(false);
-  const [slipSaving, setSlipSaving] = useState(false);
   const [sessionStartAt, setSessionStartAt]     = useState<number | null>(null);
   const [sessionElapsed, setSessionElapsed]     = useState(0);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1536,34 +1532,6 @@ export default function ProfessorDashboard() {
     }
   };
 
-  const openSlip = async (id: number) => {
-    setSlipConsultId(id); setSlipLoading(true);
-    setSlipData({ outcome: '', referred_to: '', prof_notes: '' });
-    try {
-      const res = await fetch(`${API_URL}/api/consultations/${id}/slip`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const d = await res.json();
-        setSlipData({ outcome: d.slip_outcome || '', referred_to: d.slip_referred_to || '', prof_notes: d.slip_prof_notes || '' });
-      }
-    } catch { /* use defaults */ }
-    setSlipLoading(false);
-  };
-
-  const saveSlip = async () => {
-    if (!slipConsultId) return;
-    setSlipSaving(true);
-    try {
-      const res = await fetch(`${API_URL}/api/consultations/${slipConsultId}/slip`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ outcome: slipData.outcome || null, referred_to: slipData.referred_to || null, prof_notes: slipData.prof_notes || null }),
-      });
-      if (res.ok) { toast.success('Slip saved.'); setSlipConsultId(null); }
-      else { const e = await res.json(); toast.error(e.error || 'Save failed.'); }
-    } catch { toast.error('Network error.'); }
-    setSlipSaving(false);
-  };
-
   const handleDownloadStudentForm = async (id: number) => {
     setDownloadingForm(id);
     try {
@@ -1751,7 +1719,11 @@ export default function ProfessorDashboard() {
     // as long as whoever opens the link is still logged into the app in the same
     // browser (cookie auth), and never shows as empty for an uploaded file.
     const proofLabel = (c: Consultation): string => {
-      if (!c.proof_of_evidence) return '—';
+      if (!c.proof_of_evidence) {
+        // Automatic-form booking: no separate proof was uploaded, but the signed
+        // slip can always be regenerated on demand from stored data.
+        return c.proof_required === false ? `${API_URL}/api/forms/advising-slip/${c.id}` : '—';
+      }
       if (c.proof_type === 'link') return c.proof_of_evidence;
       return `${API_URL}/api/consultations/${c.id}/proof`;
     };
@@ -2478,72 +2450,6 @@ export default function ProfessorDashboard() {
                 {newSchedDates.length > 1 ? `Save ${newSchedDates.length} Slots` : 'Save Schedule'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Digital Advising Slip Modal ── */}
-      {slipConsultId !== null && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
-          <div className={`rounded-2xl p-6 w-full max-w-md border ${isDark ? 'bg-[#252525] border-white/10' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className={`font-bold text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>Advising Slip</h2>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Fill in the action taken for this consultation</p>
-              </div>
-              <button onClick={() => setSlipConsultId(null)} className={`p-1.5 rounded-lg ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            {slipLoading ? (
-              <div className="flex justify-center py-8"><span className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
-            ) : (
-              <div className="space-y-4">
-                {/* Outcome */}
-                <div>
-                  <p className={`text-xs font-semibold mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Action Taken</p>
-                  <div className="flex gap-2">
-                    {[{ value: 'resolved', label: 'Resolved' }, { value: 'follow_up', label: 'For Follow-up' }].map(opt => (
-                      <button key={opt.value} onClick={() => setSlipData(d => ({ ...d, outcome: d.outcome === opt.value ? '' : opt.value }))}
-                        className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                          slipData.outcome === opt.value
-                            ? isDark ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'bg-sky-50 text-sky-700 border-sky-400'
-                            : isDark ? 'text-gray-500 border-white/10 hover:text-gray-300' : 'text-gray-500 border-gray-300 hover:text-gray-700'
-                        }`}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Referred to */}
-                <div>
-                  <label className={`text-xs font-semibold mb-1.5 block ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Referred To <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional)</span></label>
-                  <input
-                    value={slipData.referred_to || ''}
-                    onChange={e => setSlipData(d => ({ ...d, referred_to: e.target.value }))}
-                    placeholder="e.g. Department Head, Guidance Office…"
-                    className={`w-full px-3 py-2 rounded-xl text-sm border focus:outline-none ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-gray-600 focus:border-sky-500/50' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-sky-400'}`}
-                  />
-                </div>
-                {/* Professor notes */}
-                <div>
-                  <label className={`text-xs font-semibold mb-1.5 block ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Remarks / Notes <span className={`font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(optional)</span></label>
-                  <textarea
-                    rows={3}
-                    value={slipData.prof_notes || ''}
-                    onChange={e => setSlipData(d => ({ ...d, prof_notes: e.target.value }))}
-                    placeholder="Summary of advice given, recommendations, etc."
-                    className={`w-full px-3 py-2 rounded-xl text-sm border focus:outline-none resize-none ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-gray-600 focus:border-sky-500/50' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-sky-400'}`}
-                  />
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => setSlipConsultId(null)} className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${isDark ? 'text-gray-400 border-white/10 hover:text-gray-200' : 'text-gray-600 border-gray-300 hover:text-gray-900'}`}>Cancel</button>
-                  <button onClick={saveSlip} disabled={slipSaving} className={`flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 ${btnPrimary}`}>
-                    {slipSaving ? 'Saving…' : 'Save Slip'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -3400,15 +3306,6 @@ export default function ProfessorDashboard() {
                               <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                 Resubmitted ×{c.proof_attempts}
                               </span>
-                            )}
-                            {/* Fill / View Digital Slip */}
-                            {(c.status === 'confirmed' || c.status === 'completed') && (
-                              <button
-                                onClick={() => openSlip(c.id)}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${isDark ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100'}`}>
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                Fill Slip
-                              </button>
                             )}
                             {c.uploaded_form_path && (
                               <button

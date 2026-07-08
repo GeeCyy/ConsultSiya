@@ -177,7 +177,7 @@ export default function AdvisingSlipStep({
       {formMode === 'auto' && (
         <>
           <p className={`text-[11px] mb-2 ${ts}`}>Signature <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>(optional — leave blank to use auto-stamp)</span></p>
-          <SignaturePad value={signature} onChange={sig => onSignatureChange?.(sig)} isDark={isDark} />
+          <SignaturePad value={signature} onChange={sig => onSignatureChange?.(sig)} />
           {signature && (
             <label className={`flex items-center gap-2 mt-2.5 text-xs cursor-pointer ${ts}`}>
               <input type="checkbox" checked={rememberSignature} onChange={e => onRememberSignatureChange?.(e.target.checked)} className="accent-[#0EA5E9]" />

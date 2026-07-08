@@ -42,7 +42,7 @@ const getReportData = async (professorId, { period, dateFrom, dateTo, status } =
 
   const result = await pool.query(
     `SELECT
-      c.id, c.date, c.nature_of_advising, c.mode, c.status, c.uploaded_form_path, c.proof_of_evidence, c.proof_type,
+      c.id, c.date, c.nature_of_advising, c.mode, c.status, c.uploaded_form_path, c.proof_of_evidence, c.proof_type, c.proof_required,
       s.full_name AS student_name, s.student_number, s.program,
       p.full_name AS professor_name, p.department,
       sch.day, sch.time_start, sch.time_end, sch.mode AS slot_mode,
@@ -152,14 +152,19 @@ function formatAdvisingDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function buildReportHtml(sections) {
+function buildReportHtml(sections, req) {
   // Use the earliest consultation date across all sections to determine the correct term.
   // Falls back to today only when there are no rows (empty export).
   const allDates = sections.flatMap(s => s.rows.map(r => r.date)).filter(Boolean);
   const refDate  = allDates.length > 0 ? allDates.sort()[0] : new Date();
   const { qtr, ay } = getTermForDate(refDate);
   const termLabel   = `${ordinal(qtr.replace(/\D/g, ''))} QTR  Term, AY${ay}`;
-  const baseUrl     = process.env.BASE_URL || 'http://localhost:5001';
+  // Prefer BASE_URL when explicitly configured (e.g. production behind a fixed
+  // domain); otherwise derive it from the incoming request so the generated
+  // links always point at whatever host the browser already holds an auth
+  // cookie for (matters on LAN dev setups where "localhost" and the machine's
+  // LAN IP are different origins).
+  const baseUrl     = process.env.BASE_URL || (req ? `${req.protocol}://${req.get('host')}` : `http://localhost:${process.env.PORT || 4000}`);
   const logoTag     = MAPUA_LOGO_B64
     ? `<img src="${MAPUA_LOGO_B64}" style="width:60px;height:auto;mix-blend-mode:multiply;">`
     : '';
@@ -185,6 +190,10 @@ function buildReportHtml(sections) {
         proofUrl = cloudinary.toDeliverableUrl(row.uploaded_form_path);
       } else if (row.uploaded_form_path) {
         proofUrl = `${baseUrl}/api/forms/download/${row.id}`;
+      } else if (row.proof_required === false) {
+        // Automatic-form booking: no separate proof was ever uploaded, but the
+        // signed slip can always be regenerated on demand from stored data.
+        proofUrl = `${baseUrl}/api/forms/advising-slip/${row.id}`;
       }
       const proofCell = proofUrl
         ? `<a href="${proofUrl}">Advising Slip</a>`
@@ -509,7 +518,7 @@ router.get('/pdf', authenticate, authorize('professor', 'admin'), async (req, re
       sections.push({ professor, rows });
     }
 
-    const html = buildReportHtml(sections);
+    const html = buildReportHtml(sections, req);
 
     browser = await puppeteer.launch({
       headless: true,
