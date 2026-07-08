@@ -572,6 +572,18 @@ export default function ChatbotWidget({
     return () => window.removeEventListener('consulta-tour-chatbot', handler);
   }, []);
 
+  // Lets other pages (e.g. the Help Center's "Chat with Assistant" button) open
+  // this shared widget directly instead of duplicating a second chat UI.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent<{ tab?: 'faq' | 'ai' } | undefined>).detail?.tab;
+      setOpen(true);
+      if (tab) setMobileTab(tab);
+    };
+    window.addEventListener('consulta-open-chatbot', handler);
+    return () => window.removeEventListener('consulta-open-chatbot', handler);
+  }, []);
+
   const rootOptionCount = tree['root'].options.length;
 
   const panelBg      = isDark ? '#1e1f22' : '#ffffff';
@@ -835,7 +847,10 @@ export default function ChatbotWidget({
                                   const url = new URL(route, window.location.origin);
                                   const tab = url.searchParams.get('view');
                                   if (url.pathname === window.location.pathname) {
-                                    if (tab) {
+                                    if (url.hash) {
+                                      document.getElementById(url.hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                      setOpen(false);
+                                    } else if (tab) {
                                       window.dispatchEvent(new CustomEvent('consulta-tab-change', { detail: tab }));
                                     } else {
                                       // Already on this page with no specific tab — just close

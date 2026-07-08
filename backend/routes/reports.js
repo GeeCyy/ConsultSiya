@@ -152,7 +152,7 @@ function formatAdvisingDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function buildReportHtml(sections, req) {
+function buildReportHtml(sections, req, rawToken) {
   // Use the earliest consultation date across all sections to determine the correct term.
   // Falls back to today only when there are no rows (empty export).
   const allDates = sections.flatMap(s => s.rows.map(r => r.date)).filter(Boolean);
@@ -165,6 +165,12 @@ function buildReportHtml(sections, req) {
   // cookie for (matters on LAN dev setups where "localhost" and the machine's
   // LAN IP are different origins).
   const baseUrl     = process.env.BASE_URL || (req ? `${req.protocol}://${req.get('host')}` : `http://localhost:${process.env.PORT || 4000}`);
+  // Links inside the exported PDF are opened via plain browser navigation (clicking a link
+  // in a PDF viewer, possibly in a new tab) — there's no way to attach an Authorization
+  // header there, and in production the frontend/backend are on different domains, so
+  // SameSite cookies aren't reliably sent either. Carry the requester's own token in the
+  // URL instead so these links keep working regardless of cookie/cross-site policy.
+  const tokenQS     = rawToken ? `?token=${encodeURIComponent(rawToken)}` : '';
   const logoTag     = MAPUA_LOGO_B64
     ? `<img src="${MAPUA_LOGO_B64}" style="width:60px;height:auto;mix-blend-mode:multiply;">`
     : '';
@@ -185,15 +191,15 @@ function buildReportHtml(sections, req) {
       } else if (row.proof_type === 'file' && row.proof_of_evidence) {
         proofUrl = row.proof_of_evidence.startsWith('https://')
           ? cloudinary.toDeliverableUrl(row.proof_of_evidence)
-          : `${baseUrl}/api/consultations/${row.id}/proof`;
+          : `${baseUrl}/api/consultations/${row.id}/proof${tokenQS}`;
       } else if (row.uploaded_form_path?.startsWith('https://')) {
         proofUrl = cloudinary.toDeliverableUrl(row.uploaded_form_path);
       } else if (row.uploaded_form_path) {
-        proofUrl = `${baseUrl}/api/forms/download/${row.id}`;
+        proofUrl = `${baseUrl}/api/forms/download/${row.id}${tokenQS}`;
       } else if (row.proof_required === false) {
         // Automatic-form booking: no separate proof was ever uploaded, but the
         // signed slip can always be regenerated on demand from stored data.
-        proofUrl = `${baseUrl}/api/forms/advising-slip/${row.id}`;
+        proofUrl = `${baseUrl}/api/forms/advising-slip/${row.id}${tokenQS}`;
       }
       const proofCell = proofUrl
         ? `<a href="${proofUrl}">Advising Slip</a>`
@@ -518,7 +524,7 @@ router.get('/pdf', authenticate, authorize('professor', 'admin'), async (req, re
       sections.push({ professor, rows });
     }
 
-    const html = buildReportHtml(sections, req);
+    const html = buildReportHtml(sections, req, req.token);
 
     browser = await puppeteer.launch({
       headless: true,

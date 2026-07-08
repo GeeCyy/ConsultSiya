@@ -1715,17 +1715,19 @@ export default function ProfessorDashboard() {
     if (rows.length === 0) { toast.error('No records match the selected filters.'); return; }
 
     // File-type proofs can't be signed client-side (no access to the Cloudinary
-    // secret), so route them through our own serving endpoint instead — it works
-    // as long as whoever opens the link is still logged into the app in the same
-    // browser (cookie auth), and never shows as empty for an uploaded file.
+    // secret), so route them through our own serving endpoint instead. Carries the
+    // current token as a query param rather than relying on cookie auth — frontend
+    // and backend live on different domains in production, so a cross-site cookie
+    // isn't reliably sent when this link is opened later from an Excel cell.
+    const tokenQS = `?token=${encodeURIComponent(token || '')}`;
     const proofLabel = (c: Consultation): string => {
       if (!c.proof_of_evidence) {
         // Automatic-form booking: no separate proof was uploaded, but the signed
         // slip can always be regenerated on demand from stored data.
-        return c.proof_required === false ? `${API_URL}/api/forms/advising-slip/${c.id}` : '—';
+        return c.proof_required === false ? `${API_URL}/api/forms/advising-slip/${c.id}${tokenQS}` : '—';
       }
       if (c.proof_type === 'link') return c.proof_of_evidence;
-      return `${API_URL}/api/consultations/${c.id}/proof`;
+      return `${API_URL}/api/consultations/${c.id}/proof${tokenQS}`;
     };
 
     const tableData = rows.map(c => [
@@ -2262,6 +2264,15 @@ export default function ProfessorDashboard() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             Settings
+          </button>
+          <button
+            onClick={() => { router.push('/dashboard/help'); setTopNavProfileOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors text-left"
+          >
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Help Center
           </button>
           <div className="h-px bg-gray-100" />
           <button
